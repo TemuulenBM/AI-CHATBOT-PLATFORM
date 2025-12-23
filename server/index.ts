@@ -5,6 +5,10 @@ import { serveStatic } from "./static";
 import { createServer } from "http";
 import { closeQueues } from "./jobs/queues";
 import logger from "./utils/logger";
+import { initializeEnvironment } from "./utils/env";
+
+// Validate environment variables at startup
+initializeEnvironment();
 
 const app = express();
 const httpServer = createServer(app);

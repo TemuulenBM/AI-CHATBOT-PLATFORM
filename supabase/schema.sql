@@ -48,7 +48,7 @@ CREATE TABLE IF NOT EXISTS conversations (
 -- Subscriptions table
 CREATE TABLE IF NOT EXISTS subscriptions (
   user_id UUID PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
-  plan TEXT NOT NULL DEFAULT 'free' CHECK (plan IN ('free', 'starter', 'pro')),
+  plan TEXT NOT NULL DEFAULT 'free' CHECK (plan IN ('free', 'starter', 'growth', 'business')),
   stripe_subscription_id TEXT,
   stripe_customer_id TEXT,
   usage JSONB NOT NULL DEFAULT '{"messages_count": 0, "chatbots_count": 0}'::jsonb,

@@ -103,7 +103,7 @@ export const schemas = {
 
   // Subscription schemas
   createCheckout: z.object({
-    plan: z.enum(["starter", "pro"]),
+    plan: z.enum(["starter", "growth", "business"]),
     successUrl: z.string().url(),
     cancelUrl: z.string().url(),
   }),

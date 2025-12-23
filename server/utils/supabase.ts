@@ -73,7 +73,7 @@ export interface Database {
       subscriptions: {
         Row: {
           user_id: string;
-          plan: "free" | "starter" | "pro";
+          plan: "free" | "starter" | "growth" | "business";
           stripe_subscription_id: string | null;
           stripe_customer_id: string | null;
           usage: UsageData;
@@ -116,12 +116,17 @@ export const PLAN_LIMITS = {
   starter: {
     chatbots: 3,
     messages: 2000,
-    price: 4900, // cents
+    price: 4900, // $49/month in cents
   },
-  pro: {
+  growth: {
     chatbots: 10,
     messages: 10000,
-    price: 9900, // cents
+    price: 9900, // $99/month in cents
+  },
+  business: {
+    chatbots: 999, // unlimited
+    messages: 50000,
+    price: 29900, // $299/month in cents
   },
 } as const;
 

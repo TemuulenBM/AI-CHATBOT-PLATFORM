@@ -10,8 +10,14 @@ let widgetCache: string | null = null;
 let widgetLastBuild: number = 0;
 const CACHE_TTL = 60 * 1000; // 1 minute in dev
 
+// Get the branding URL from environment
+function getBrandingUrl(): string {
+  return process.env.WIDGET_POWERED_BY_URL || process.env.APP_URL || "https://chatai.com";
+}
+
 async function getWidgetScript(): Promise<string> {
   const now = Date.now();
+  const brandingUrl = getBrandingUrl();
 
   // Check cache
   if (widgetCache && now - widgetLastBuild < CACHE_TTL) {
@@ -21,7 +27,10 @@ async function getWidgetScript(): Promise<string> {
   // Try to read pre-built widget
   const prebuiltPath = path.join(process.cwd(), "dist/widget/widget.js");
   if (fs.existsSync(prebuiltPath)) {
-    widgetCache = fs.readFileSync(prebuiltPath, "utf-8");
+    let script = fs.readFileSync(prebuiltPath, "utf-8");
+    // Replace placeholder with actual branding URL
+    script = script.replace(/__WIDGET_POWERED_BY_URL__/g, brandingUrl);
+    widgetCache = script;
     widgetLastBuild = now;
     return widgetCache;
   }
@@ -39,7 +48,10 @@ async function getWidgetScript(): Promise<string> {
       write: false,
     });
 
-    widgetCache = result.outputFiles[0].text;
+    let script = result.outputFiles[0].text;
+    // Replace placeholder with actual branding URL
+    script = script.replace(/__WIDGET_POWERED_BY_URL__/g, brandingUrl);
+    widgetCache = script;
     widgetLastBuild = now;
     return widgetCache;
   }

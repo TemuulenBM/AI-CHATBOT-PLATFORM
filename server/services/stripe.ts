@@ -21,7 +21,8 @@ function getStripe(): Stripe {
 // Price IDs from Stripe Dashboard
 const PRICE_IDS: Record<Exclude<PlanType, "free">, string> = {
   starter: process.env.STRIPE_STARTER_PRICE_ID || "price_starter",
-  pro: process.env.STRIPE_PRO_PRICE_ID || "price_pro",
+  growth: process.env.STRIPE_GROWTH_PRICE_ID || "price_growth",
+  business: process.env.STRIPE_BUSINESS_PRICE_ID || "price_business",
 };
 
 export class StripeService {

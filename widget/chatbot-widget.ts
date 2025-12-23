@@ -392,7 +392,7 @@ class ChatAIWidget {
           </form>
         </div>
         <div id="chatai-powered-by">
-          Powered by <a href="https://chatai.com" target="_blank">ChatAI</a>
+          Powered by <a href="__WIDGET_POWERED_BY_URL__" target="_blank">ChatAI</a>
         </div>
       </div>
       <button id="chatai-widget-button">
