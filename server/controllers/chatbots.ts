@@ -332,25 +332,18 @@ export async function getStats(
     let totalConversations = 0;
 
     if (chatbotIds.length > 0) {
-      // Get conversations count
+      // Get conversations with messages JSONB field
       const { data: conversations, count: convoCount } = await supabaseAdmin
         .from("conversations")
-        .select("id", { count: "exact" })
+        .select("messages", { count: "exact" })
         .in("chatbot_id", chatbotIds);
 
       totalConversations = convoCount || 0;
 
-      // Get messages count if there are conversations
-      const conversationIds = conversations?.map((c) => c.id) || [];
-      
-      if (conversationIds.length > 0) {
-        const { count: messagesCount } = await supabaseAdmin
-          .from("messages")
-          .select("*", { count: "exact", head: true })
-          .in("conversation_id", conversationIds);
-
-        totalMessages = messagesCount || 0;
-      }
+      // Count messages from conversations.messages JSONB array
+      totalMessages = conversations?.reduce((sum, conv) => {
+        return sum + (Array.isArray(conv.messages) ? conv.messages.length : 0);
+      }, 0) || 0;
     }
 
     res.json({

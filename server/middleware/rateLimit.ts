@@ -61,11 +61,12 @@ export const chatRateLimit = rateLimit({
   windowSeconds: 60, // 1 minute
   limit: (req: AuthenticatedRequest) => {
     const plan = req.subscription?.plan || "free";
-    // Different limits per plan
+    // Different limits per plan (must match PLAN_LIMITS)
     const limits: Record<PlanType, number> = {
       free: 10,
       starter: 30,
-      pro: 100,
+      growth: 100,
+      business: 200,
     };
     return limits[plan];
   },
