@@ -1,4 +1,5 @@
 import "dotenv/config";
+import * as Sentry from "@sentry/node";
 import express from "express";
 import { registerRoutes } from "./routes";
 import { serveStatic } from "./static";
@@ -9,6 +10,35 @@ import { initializeEnvironment } from "./utils/env";
 
 // Validate environment variables at startup
 initializeEnvironment();
+
+// Initialize Sentry for error tracking
+if (process.env.SENTRY_DSN) {
+  Sentry.init({
+    dsn: process.env.SENTRY_DSN,
+    environment: process.env.NODE_ENV || "development",
+    release: process.env.npm_package_version,
+    tracesSampleRate: process.env.NODE_ENV === "production" ? 0.1 : 1.0,
+    profilesSampleRate: 0.1,
+    integrations: [
+      Sentry.httpIntegration(),
+      Sentry.expressIntegration(),
+    ],
+    beforeSend(event, hint) {
+      // Filter out non-critical errors in production
+      if (process.env.NODE_ENV === "production") {
+        const error = hint.originalException;
+        if (error instanceof Error) {
+          // Don't send 404 or validation errors to Sentry
+          if (error.message.includes("not found") || error.name === "ZodError") {
+            return null;
+          }
+        }
+      }
+      return event;
+    },
+  });
+  logger.info("Sentry initialized", { environment: process.env.NODE_ENV });
+}
 
 const app = express();
 const httpServer = createServer(app);

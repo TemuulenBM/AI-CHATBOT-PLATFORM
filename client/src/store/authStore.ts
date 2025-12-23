@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
+import * as Sentry from "@sentry/react";
 
 interface User {
   id: string;
@@ -57,6 +58,12 @@ export const useAuthStore = create<AuthState>()(
             error: null,
           });
 
+          // Set Sentry user context
+          Sentry.setUser({
+            id: data.user.id,
+            email: data.user.email,
+          });
+
           return true;
         } catch (error) {
           set({ isLoading: false, error: "Network error. Please try again." });
@@ -90,6 +97,12 @@ export const useAuthStore = create<AuthState>()(
             error: null,
           });
 
+          // Set Sentry user context
+          Sentry.setUser({
+            id: data.user.id,
+            email: data.user.email,
+          });
+
           return true;
         } catch (error) {
           set({ isLoading: false, error: "Network error. Please try again." });
@@ -98,6 +111,8 @@ export const useAuthStore = create<AuthState>()(
       },
 
       logout: () => {
+        // Clear Sentry user context
+        Sentry.setUser(null);
         set({
           user: null,
           accessToken: null,
