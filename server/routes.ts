@@ -4,6 +4,7 @@ import authRoutes from "./routes/auth";
 import chatbotRoutes from "./routes/chatbots";
 import chatRoutes from "./routes/chat";
 import subscriptionRoutes from "./routes/subscriptions";
+import widgetRoutes from "./routes/widget";
 import { AppError } from "./utils/errors";
 import logger from "./utils/logger";
 import { redis } from "./utils/redis";
@@ -40,6 +41,9 @@ export async function registerRoutes(
   app.use("/api/chatbots", chatbotRoutes);
   app.use("/api/chat", chatRoutes);
   app.use("/api/subscriptions", subscriptionRoutes);
+
+  // Widget routes (served at root level for easy embedding)
+  app.use("/", widgetRoutes);
 
   // 404 handler for API routes
   app.use("/api/*", (_req: Request, res: Response) => {

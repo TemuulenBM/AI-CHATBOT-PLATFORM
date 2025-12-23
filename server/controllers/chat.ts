@@ -14,13 +14,18 @@ export async function sendMessage(
   try {
     const { chatbotId, sessionId, message } = req.body as ChatMessageInput;
 
-    // Get chatbot
-    const { data: chatbot, error: chatbotError } = await supabaseAdmin
+    // Get chatbot (allow any status in development for testing)
+    const query = supabaseAdmin
       .from("chatbots")
       .select("id, user_id, name, website_url, settings, status")
-      .eq("id", chatbotId)
-      .eq("status", "ready")
-      .single();
+      .eq("id", chatbotId);
+
+    // In production, only allow ready chatbots
+    if (process.env.NODE_ENV === "production") {
+      query.eq("status", "ready");
+    }
+
+    const { data: chatbot, error: chatbotError } = await query.single();
 
     if (chatbotError || !chatbot) {
       throw new NotFoundError("Chatbot");
@@ -100,13 +105,18 @@ export async function streamMessage(
   try {
     const { chatbotId, sessionId, message } = req.body as ChatMessageInput;
 
-    // Get chatbot
-    const { data: chatbot, error: chatbotError } = await supabaseAdmin
+    // Get chatbot (allow any status in development for testing)
+    const query = supabaseAdmin
       .from("chatbots")
       .select("id, user_id, name, website_url, settings, status")
-      .eq("id", chatbotId)
-      .eq("status", "ready")
-      .single();
+      .eq("id", chatbotId);
+
+    // In production, only allow ready chatbots
+    if (process.env.NODE_ENV === "production") {
+      query.eq("status", "ready");
+    }
+
+    const { data: chatbot, error: chatbotError } = await query.single();
 
     if (chatbotError || !chatbot) {
       throw new NotFoundError("Chatbot");
