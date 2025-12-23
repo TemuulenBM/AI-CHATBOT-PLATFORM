@@ -6,26 +6,16 @@ import { AreaChart, Area, ResponsiveContainer, Tooltip, XAxis, YAxis } from "rec
 import { useAuthStore } from "@/store/authStore";
 import { useChatbotStore } from "@/store/chatbot-store";
 import { useLocation } from "wouter";
-import { Bot, Loader2 } from "lucide-react";
+import { Bot, Loader2, TrendingUp } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Link } from "wouter";
 
-// Sample chart data - in a real app, this would come from an API
-const chartData = [
-  { name: 'Mon', messages: 0 },
-  { name: 'Tue', messages: 0 },
-  { name: 'Wed', messages: 0 },
-  { name: 'Thu', messages: 0 },
-  { name: 'Fri', messages: 0 },
-  { name: 'Sat', messages: 0 },
-  { name: 'Sun', messages: 0 },
-];
-
 export default function Dashboard() {
   const { isAuthenticated, user } = useAuthStore();
-  const { stats, fetchStats, chatbots, fetchChatbots } = useChatbotStore();
+  const { stats, fetchStats, chatbots, fetchChatbots, messageVolume, fetchMessageVolume } = useChatbotStore();
   const [, setLocation] = useLocation();
   const [isLoading, setIsLoading] = useState(true);
+  const [selectedDays, setSelectedDays] = useState(7);
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -35,12 +25,27 @@ export default function Dashboard() {
 
     const loadData = async () => {
       setIsLoading(true);
-      await Promise.all([fetchStats(), fetchChatbots()]);
+      await Promise.all([fetchStats(), fetchChatbots(), fetchMessageVolume(selectedDays)]);
       setIsLoading(false);
     };
 
     loadData();
-  }, [isAuthenticated]);
+  }, [isAuthenticated, selectedDays]);
+
+  // Format date for chart display
+  const formatChartData = () => {
+    return messageVolume.map((point) => {
+      const date = new Date(point.date);
+      const dayName = date.toLocaleDateString('en-US', { weekday: 'short' });
+      return {
+        name: dayName,
+        date: point.date,
+        messages: point.messages,
+      };
+    });
+  };
+
+  const chartData = formatChartData();
 
   // Get recent chatbots for activity
   const recentChatbots = chatbots.slice(0, 5);
@@ -88,13 +93,27 @@ export default function Dashboard() {
 
           <div className="grid lg:grid-cols-3 gap-8">
             <GlassCard className="col-span-2 p-6 min-h-[400px]">
-              <h3 className="text-lg font-semibold mb-6">Conversation Volume</h3>
+              <div className="flex justify-between items-center mb-6">
+                <h3 className="text-lg font-semibold">Message Volume</h3>
+                <div className="flex gap-2">
+                  {[7, 14, 30].map((days) => (
+                    <Button
+                      key={days}
+                      variant={selectedDays === days ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => setSelectedDays(days)}
+                    >
+                      {days}d
+                    </Button>
+                  ))}
+                </div>
+              </div>
               <div className="h-[300px] w-full">
                 {isLoading ? (
                   <div className="flex items-center justify-center h-full">
                     <Loader2 className="h-8 w-8 animate-spin text-primary" />
                   </div>
-                ) : stats.totalMessages === 0 ? (
+                ) : stats.totalMessages === 0 && chartData.every(d => d.messages === 0) ? (
                   <div className="flex flex-col items-center justify-center h-full text-center">
                     <div className="h-16 w-16 rounded-full bg-primary/10 flex items-center justify-center mb-4 text-primary">
                       <Bot className="h-8 w-8" />
@@ -115,15 +134,33 @@ export default function Dashboard() {
                       </defs>
                       <XAxis dataKey="name" stroke="#525252" fontSize={12} tickLine={false} axisLine={false} />
                       <YAxis stroke="#525252" fontSize={12} tickLine={false} axisLine={false} tickFormatter={(value) => `${value}`} />
-                      <Tooltip 
+                      <Tooltip
                         contentStyle={{ backgroundColor: '#1e293b', borderColor: '#334155', borderRadius: '8px' }}
                         itemStyle={{ color: '#fff' }}
+                        labelFormatter={(label, payload) => {
+                          if (payload && payload[0]?.payload?.date) {
+                            return new Date(payload[0].payload.date).toLocaleDateString('en-US', {
+                              weekday: 'long',
+                              month: 'short',
+                              day: 'numeric'
+                            });
+                          }
+                          return label;
+                        }}
                       />
                       <Area type="monotone" dataKey="messages" stroke="#8B5CF6" strokeWidth={3} fillOpacity={1} fill="url(#colorMessages)" />
                     </AreaChart>
                   </ResponsiveContainer>
                 )}
               </div>
+              {!isLoading && chartData.length > 0 && chartData.some(d => d.messages > 0) && (
+                <div className="mt-4 flex items-center justify-center gap-2 text-sm text-muted-foreground">
+                  <TrendingUp className="h-4 w-4" />
+                  <span>
+                    {chartData.reduce((sum, d) => sum + d.messages, 0)} messages in the last {selectedDays} days
+                  </span>
+                </div>
+              )}
             </GlassCard>
 
             <GlassCard className="p-6">

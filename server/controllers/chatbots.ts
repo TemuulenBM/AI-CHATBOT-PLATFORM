@@ -6,6 +6,7 @@ import { CreateChatbotInput, UpdateChatbotInput } from "../middleware/validation
 import { deleteCache, deleteCachePattern, getCache, setCache } from "../utils/redis";
 import { scrapeQueue } from "../jobs/queues";
 import logger from "../utils/logger";
+import * as analyticsService from "../services/analytics";
 
 export async function createChatbot(
   req: AuthenticatedRequest,
@@ -306,52 +307,263 @@ export async function getStats(
 
     const userId = req.user.userId;
 
-    // Get total chatbots
-    const { count: totalChatbots } = await supabaseAdmin
-      .from("chatbots")
-      .select("*", { count: "exact", head: true })
-      .eq("user_id", userId);
+    // Use analytics service with built-in caching
+    const stats = await analyticsService.getDashboardStats(userId);
 
-    // Get active chatbots (ready status)
-    const { count: activeChatbots } = await supabaseAdmin
-      .from("chatbots")
-      .select("*", { count: "exact", head: true })
-      .eq("user_id", userId)
-      .eq("status", "ready");
+    res.json(stats);
+  } catch (error) {
+    next(error);
+  }
+}
 
-    // Get user's chatbot IDs
-    const { data: userChatbots } = await supabaseAdmin
-      .from("chatbots")
-      .select("id")
-      .eq("user_id", userId);
-
-    const chatbotIds = userChatbots?.map((c) => c.id) || [];
-
-    // Get total messages across all user's chatbots
-    let totalMessages = 0;
-    let totalConversations = 0;
-
-    if (chatbotIds.length > 0) {
-      // Get conversations with messages JSONB field
-      const { data: conversations, count: convoCount } = await supabaseAdmin
-        .from("conversations")
-        .select("messages", { count: "exact" })
-        .in("chatbot_id", chatbotIds);
-
-      totalConversations = convoCount || 0;
-
-      // Count messages from conversations.messages JSONB array
-      totalMessages = conversations?.reduce((sum, conv) => {
-        return sum + (Array.isArray(conv.messages) ? conv.messages.length : 0);
-      }, 0) || 0;
+// Get message volume trends for the dashboard chart
+export async function getMessageVolume(
+  req: AuthenticatedRequest,
+  res: Response,
+  next: NextFunction
+): Promise<void> {
+  try {
+    if (!req.user) {
+      throw new AuthorizationError();
     }
 
+    const days = parseInt(req.query.days as string) || 7;
+    const validDays = Math.min(Math.max(days, 1), 30); // Limit to 1-30 days
+
+    const volume = await analyticsService.getMessageVolumeByDay(
+      req.user.userId,
+      validDays
+    );
+
+    res.json({ volume });
+  } catch (error) {
+    next(error);
+  }
+}
+
+// Get conversation trends for a specific chatbot
+export async function getConversationTrends(
+  req: AuthenticatedRequest,
+  res: Response,
+  next: NextFunction
+): Promise<void> {
+  try {
+    if (!req.user) {
+      throw new AuthorizationError();
+    }
+
+    const { id } = req.params;
+    const days = parseInt(req.query.days as string) || 7;
+    const validDays = Math.min(Math.max(days, 1), 30);
+
+    // Verify ownership
+    const { data: chatbot, error } = await supabaseAdmin
+      .from("chatbots")
+      .select("id")
+      .eq("id", id)
+      .eq("user_id", req.user.userId)
+      .single();
+
+    if (error || !chatbot) {
+      throw new NotFoundError("Chatbot");
+    }
+
+    const trends = await analyticsService.getConversationTrends(id, validDays);
+
+    res.json({ trends });
+  } catch (error) {
+    next(error);
+  }
+}
+
+// Get top questions for a chatbot
+export async function getTopQuestions(
+  req: AuthenticatedRequest,
+  res: Response,
+  next: NextFunction
+): Promise<void> {
+  try {
+    if (!req.user) {
+      throw new AuthorizationError();
+    }
+
+    const { id } = req.params;
+    const limit = parseInt(req.query.limit as string) || 10;
+    const validLimit = Math.min(Math.max(limit, 1), 50);
+
+    // Verify ownership
+    const { data: chatbot, error } = await supabaseAdmin
+      .from("chatbots")
+      .select("id")
+      .eq("id", id)
+      .eq("user_id", req.user.userId)
+      .single();
+
+    if (error || !chatbot) {
+      throw new NotFoundError("Chatbot");
+    }
+
+    const questions = await analyticsService.getTopQuestions(id, validLimit);
+
+    res.json({ questions });
+  } catch (error) {
+    next(error);
+  }
+}
+
+// Get chatbot analytics
+export async function getChatbotAnalytics(
+  req: AuthenticatedRequest,
+  res: Response,
+  next: NextFunction
+): Promise<void> {
+  try {
+    if (!req.user) {
+      throw new AuthorizationError();
+    }
+
+    const { id } = req.params;
+
+    // Verify ownership
+    const { data: chatbot, error } = await supabaseAdmin
+      .from("chatbots")
+      .select("id, name")
+      .eq("id", id)
+      .eq("user_id", req.user.userId)
+      .single();
+
+    if (error || !chatbot) {
+      throw new NotFoundError("Chatbot");
+    }
+
+    const analytics = await analyticsService.getChatbotAnalytics(id);
+
     res.json({
-      totalChatbots: totalChatbots || 0,
-      activeChatbots: activeChatbots || 0,
-      totalMessages,
-      totalConversations,
+      ...analytics,
+      name: chatbot.name,
     });
+  } catch (error) {
+    next(error);
+  }
+}
+
+// Get conversations for a chatbot with pagination
+export async function getConversations(
+  req: AuthenticatedRequest,
+  res: Response,
+  next: NextFunction
+): Promise<void> {
+  try {
+    if (!req.user) {
+      throw new AuthorizationError();
+    }
+
+    const { id } = req.params;
+    const page = parseInt(req.query.page as string) || 1;
+    const limit = Math.min(parseInt(req.query.limit as string) || 20, 50);
+    const offset = (page - 1) * limit;
+    const startDate = req.query.startDate as string | undefined;
+    const endDate = req.query.endDate as string | undefined;
+
+    // Verify ownership
+    const { data: chatbot, error: chatbotError } = await supabaseAdmin
+      .from("chatbots")
+      .select("id")
+      .eq("id", id)
+      .eq("user_id", req.user.userId)
+      .single();
+
+    if (chatbotError || !chatbot) {
+      throw new NotFoundError("Chatbot");
+    }
+
+    // Build query
+    let query = supabaseAdmin
+      .from("conversations")
+      .select("id, session_id, messages, created_at, updated_at", { count: "exact" })
+      .eq("chatbot_id", id)
+      .order("updated_at", { ascending: false })
+      .range(offset, offset + limit - 1);
+
+    if (startDate) {
+      query = query.gte("created_at", startDate);
+    }
+    if (endDate) {
+      query = query.lte("created_at", endDate);
+    }
+
+    const { data: conversations, error, count } = await query;
+
+    if (error) {
+      logger.error("Failed to fetch conversations", { error, chatbotId: id });
+      throw new Error("Failed to fetch conversations");
+    }
+
+    // Transform conversations to include message count and preview
+    const transformedConversations = (conversations || []).map((conv) => {
+      const messages = conv.messages as { role: string; content: string; timestamp: string }[];
+      const firstUserMessage = messages?.find((m) => m.role === "user");
+
+      return {
+        id: conv.id,
+        sessionId: conv.session_id,
+        messageCount: Array.isArray(messages) ? messages.length : 0,
+        preview: firstUserMessage?.content?.substring(0, 100) || "No messages",
+        createdAt: conv.created_at,
+        updatedAt: conv.updated_at,
+      };
+    });
+
+    res.json({
+      conversations: transformedConversations,
+      total: count || 0,
+      page,
+      limit,
+      totalPages: Math.ceil((count || 0) / limit),
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
+// Get a single conversation with full messages
+export async function getConversation(
+  req: AuthenticatedRequest,
+  res: Response,
+  next: NextFunction
+): Promise<void> {
+  try {
+    if (!req.user) {
+      throw new AuthorizationError();
+    }
+
+    const { id, conversationId } = req.params;
+
+    // Verify chatbot ownership
+    const { data: chatbot, error: chatbotError } = await supabaseAdmin
+      .from("chatbots")
+      .select("id")
+      .eq("id", id)
+      .eq("user_id", req.user.userId)
+      .single();
+
+    if (chatbotError || !chatbot) {
+      throw new NotFoundError("Chatbot");
+    }
+
+    // Get conversation
+    const { data: conversation, error } = await supabaseAdmin
+      .from("conversations")
+      .select("*")
+      .eq("id", conversationId)
+      .eq("chatbot_id", id)
+      .single();
+
+    if (error || !conversation) {
+      throw new NotFoundError("Conversation");
+    }
+
+    res.json(conversation);
   } catch (error) {
     next(error);
   }

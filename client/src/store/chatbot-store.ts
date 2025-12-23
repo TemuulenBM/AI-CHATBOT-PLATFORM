@@ -21,16 +21,33 @@ export interface ChatbotStats {
   totalMessages: number;
   activeChatbots: number;
   totalConversations: number;
+  avgResponseTime: number | null;
+}
+
+export interface MessageVolumePoint {
+  date: string;
+  messages: number;
+}
+
+export interface ConversationSummary {
+  id: string;
+  sessionId: string;
+  messageCount: number;
+  preview: string;
+  createdAt: string;
+  updatedAt: string;
 }
 
 interface ChatbotStore {
   chatbots: Chatbot[];
   stats: ChatbotStats;
+  messageVolume: MessageVolumePoint[];
   isLoading: boolean;
   error: string | null;
 
   fetchChatbots: () => Promise<void>;
   fetchStats: () => Promise<void>;
+  fetchMessageVolume: (days?: number) => Promise<void>;
   createChatbot: (name: string, websiteUrl: string) => Promise<Chatbot | null>;
   deleteChatbot: (id: string) => Promise<boolean>;
   clearError: () => void;
@@ -43,7 +60,9 @@ export const useChatbotStore = create<ChatbotStore>((set, get) => ({
     totalMessages: 0,
     activeChatbots: 0,
     totalConversations: 0,
+    avgResponseTime: null,
   },
+  messageVolume: [],
   isLoading: false,
   error: null,
 
@@ -85,6 +104,24 @@ export const useChatbotStore = create<ChatbotStore>((set, get) => ({
       }
     } catch (error) {
       console.error('Failed to fetch stats:', error);
+    }
+  },
+
+  fetchMessageVolume: async (days: number = 7) => {
+    try {
+      const response = await fetch(`/api/chatbots/stats/volume?days=${days}`, {
+        headers: {
+          ...getAuthHeader(),
+        },
+      });
+
+      const data = await response.json();
+
+      if (response.ok && data.volume) {
+        set({ messageVolume: data.volume });
+      }
+    } catch (error) {
+      console.error('Failed to fetch message volume:', error);
     }
   },
 
