@@ -293,6 +293,77 @@ export async function deleteChatbot(
   }
 }
 
+// Get dashboard stats
+export async function getStats(
+  req: AuthenticatedRequest,
+  res: Response,
+  next: NextFunction
+): Promise<void> {
+  try {
+    if (!req.user) {
+      throw new AuthorizationError();
+    }
+
+    const userId = req.user.userId;
+
+    // Get total chatbots
+    const { count: totalChatbots } = await supabaseAdmin
+      .from("chatbots")
+      .select("*", { count: "exact", head: true })
+      .eq("user_id", userId);
+
+    // Get active chatbots (ready status)
+    const { count: activeChatbots } = await supabaseAdmin
+      .from("chatbots")
+      .select("*", { count: "exact", head: true })
+      .eq("user_id", userId)
+      .eq("status", "ready");
+
+    // Get user's chatbot IDs
+    const { data: userChatbots } = await supabaseAdmin
+      .from("chatbots")
+      .select("id")
+      .eq("user_id", userId);
+
+    const chatbotIds = userChatbots?.map((c) => c.id) || [];
+
+    // Get total messages across all user's chatbots
+    let totalMessages = 0;
+    let totalConversations = 0;
+
+    if (chatbotIds.length > 0) {
+      // Get conversations count
+      const { data: conversations, count: convoCount } = await supabaseAdmin
+        .from("conversations")
+        .select("id", { count: "exact" })
+        .in("chatbot_id", chatbotIds);
+
+      totalConversations = convoCount || 0;
+
+      // Get messages count if there are conversations
+      const conversationIds = conversations?.map((c) => c.id) || [];
+      
+      if (conversationIds.length > 0) {
+        const { count: messagesCount } = await supabaseAdmin
+          .from("messages")
+          .select("*", { count: "exact", head: true })
+          .in("conversation_id", conversationIds);
+
+        totalMessages = messagesCount || 0;
+      }
+    }
+
+    res.json({
+      totalChatbots: totalChatbots || 0,
+      activeChatbots: activeChatbots || 0,
+      totalMessages,
+      totalConversations,
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
 // Public endpoint for widget
 export async function getChatbotPublic(
   req: AuthenticatedRequest,

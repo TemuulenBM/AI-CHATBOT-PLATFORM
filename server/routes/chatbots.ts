@@ -10,6 +10,9 @@ const router = Router();
 router.use(authMiddleware);
 router.use(loadSubscription);
 
+// GET /api/chatbots/stats - Get dashboard stats
+router.get("/stats", chatbotsController.getStats);
+
 // POST /api/chatbots - Create chatbot
 router.post(
   "/",
