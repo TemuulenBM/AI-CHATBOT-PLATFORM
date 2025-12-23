@@ -1,0 +1,89 @@
+import Redis from "ioredis";
+import logger from "./logger";
+
+const redisUrl = process.env.REDIS_URL || "redis://localhost:6379";
+
+export const redis = new Redis(redisUrl, {
+  maxRetriesPerRequest: 3,
+  lazyConnect: true,
+});
+
+redis.on("connect", () => {
+  logger.info("Redis connected");
+});
+
+redis.on("error", (error) => {
+  logger.error("Redis error", { error: error.message });
+});
+
+// Cache utilities
+export async function getCache<T>(key: string): Promise<T | null> {
+  try {
+    const data = await redis.get(key);
+    return data ? JSON.parse(data) : null;
+  } catch (error) {
+    logger.error("Cache get error", { key, error });
+    return null;
+  }
+}
+
+export async function setCache(
+  key: string,
+  value: unknown,
+  ttlSeconds: number = 3600
+): Promise<void> {
+  try {
+    await redis.setex(key, ttlSeconds, JSON.stringify(value));
+  } catch (error) {
+    logger.error("Cache set error", { key, error });
+  }
+}
+
+export async function deleteCache(key: string): Promise<void> {
+  try {
+    await redis.del(key);
+  } catch (error) {
+    logger.error("Cache delete error", { key, error });
+  }
+}
+
+export async function deleteCachePattern(pattern: string): Promise<void> {
+  try {
+    const keys = await redis.keys(pattern);
+    if (keys.length > 0) {
+      await redis.del(...keys);
+    }
+  } catch (error) {
+    logger.error("Cache pattern delete error", { pattern, error });
+  }
+}
+
+// Rate limiting utilities
+export async function checkRateLimit(
+  key: string,
+  limit: number,
+  windowSeconds: number
+): Promise<{ allowed: boolean; remaining: number; resetIn: number }> {
+  const now = Date.now();
+  const windowKey = `ratelimit:${key}:${Math.floor(now / (windowSeconds * 1000))}`;
+
+  try {
+    const count = await redis.incr(windowKey);
+    if (count === 1) {
+      await redis.expire(windowKey, windowSeconds);
+    }
+
+    const ttl = await redis.ttl(windowKey);
+
+    return {
+      allowed: count <= limit,
+      remaining: Math.max(0, limit - count),
+      resetIn: ttl > 0 ? ttl : windowSeconds,
+    };
+  } catch (error) {
+    logger.error("Rate limit check error", { key, error });
+    return { allowed: true, remaining: limit, resetIn: windowSeconds };
+  }
+}
+
+export default redis;

@@ -5,3 +5,18 @@ server/public
 vite.config.ts.*
 *.tar.gz
 .local/
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# Logs
+logs/
+*.log
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo

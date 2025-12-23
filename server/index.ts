@@ -1,7 +1,10 @@
+import "dotenv/config";
 import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { serveStatic } from "./static";
 import { createServer } from "http";
+import { closeQueues } from "./jobs/queues";
+import logger from "./utils/logger";
 
 const app = express();
 const httpServer = createServer(app);
@@ -85,14 +88,30 @@ app.use((req, res, next) => {
   // this serves both the API and the client.
   // It is the only port that is not firewalled.
   const port = parseInt(process.env.PORT || "5000", 10);
+  const host = process.env.NODE_ENV === "production" ? "0.0.0.0" : "localhost";
+  
   httpServer.listen(
-    {
-      port,
-      host: "0.0.0.0",
-      reusePort: true,
-    },
+    port,
+    host,
     () => {
-      log(`serving on port ${port}`);
+      log(`serving on ${host}:${port}`);
+      logger.info(`Server started on ${host}:${port}`);
     },
   );
+
+  // Graceful shutdown
+  const shutdown = async () => {
+    logger.info("Shutting down gracefully...");
+
+    httpServer.close(() => {
+      logger.info("HTTP server closed");
+    });
+
+    await closeQueues();
+
+    process.exit(0);
+  };
+
+  process.on("SIGTERM", shutdown);
+  process.on("SIGINT", shutdown);
 })();

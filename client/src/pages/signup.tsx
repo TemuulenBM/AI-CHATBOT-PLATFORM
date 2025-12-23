@@ -7,22 +7,37 @@ import { Link, useLocation } from "wouter";
 import { useAuthStore } from "@/store/authStore";
 import heroImage from "@assets/generated_images/3d_floating_futuristic_chatbot_robot_head.png";
 
-export default function AuthPage() {
+export default function SignupPage() {
   const [, navigate] = useLocation();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [validationError, setValidationError] = useState("");
 
-  const { login, isLoading, error, clearError } = useAuthStore();
+  const { signup, isLoading, error, clearError } = useAuthStore();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     clearError();
+    setValidationError("");
 
-    const success = await login(email, password);
+    if (password !== confirmPassword) {
+      setValidationError("Passwords do not match");
+      return;
+    }
+
+    if (password.length < 8) {
+      setValidationError("Password must be at least 8 characters");
+      return;
+    }
+
+    const success = await signup(email, password);
     if (success) {
       navigate("/dashboard");
     }
   };
+
+  const displayError = validationError || error;
 
   return (
     <div className="min-h-screen flex">
@@ -39,8 +54,8 @@ export default function AuthPage() {
 
         <div className="w-full max-w-md">
           <div className="mb-8">
-            <h1 className="text-3xl font-bold mb-2">Welcome Back</h1>
-            <p className="text-muted-foreground">Enter your credentials to access your account.</p>
+            <h1 className="text-3xl font-bold mb-2">Create Account</h1>
+            <p className="text-muted-foreground">Get started with your free account today.</p>
           </div>
 
           <div className="grid grid-cols-2 gap-4 mb-8">
@@ -61,9 +76,9 @@ export default function AuthPage() {
             </div>
           </div>
 
-          {error && (
+          {displayError && (
             <div className="mb-4 p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-sm">
-              {error}
+              {displayError}
             </div>
           )}
 
@@ -86,9 +101,22 @@ export default function AuthPage() {
               <Input
                 id="password"
                 type="password"
+                placeholder="At least 8 characters"
                 className="h-12 bg-white/5 border-white/10"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
+                required
+                disabled={isLoading}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="confirmPassword">Confirm Password</Label>
+              <Input
+                id="confirmPassword"
+                type="password"
+                className="h-12 bg-white/5 border-white/10"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
                 required
                 disabled={isLoading}
               />
@@ -101,18 +129,18 @@ export default function AuthPage() {
               {isLoading ? (
                 <>
                   <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-                  Signing In...
+                  Creating Account...
                 </>
               ) : (
-                "Sign In"
+                "Create Account"
               )}
             </Button>
           </form>
 
           <p className="mt-8 text-center text-sm text-muted-foreground">
-            Don't have an account?{" "}
-            <Link href="/signup" className="text-primary hover:underline font-medium">
-              Sign up
+            Already have an account?{" "}
+            <Link href="/login" className="text-primary hover:underline font-medium">
+              Sign in
             </Link>
           </p>
         </div>
@@ -127,9 +155,9 @@ export default function AuthPage() {
             alt="AI Visual"
             className="w-[400px] mx-auto mb-8 animate-[float_6s_ease-in-out_infinite] drop-shadow-2xl"
           />
-          <h2 className="text-4xl font-bold mb-4">Smart Automation</h2>
+          <h2 className="text-4xl font-bold mb-4">Start Building Today</h2>
           <p className="text-xl text-muted-foreground max-w-md mx-auto">
-            Join thousands of businesses using ChatAI to streamline customer support.
+            Create your first AI chatbot in minutes. No credit card required.
           </p>
         </div>
       </div>
