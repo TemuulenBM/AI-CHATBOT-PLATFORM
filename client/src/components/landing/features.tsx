@@ -1,50 +1,80 @@
 import { GlassCard } from "@/components/ui/glass-card";
-import { Bot, Zap, Shield, Globe, Cpu, BarChart3 } from "lucide-react";
+import { Bot, Zap, Shield, Globe, Cpu, BarChart3, Workflow, Link2, DollarSign, Timer, TrendingUp, MessageSquare } from "lucide-react";
 
 const features = [
   {
-    icon: Bot,
-    title: "Custom AI Persona",
-    description: "Customize your chatbot's personality, tone, and knowledge base to match your brand."
+    icon: Zap,
+    title: "Deploy in Seconds",
+    description: "Simply input your website URL and get a fully trained chatbot in under 60 seconds. No coding required."
   },
   {
-    icon: Zap,
-    title: "Instant Training",
-    description: "Simply input your website URL and our AI will scrape and learn your content in seconds."
+    icon: Bot,
+    title: "Custom AI Persona",
+    description: "Customize your chatbot's personality, tone, and knowledge base to match your brand identity perfectly."
+  },
+  {
+    icon: Cpu,
+    title: "GPT-4 & Claude Powered",
+    description: "Leverage the latest AI models from OpenAI and Anthropic for human-like understanding and responses."
   },
   {
     icon: Globe,
-    title: "Multi-language",
-    description: "Support customers in 95+ languages with automatic translation and detection."
+    title: "95+ Languages",
+    description: "Support customers worldwide with automatic language detection and translation in 95+ languages."
+  },
+  {
+    icon: BarChart3,
+    title: "Real-time Analytics",
+    description: "Track conversations, sentiment, resolution rates, and customer satisfaction in real-time dashboards."
+  },
+  {
+    icon: DollarSign,
+    title: "Reduce Support Costs",
+    description: "Cut support tickets by up to 70% and see immediate ROI. Pay only for what you use with usage-based API pricing."
+  },
+  {
+    icon: Link2,
+    title: "Easy Website Embed",
+    description: "Add chatbot to your website with a single line of code. Includes 'Powered by' branding for viral growth."
+  },
+  {
+    icon: Workflow,
+    title: "n8n Integrations",
+    description: "Connect to your CRM, Zendesk, Slack, Google Sheets, and 350+ apps with no-code automation workflows."
   },
   {
     icon: Shield,
     title: "Enterprise Security",
-    description: "Bank-grade encryption and GDPR compliance to keep your data safe."
+    description: "Bank-grade encryption, GDPR compliance, and SOC 2 Type II certification to keep your data safe."
   },
   {
-    icon: Cpu,
-    title: "GPT-4 Powered",
-    description: "Leverage the latest AI models for human-like understanding and responses."
+    icon: Timer,
+    title: "24/7 Auto-Support",
+    description: "Never miss a customer query. Your AI chatbot works around the clock, handling unlimited conversations."
   },
   {
-    icon: BarChart3,
-    title: "Advanced Analytics",
-    description: "Track conversations, sentiment, and resolution rates in real-time."
+    icon: MessageSquare,
+    title: "Lead Capture & CRM",
+    description: "Automatically capture leads, qualify prospects, and sync to your CRM with intelligent conversation routing."
+  },
+  {
+    icon: TrendingUp,
+    title: "Smart Escalation",
+    description: "Complex queries? Auto-escalate to human agents via Slack, email, or ticketing systems when needed."
   }
 ];
 
 export function Features() {
   return (
-    <section className="py-24 relative">
+    <section id="features" className="py-24 relative scroll-mt-16">
       <div className="container mx-auto px-4">
         <div className="text-center max-w-3xl mx-auto mb-16">
           <h2 className="text-3xl md:text-5xl font-bold mb-6">
-            Powerful Features for <br />
-            <span className="text-gradient">Modern Businesses</span>
+            Everything You Need to <br />
+            <span className="text-gradient">Automate Customer Support</span>
           </h2>
           <p className="text-muted-foreground text-lg">
-            Everything you need to automate customer support and increase engagement without writing a single line of code.
+            Launch your AI chatbot in minutes, reduce support costs by 70%, and deliver 24/7 customer service without writing a single line of code.
           </p>
         </div>
 

@@ -73,11 +73,13 @@ const plans = [
 
 export function Pricing() {
   return (
-    <section id="pricing" className="py-24 relative overflow-hidden">
+    <section id="pricing" className="py-24 relative overflow-hidden scroll-mt-16">
       <div className="container mx-auto px-4">
         <div className="text-center mb-16">
-          <h2 className="text-3xl md:text-5xl font-bold mb-6">Simple, Transparent Pricing</h2>
-          <p className="text-muted-foreground text-lg">Choose the perfect plan for your business needs.</p>
+          <h2 className="text-3xl md:text-5xl font-bold mb-6">
+            Simple, <span className="text-gradient">Transparent Pricing</span>
+          </h2>
+          <p className="text-muted-foreground text-lg">Start free, scale as you grow. Pay only for what you use with 85%+ profit margins.</p>
         </div>
 
         <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6 max-w-7xl mx-auto">

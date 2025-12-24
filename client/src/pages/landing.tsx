@@ -1,6 +1,7 @@
 import { Hero } from "@/components/landing/hero";
 import { Features } from "@/components/landing/features";
 import { Pricing } from "@/components/landing/pricing";
+import { Testimonials } from "@/components/landing/testimonials";
 import { Button } from "@/components/ui/button";
 import { Link } from "wouter";
 import { Bot } from "lucide-react";
@@ -49,6 +50,7 @@ export default function Landing() {
         <Hero />
         <Features />
         <Pricing />
+        <Testimonials />
       </main>
 
       <footer className="py-12 border-t border-white/5 bg-background/50">
