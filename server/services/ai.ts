@@ -29,7 +29,7 @@ interface ChatOptions {
 
 const DEFAULT_OPTIONS: ChatOptions = {
   provider: "openai",
-  model: "gpt-4o-mini",
+  model: "gpt-5.2",
   temperature: 0.7,
   maxTokens: 1000,
 };
@@ -166,7 +166,7 @@ export class AIService {
     ];
 
     const response = await openai.chat.completions.create({
-      model: options.model || "gpt-4o-mini",
+      model: options.model || "gpt-5.2",
       messages,
       temperature: options.temperature,
       max_tokens: options.maxTokens,
@@ -189,7 +189,7 @@ export class AIService {
     messages.push({ role: "user", content: message });
 
     const response = await anthropic.messages.create({
-      model: options.model || "claude-sonnet-4-20250514",
+      model: options.model || "claude-4-5-opus-20251124",
       max_tokens: options.maxTokens || 1000,
       system: systemPrompt,
       messages,
@@ -248,7 +248,7 @@ export class AIService {
     ];
 
     const stream = await openai.chat.completions.create({
-      model: options.model || "gpt-4o-mini",
+      model: options.model || "gpt-5.2",
       messages,
       temperature: options.temperature,
       max_tokens: options.maxTokens,
@@ -277,7 +277,7 @@ export class AIService {
     messages.push({ role: "user", content: message });
 
     const stream = anthropic.messages.stream({
-      model: options.model || "claude-sonnet-4-20250514",
+      model: options.model || "claude-4-5-opus-20251124",
       max_tokens: options.maxTokens || 1000,
       system: systemPrompt,
       messages,

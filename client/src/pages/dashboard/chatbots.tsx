@@ -4,7 +4,7 @@ import { GlassCard } from "@/components/ui/glass-card";
 import { useChatbotStore, Chatbot } from "@/store/chatbot-store";
 import { useAuth } from "@clerk/clerk-react";
 import { Button } from "@/components/ui/button";
-import { Plus, MoreHorizontal, Globe, Trash2, ExternalLink, Loader2, Copy, AlertCircle } from "lucide-react";
+import { Plus, MoreHorizontal, Globe, Trash2, ExternalLink, Loader2, Copy, AlertCircle, Settings } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import {
   DropdownMenu,
@@ -148,6 +148,9 @@ export default function ChatbotsList() {
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
+                          <DropdownMenuItem onClick={() => setLocation(`/dashboard/chatbots/${bot.id}/settings`)}>
+                            <Settings className="h-4 w-4 mr-2" /> Settings
+                          </DropdownMenuItem>
                           <DropdownMenuItem onClick={() => handleCopyEmbed(bot.id)}>
                             <Copy className="h-4 w-4 mr-2" /> Copy Embed Code
                           </DropdownMenuItem>

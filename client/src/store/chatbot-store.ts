@@ -1,19 +1,26 @@
 import { create } from 'zustand';
 import { getAuthHeader } from './authStore';
 
+export interface ChatbotSettings {
+  primaryColor?: string;
+  welcomeMessage?: string;
+  personality?: number;
+  systemPrompt?: string;
+}
+
 export interface Chatbot {
   id: string;
   name: string;
   website_url: string;
   status: 'pending' | 'scraping' | 'embedding' | 'ready' | 'failed';
-  settings: {
-    primaryColor?: string;
-    welcomeMessage?: string;
-    personality?: string;
-  };
+  settings: ChatbotSettings;
   pages_scraped: number;
   created_at: string;
   updated_at: string;
+  stats?: {
+    embeddings: number;
+    conversations: number;
+  };
 }
 
 export interface ChatbotStats {
@@ -40,21 +47,27 @@ export interface ConversationSummary {
 
 interface ChatbotStore {
   chatbots: Chatbot[];
+  currentChatbot: Chatbot | null;
   stats: ChatbotStats;
   messageVolume: MessageVolumePoint[];
   isLoading: boolean;
+  isSaving: boolean;
   error: string | null;
 
   fetchChatbots: () => Promise<void>;
+  fetchChatbot: (id: string) => Promise<Chatbot | null>;
   fetchStats: () => Promise<void>;
   fetchMessageVolume: (days?: number) => Promise<void>;
-  createChatbot: (name: string, websiteUrl: string) => Promise<Chatbot | null>;
+  createChatbot: (name: string, websiteUrl: string, settings?: Partial<ChatbotSettings>) => Promise<Chatbot | null>;
+  updateChatbot: (id: string, updates: { name?: string; settings?: Partial<ChatbotSettings> }) => Promise<boolean>;
   deleteChatbot: (id: string) => Promise<boolean>;
   clearError: () => void;
+  clearCurrentChatbot: () => void;
 }
 
 export const useChatbotStore = create<ChatbotStore>((set, get) => ({
   chatbots: [],
+  currentChatbot: null,
   stats: {
     totalChatbots: 0,
     totalMessages: 0,
@@ -64,6 +77,7 @@ export const useChatbotStore = create<ChatbotStore>((set, get) => ({
   },
   messageVolume: [],
   isLoading: false,
+  isSaving: false,
   error: null,
 
   fetchChatbots: async () => {
@@ -86,6 +100,31 @@ export const useChatbotStore = create<ChatbotStore>((set, get) => ({
       set({ chatbots: data.chatbots, isLoading: false });
     } catch (error) {
       set({ isLoading: false, error: 'Network error. Please try again.' });
+    }
+  },
+
+  fetchChatbot: async (id: string) => {
+    set({ isLoading: true, error: null });
+
+    try {
+      const response = await fetch(`/api/chatbots/${id}`, {
+        headers: {
+          ...getAuthHeader(),
+        },
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        set({ isLoading: false, error: data.message || 'Failed to fetch chatbot' });
+        return null;
+      }
+
+      set({ currentChatbot: data, isLoading: false });
+      return data;
+    } catch (error) {
+      set({ isLoading: false, error: 'Network error. Please try again.' });
+      return null;
     }
   },
 
@@ -125,7 +164,7 @@ export const useChatbotStore = create<ChatbotStore>((set, get) => ({
     }
   },
 
-  createChatbot: async (name: string, websiteUrl: string) => {
+  createChatbot: async (name: string, websiteUrl: string, settings?: Partial<ChatbotSettings>) => {
     set({ isLoading: true, error: null });
 
     try {
@@ -135,7 +174,7 @@ export const useChatbotStore = create<ChatbotStore>((set, get) => ({
           'Content-Type': 'application/json',
           ...getAuthHeader(),
         },
-        body: JSON.stringify({ name, websiteUrl }),
+        body: JSON.stringify({ name, websiteUrl, settings }),
       });
 
       const data = await response.json();
@@ -155,6 +194,40 @@ export const useChatbotStore = create<ChatbotStore>((set, get) => ({
     } catch (error) {
       set({ isLoading: false, error: 'Network error. Please try again.' });
       return null;
+    }
+  },
+
+  updateChatbot: async (id: string, updates: { name?: string; settings?: Partial<ChatbotSettings> }) => {
+    set({ isSaving: true, error: null });
+
+    try {
+      const response = await fetch(`/api/chatbots/${id}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          ...getAuthHeader(),
+        },
+        body: JSON.stringify(updates),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        set({ isSaving: false, error: data.message || 'Failed to update chatbot' });
+        return false;
+      }
+
+      // Update chatbot in list and current
+      set((state) => ({
+        chatbots: state.chatbots.map((c) => (c.id === id ? data.chatbot : c)),
+        currentChatbot: state.currentChatbot?.id === id ? data.chatbot : state.currentChatbot,
+        isSaving: false,
+      }));
+
+      return true;
+    } catch (error) {
+      set({ isSaving: false, error: 'Network error. Please try again.' });
+      return false;
     }
   },
 
@@ -183,4 +256,5 @@ export const useChatbotStore = create<ChatbotStore>((set, get) => ({
   },
 
   clearError: () => set({ error: null }),
+  clearCurrentChatbot: () => set({ currentChatbot: null }),
 }));

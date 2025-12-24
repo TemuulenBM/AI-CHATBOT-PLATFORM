@@ -4,7 +4,8 @@ import { GlassCard } from "@/components/ui/glass-card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Check, Globe, Loader2, Sparkles, Code2, Copy, ExternalLink } from "lucide-react";
+import { Check, Globe, Loader2, Sparkles, Code2, Copy, ExternalLink, Brain } from "lucide-react";
+import { Slider } from "@/components/ui/slider";
 import { useChatbotStore, Chatbot } from "@/store/chatbot-store";
 import { useLocation } from "wouter";
 import { useToast } from "@/hooks/use-toast";
@@ -22,12 +23,21 @@ const colorOptions = [
   { name: 'Orange', value: '#F97316', class: 'bg-orange-500' },
 ];
 
+function getPersonalityLabel(value: number): string {
+  if (value <= 20) return "Very Professional";
+  if (value <= 40) return "Professional";
+  if (value <= 60) return "Balanced";
+  if (value <= 80) return "Friendly";
+  return "Very Casual";
+}
+
 export default function CreateChatbot() {
   const [step, setStep] = useState(1);
   const [url, setUrl] = useState("");
   const [chatbotName, setChatbotName] = useState("");
   const [selectedColor, setSelectedColor] = useState(colorOptions[0].value);
   const [welcomeMessage, setWelcomeMessage] = useState("Hello! How can I help you today?");
+  const [personality, setPersonality] = useState(50);
   const [createdChatbot, setCreatedChatbot] = useState<Chatbot | null>(null);
   
   const { createChatbot, isLoading, error, clearError } = useChatbotStore();
@@ -86,7 +96,11 @@ export default function CreateChatbot() {
 
     clearError();
 
-    const chatbot = await createChatbot(chatbotName.trim(), url);
+    const chatbot = await createChatbot(chatbotName.trim(), url, {
+      personality,
+      primaryColor: selectedColor,
+      welcomeMessage: welcomeMessage.trim(),
+    });
     
     if (chatbot) {
       setCreatedChatbot(chatbot);
@@ -217,6 +231,28 @@ export default function CreateChatbot() {
                       placeholder="Hello! How can I help you today?"
                       className="bg-background/50" 
                     />
+                  </div>
+                  <div>
+                    <div className="flex items-center justify-between mb-2">
+                      <Label className="flex items-center gap-2">
+                        <Brain className="h-4 w-4 text-purple-400" />
+                        Personality Tone
+                      </Label>
+                      <span className="text-sm font-medium text-primary">
+                        {getPersonalityLabel(personality)}
+                      </span>
+                    </div>
+                    <Slider
+                      value={[personality]}
+                      onValueChange={(value) => setPersonality(value[0])}
+                      max={100}
+                      step={1}
+                      className="mb-2"
+                    />
+                    <div className="flex justify-between text-xs text-muted-foreground">
+                      <span>Professional</span>
+                      <span>Casual</span>
+                    </div>
                   </div>
                   <Button 
                     className="w-full btn-gradient mt-4" 
