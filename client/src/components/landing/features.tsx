@@ -10,7 +10,7 @@ const features = [
   {
     icon: Bot,
     title: "Custom AI Persona",
-    description: "Customize your chatbot's personality, tone, and knowledge base to match your brand identity perfectly."
+    description: "Customize your chatbot's personality and tone - it automatically learns from your website to match your brand perfectly."
   },
   {
     icon: Cpu,
@@ -20,17 +20,17 @@ const features = [
   {
     icon: Globe,
     title: "95+ Languages",
-    description: "Support customers worldwide with automatic language detection and translation in 95+ languages."
+    description: "Powered by multilingual AI models that naturally understand and respond in your customers' language."
   },
   {
     icon: BarChart3,
     title: "Real-time Analytics",
-    description: "Track conversations, sentiment, resolution rates, and customer satisfaction in real-time dashboards."
+    description: "Track conversations, sentiment trends, and customer satisfaction with comprehensive analytics and insights."
   },
   {
     icon: DollarSign,
     title: "Reduce Support Costs",
-    description: "Cut support tickets by up to 70% and see immediate ROI. Pay only for what you use with usage-based API pricing."
+    description: "Automate customer support with 24/7 AI assistance. Flexible subscription plans that scale with your business needs."
   },
   {
     icon: Link2,
@@ -44,8 +44,8 @@ const features = [
   },
   {
     icon: Shield,
-    title: "Enterprise Security",
-    description: "Bank-grade encryption, GDPR compliance, and SOC 2 Type II certification to keep your data safe."
+    title: "Secure & Protected",
+    description: "Bank-grade password encryption, JWT authentication, rate limiting, and secure data handling to keep your conversations safe."
   },
   {
     icon: Timer,
