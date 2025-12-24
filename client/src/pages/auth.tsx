@@ -33,7 +33,7 @@ export default function AuthPage() {
             <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-primary to-secondary flex items-center justify-center text-white">
               <Bot className="h-5 w-5" />
             </div>
-            <span>ChatAI</span>
+            <span>ConvoAI</span>
           </Link>
         </div>
 
@@ -129,7 +129,7 @@ export default function AuthPage() {
           />
           <h2 className="text-4xl font-bold mb-4">Smart Automation</h2>
           <p className="text-xl text-muted-foreground max-w-md mx-auto">
-            Join thousands of businesses using ChatAI to streamline customer support.
+            Join thousands of businesses using ConvoAI to streamline customer support.
           </p>
         </div>
       </div>

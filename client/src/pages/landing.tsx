@@ -18,7 +18,7 @@ export default function Landing() {
             <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-primary to-secondary flex items-center justify-center text-white">
               <Bot className="h-5 w-5" />
             </div>
-            <span>ChatAI</span>
+            <span>ConvoAI</span>
           </Link>
 
           <div className="hidden md:flex items-center gap-8 text-sm font-medium text-muted-foreground">
@@ -55,7 +55,7 @@ export default function Landing() {
 
       <footer className="py-12 border-t border-white/5 bg-background/50">
         <div className="container mx-auto px-4 text-center text-muted-foreground">
-          <p>© 2024 ChatAI Platform. All rights reserved.</p>
+          <p>© 2024 ConvoAI. All rights reserved.</p>
         </div>
       </footer>
 

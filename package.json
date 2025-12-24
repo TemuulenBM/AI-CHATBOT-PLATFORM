@@ -1,8 +1,9 @@
 {
-  "name": "rest-express",
+  "name": "convoai",
   "version": "1.0.0",
   "type": "module",
   "license": "MIT",
+  "description": "ConvoAI - AI Chatbot Platform for automating customer support",
   "scripts": {
     "dev:client": "vite dev --port 5000",
     "dev": "NODE_ENV=development tsx server/index.ts",

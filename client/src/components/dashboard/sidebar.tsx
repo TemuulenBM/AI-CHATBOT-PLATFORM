@@ -21,7 +21,7 @@ export function Sidebar() {
           <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-primary to-secondary flex items-center justify-center text-white">
             <Bot className="h-5 w-5" />
           </div>
-          <span>ChatAI</span>
+          <span>ConvoAI</span>
         </Link>
       </div>
 
