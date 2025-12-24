@@ -104,11 +104,19 @@ export function initializeEnvironment(): void {
   // Additional validation for JWT secret
   const jwtSecret = process.env.JWT_SECRET;
   if (jwtSecret && jwtSecret.length < 32) {
+    if (process.env.NODE_ENV === "production") {
+      console.error("\n❌ JWT_SECRET is too short. For production, use at least 32 characters.\n");
+      process.exit(1);
+    }
     logger.warn("JWT_SECRET is too short. For production, use at least 32 characters.");
   }
 
   if (jwtSecret === "your-super-secret-jwt-key-change-in-production" || 
       jwtSecret === "development-secret-change-in-production") {
+    if (process.env.NODE_ENV === "production") {
+      console.error("\n❌ JWT_SECRET is using a default value. Set a secure secret for production.\n");
+      process.exit(1);
+    }
     logger.warn("JWT_SECRET is using a default value. Change this for production!");
   }
 

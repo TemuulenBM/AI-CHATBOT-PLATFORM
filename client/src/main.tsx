@@ -39,7 +39,10 @@ if (SENTRY_DSN) {
 }
 
 // Error Boundary fallback component
-function ErrorFallback({ error, resetError }: { error: Error; resetError: () => void }) {
+function ErrorFallback({ error, resetError }: { error: unknown; resetError: () => void }) {
+  // Safely extract error message
+  const errorMessage = error instanceof Error ? error.message : String(error);
+  
   return (
     <div className="min-h-screen flex items-center justify-center bg-background">
       <div className="text-center p-8 max-w-md">
@@ -63,7 +66,7 @@ function ErrorFallback({ error, resetError }: { error: Error; resetError: () => 
           We've been notified and are working on a fix.
         </p>
         <p className="text-sm text-muted-foreground mb-4 font-mono bg-muted p-2 rounded">
-          {error.message}
+          {errorMessage}
         </p>
         <button
           onClick={resetError}

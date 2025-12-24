@@ -1,7 +1,20 @@
 import Redis from "ioredis";
 import logger from "./logger";
 
-const redisUrl = process.env.REDIS_URL || "redis://localhost:6379";
+const redisUrl = (() => {
+  const url = process.env.REDIS_URL;
+  const isProduction = process.env.NODE_ENV === "production";
+  
+  if (!url) {
+    if (isProduction) {
+      throw new Error("FATAL: REDIS_URL environment variable is required in production");
+    }
+    logger.warn("REDIS_URL not set - using localhost:6379 for development");
+    return "redis://localhost:6379";
+  }
+  
+  return url;
+})();
 
 export const redis = new Redis(redisUrl, {
   maxRetriesPerRequest: 3,
@@ -14,6 +27,9 @@ redis.on("connect", () => {
 
 redis.on("error", (error) => {
   logger.error("Redis error", { error: error.message });
+  if (process.env.NODE_ENV === "production") {
+    logger.error("Redis connection failed in production - this may cause service degradation");
+  }
 });
 
 // Cache utilities

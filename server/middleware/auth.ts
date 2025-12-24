@@ -5,7 +5,27 @@ import { supabaseAdmin, PLAN_LIMITS, PlanType } from "../utils/supabase";
 import { getCache, setCache } from "../utils/redis";
 import logger from "../utils/logger";
 
-const JWT_SECRET = process.env.JWT_SECRET || "development-secret-change-in-production";
+const JWT_SECRET = (() => {
+  const secret = process.env.JWT_SECRET;
+  const isProduction = process.env.NODE_ENV === "production";
+  
+  if (!secret) {
+    if (isProduction) {
+      throw new Error("FATAL: JWT_SECRET environment variable is required in production");
+    }
+    console.warn("⚠️  JWT_SECRET not set - using insecure development default");
+    return "development-secret-change-in-production";
+  }
+  
+  if (secret === "development-secret-change-in-production" || 
+      secret === "your-super-secret-jwt-key-change-in-production") {
+    if (isProduction) {
+      throw new Error("FATAL: JWT_SECRET is using a default value. Set a secure secret for production");
+    }
+  }
+  
+  return secret;
+})();
 
 export interface JwtPayload {
   userId: string;

@@ -3,15 +3,21 @@ import logger from "./logger";
 
 const supabaseUrl = process.env.SUPABASE_URL;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_KEY;
+const isProduction = process.env.NODE_ENV === "production";
 
 if (!supabaseUrl || !supabaseServiceKey) {
+  if (isProduction) {
+    throw new Error(
+      "FATAL: SUPABASE_URL and SUPABASE_SERVICE_KEY environment variables are required in production"
+    );
+  }
   logger.warn("Supabase credentials not configured. Some features will be unavailable.");
 }
 
 // Service client with admin privileges (for server-side operations)
 export const supabaseAdmin: SupabaseClient = createClient(
   supabaseUrl || "https://placeholder.supabase.co",
-  supabaseServiceKey || "placeholder",
+  supabaseServiceKey || "placeholder-key-for-development-only",
   {
     auth: {
       autoRefreshToken: false,
