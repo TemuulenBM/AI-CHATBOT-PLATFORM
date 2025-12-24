@@ -155,8 +155,6 @@ router.get("/widget.js", async (req: Request, res: Response) => {
 
     res.setHeader("Content-Type", "application/javascript; charset=utf-8");
     res.setHeader("Cache-Control", "public, max-age=3600"); // 1 hour cache
-    res.setHeader("Access-Control-Allow-Origin", "*");
-    res.setHeader("Access-Control-Allow-Methods", "GET");
     res.setHeader("X-Content-Type-Options", "nosniff");
 
     // Send integrity in header for clients that want to verify
@@ -176,8 +174,6 @@ router.get("/widget/loader.js", async (req: Request, res: Response) => {
 
     res.setHeader("Content-Type", "application/javascript; charset=utf-8");
     res.setHeader("Cache-Control", "public, max-age=86400"); // 24 hour cache (loader changes less often)
-    res.setHeader("Access-Control-Allow-Origin", "*");
-    res.setHeader("Access-Control-Allow-Methods", "GET");
     res.setHeader("X-Content-Type-Options", "nosniff");
     res.setHeader("X-Script-Integrity", integrity);
 
@@ -195,8 +191,6 @@ router.get("/widget/widget.js", async (req: Request, res: Response) => {
 
     res.setHeader("Content-Type", "application/javascript; charset=utf-8");
     res.setHeader("Cache-Control", "public, max-age=3600");
-    res.setHeader("Access-Control-Allow-Origin", "*");
-    res.setHeader("Access-Control-Allow-Methods", "GET");
     res.setHeader("X-Content-Type-Options", "nosniff");
     res.setHeader("X-Script-Integrity", integrity);
 

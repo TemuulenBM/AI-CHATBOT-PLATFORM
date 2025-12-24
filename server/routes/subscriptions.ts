@@ -2,6 +2,7 @@ import { Router } from "express";
 import * as subscriptionsController from "../controllers/subscriptions";
 import { validate, schemas } from "../middleware/validation";
 import { authMiddleware } from "../middleware/auth";
+import { validateStripeWebhookOrigin } from "../middleware/stripeWebhookValidator";
 
 const router = Router();
 
@@ -9,7 +10,11 @@ const router = Router();
 router.get("/plans", subscriptionsController.getPlans);
 
 // POST /api/subscriptions/webhook - Stripe webhook (must be before auth middleware)
-router.post("/webhook", subscriptionsController.handleWebhook);
+router.post(
+  "/webhook",
+  validateStripeWebhookOrigin,
+  subscriptionsController.handleWebhook
+);
 
 // Protected routes
 router.use(authMiddleware);

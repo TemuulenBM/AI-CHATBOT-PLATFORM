@@ -7,6 +7,7 @@ import { createServer } from "http";
 import { closeQueues } from "./jobs/queues";
 import logger from "./utils/logger";
 import { initializeEnvironment } from "./utils/env";
+import { applySecurity } from "./middleware/security";
 
 // Validate environment variables at startup
 initializeEnvironment();
@@ -49,15 +50,23 @@ declare module "http" {
   }
 }
 
+// Apply security middleware BEFORE body parsers
+applySecurity(app);
+
+// Add size limits to prevent DoS
 app.use(
   express.json({
+    limit: process.env.BODY_LIMIT || "10mb",
     verify: (req, _res, buf) => {
       req.rawBody = buf;
     },
   }),
 );
 
-app.use(express.urlencoded({ extended: false }));
+app.use(express.urlencoded({
+  extended: false,
+  limit: process.env.BODY_LIMIT || "10mb",
+}));
 
 export function log(message: string, source = "express") {
   const formattedTime = new Date().toLocaleTimeString("en-US", {
