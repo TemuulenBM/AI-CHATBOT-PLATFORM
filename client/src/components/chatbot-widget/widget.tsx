@@ -34,24 +34,17 @@ export function ChatbotWidget({ chatbotId, welcomeMessage = "Hi! How can I help 
     setInput("");
     setIsLoading(true);
 
-    // If no chatbotId provided, show demo message
-    if (!chatbotId) {
-      setTimeout(() => {
-        setMessages(prev => [...prev, { role: 'bot', text: "This is a preview widget. Create a chatbot and add your website URL to train it with your content!" }]);
-        setIsLoading(false);
-      }, 1000);
-      return;
-    }
+    // Use support bot endpoint if no chatbotId, otherwise use regular chat
+    const endpoint = chatbotId ? "/api/chat/stream" : "/api/chat/support";
+    const payload = chatbotId 
+      ? { chatbotId, sessionId, message: userMessage }
+      : { sessionId, message: userMessage };
 
     try {
-      const response = await fetch("/api/chat/stream", {
+      const response = await fetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          chatbotId,
-          sessionId,
-          message: userMessage,
-        }),
+        body: JSON.stringify(payload),
       });
 
       if (!response.ok) {

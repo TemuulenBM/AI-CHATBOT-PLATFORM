@@ -6,6 +6,13 @@ import { chatRateLimit } from "../middleware/rateLimit";
 
 const router = Router();
 
+// POST /api/chat/support - Built-in support bot (no auth required)
+router.post(
+  "/support",
+  chatRateLimit,
+  chatController.supportBotMessage
+);
+
 // POST /api/chat/message - Send message (non-streaming)
 router.post(
   "/message",
