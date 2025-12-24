@@ -500,3 +500,201 @@ export async function invalidateChatbotAnalyticsCache(chatbotId: string): Promis
     logger.error("Failed to invalidate chatbot analytics cache", { error, chatbotId });
   }
 }
+
+export interface SentimentBreakdown {
+  positive: number;
+  neutral: number;
+  negative: number;
+  total: number;
+  positiveRate: number | null;
+  negativeRate: number | null;
+}
+
+/**
+ * Get sentiment breakdown for a chatbot
+ */
+export async function getSentimentBreakdown(chatbotId: string): Promise<SentimentBreakdown> {
+  const cacheKey = `analytics:sentiment:${chatbotId}`;
+  const cached = await getCache<SentimentBreakdown>(cacheKey);
+
+  if (cached) {
+    return cached;
+  }
+
+  try {
+    const { data: conversations } = await supabaseAdmin
+      .from("conversations")
+      .select("messages")
+      .eq("chatbot_id", chatbotId);
+
+    let positive = 0;
+    let neutral = 0;
+    let negative = 0;
+
+    if (conversations) {
+      for (const conv of conversations) {
+        const messages = conv.messages as ConversationMessage[];
+        if (Array.isArray(messages)) {
+          for (const msg of messages) {
+            if (msg.role === "user" && msg.sentiment) {
+              if (msg.sentiment === "positive") positive++;
+              else if (msg.sentiment === "negative") negative++;
+              else neutral++;
+            }
+          }
+        }
+      }
+    }
+
+    const total = positive + neutral + negative;
+    const breakdown: SentimentBreakdown = {
+      positive,
+      neutral,
+      negative,
+      total,
+      positiveRate: total > 0 ? Math.round((positive / total) * 100) : null,
+      negativeRate: total > 0 ? Math.round((negative / total) * 100) : null,
+    };
+
+    // Cache for 5 minutes
+    await setCache(cacheKey, breakdown, 300);
+
+    return breakdown;
+  } catch (error) {
+    logger.error("Failed to get sentiment breakdown", { error, chatbotId });
+    throw new Error("Failed to get sentiment breakdown");
+  }
+}
+
+export interface SatisfactionMetrics {
+  positive: number;
+  negative: number;
+  total: number;
+  satisfactionRate: number | null;
+}
+
+/**
+ * Get CSAT satisfaction metrics for a chatbot
+ */
+export async function getSatisfactionMetrics(chatbotId: string): Promise<SatisfactionMetrics> {
+  const cacheKey = `analytics:satisfaction:${chatbotId}`;
+  const cached = await getCache<SatisfactionMetrics>(cacheKey);
+
+  if (cached) {
+    return cached;
+  }
+
+  try {
+    const { data: feedbackData, error } = await supabaseAdmin
+      .from("feedback")
+      .select("rating")
+      .eq("chatbot_id", chatbotId);
+
+    if (error) {
+      logger.error("Failed to get feedback", { error, chatbotId });
+      throw new Error("Failed to get feedback");
+    }
+
+    const feedback = feedbackData || [];
+    const positive = feedback.filter((f) => f.rating === "positive").length;
+    const negative = feedback.filter((f) => f.rating === "negative").length;
+    const total = feedback.length;
+
+    const metrics: SatisfactionMetrics = {
+      positive,
+      negative,
+      total,
+      satisfactionRate: total > 0 ? Math.round((positive / total) * 100) : null,
+    };
+
+    // Cache for 5 minutes
+    await setCache(cacheKey, metrics, 300);
+
+    return metrics;
+  } catch (error) {
+    logger.error("Failed to get satisfaction metrics", { error, chatbotId });
+    throw new Error("Failed to get satisfaction metrics");
+  }
+}
+
+export interface SentimentTrendPoint {
+  date: string;
+  positive: number;
+  neutral: number;
+  negative: number;
+}
+
+/**
+ * Get sentiment trends over time for a chatbot
+ */
+export async function getSentimentTrends(
+  chatbotId: string,
+  days: number = 7
+): Promise<SentimentTrendPoint[]> {
+  const cacheKey = `analytics:sentiment-trends:${chatbotId}:${days}`;
+  const cached = await getCache<SentimentTrendPoint[]>(cacheKey);
+
+  if (cached) {
+    return cached;
+  }
+
+  try {
+    const startDate = new Date();
+    startDate.setDate(startDate.getDate() - days);
+    startDate.setHours(0, 0, 0, 0);
+
+    const { data: conversations } = await supabaseAdmin
+      .from("conversations")
+      .select("messages, created_at")
+      .eq("chatbot_id", chatbotId)
+      .gte("created_at", startDate.toISOString());
+
+    // Initialize daily buckets
+    const dailyData: Map<string, { positive: number; neutral: number; negative: number }> = new Map();
+
+    for (let i = 0; i < days; i++) {
+      const date = new Date();
+      date.setDate(date.getDate() - (days - 1 - i));
+      const dateKey = date.toISOString().split("T")[0];
+      dailyData.set(dateKey, { positive: 0, neutral: 0, negative: 0 });
+    }
+
+    // Aggregate sentiment by day
+    if (conversations) {
+      for (const conv of conversations) {
+        const dateKey = conv.created_at.split("T")[0];
+        const existing = dailyData.get(dateKey);
+
+        if (existing) {
+          const messages = conv.messages as ConversationMessage[];
+          if (Array.isArray(messages)) {
+            for (const msg of messages) {
+              if (msg.role === "user" && msg.sentiment) {
+                if (msg.sentiment === "positive") existing.positive++;
+                else if (msg.sentiment === "negative") existing.negative++;
+                else existing.neutral++;
+              }
+            }
+          }
+        }
+      }
+    }
+
+    const trends: SentimentTrendPoint[] = Array.from(dailyData.entries()).map(
+      ([date, data]) => ({
+        date,
+        positive: data.positive,
+        neutral: data.neutral,
+        negative: data.negative,
+      })
+    );
+
+    // Cache for 5 minutes
+    await setCache(cacheKey, trends, 300);
+
+    return trends;
+  } catch (error) {
+    logger.error("Failed to get sentiment trends", { error, chatbotId, days });
+    throw new Error("Failed to get sentiment trends");
+  }
+}

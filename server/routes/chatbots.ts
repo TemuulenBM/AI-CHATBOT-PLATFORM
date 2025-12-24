@@ -41,6 +41,13 @@ router.get(
   chatbotsController.getChatbotAnalytics
 );
 
+// GET /api/chatbots/:id/sentiment - Get sentiment breakdown
+router.get(
+  "/:id/sentiment",
+  validate({ params: schemas.uuidParam }),
+  chatbotsController.getSentimentBreakdown
+);
+
 // GET /api/chatbots/:id/trends - Get conversation trends for chatbot
 router.get(
   "/:id/trends",

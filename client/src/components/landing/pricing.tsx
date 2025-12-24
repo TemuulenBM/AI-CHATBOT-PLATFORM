@@ -47,7 +47,7 @@ const plans = [
       "Priority Support",
       "Remove Branding",
       "API Access",
-      "GPT-4 Support",
+      "GPT-5 Support",
     ],
     cta: "Start Free Trial",
     ctaVariant: "gradient" as const,

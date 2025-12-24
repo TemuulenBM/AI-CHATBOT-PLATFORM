@@ -10,6 +10,7 @@ interface ChatMessage {
 }
 
 interface StoredConversation {
+  id?: string;
   messages: Array<{
     role: "user" | "assistant";
     content: string;
@@ -40,10 +41,13 @@ class ChatAIWidget {
   private isOpen: boolean = false;
   private messages: ChatMessage[] = [];
   private sessionId: string;
+  private conversationId: string | null = null;
   private container: HTMLDivElement | null = null;
   private chatContainer: HTMLDivElement | null = null;
   private isLoading: boolean = false;
   private storageAvailable: boolean = false;
+  private feedbackSubmitted: boolean = false;
+  private messageCount: number = 0;
 
   constructor(config: Partial<WidgetConfig>) {
     this.config = {
@@ -78,14 +82,14 @@ class ChatAIWidget {
    */
   private getOrCreateSessionId(): string {
     const storageKey = `chatai_session_${this.config.chatbotId}`;
-    
+
     if (this.storageAvailable) {
       try {
         const existingSession = localStorage.getItem(storageKey);
         if (existingSession) {
           return existingSession;
         }
-        
+
         const newSession = "session_" + Math.random().toString(36).substring(2, 15);
         localStorage.setItem(storageKey, newSession);
         return newSession;
@@ -93,7 +97,7 @@ class ChatAIWidget {
         // Fall through to generate new session
       }
     }
-    
+
     return "session_" + Math.random().toString(36).substring(2, 15);
   }
 
@@ -102,7 +106,7 @@ class ChatAIWidget {
    */
   private clearSession(): void {
     const storageKey = `chatai_session_${this.config.chatbotId}`;
-    
+
     if (this.storageAvailable) {
       try {
         localStorage.removeItem(storageKey);
@@ -110,10 +114,10 @@ class ChatAIWidget {
         // Ignore storage errors
       }
     }
-    
+
     // Generate new session
     this.sessionId = "session_" + Math.random().toString(36).substring(2, 15);
-    
+
     if (this.storageAvailable) {
       try {
         localStorage.setItem(storageKey, this.sessionId);
@@ -121,7 +125,7 @@ class ChatAIWidget {
         // Ignore storage errors
       }
     }
-    
+
     // Reset messages to welcome message only
     this.messages = [{
       role: "assistant",
@@ -139,30 +143,58 @@ class ChatAIWidget {
       const response = await fetch(
         `${this.config.apiUrl}/api/chat/${this.config.chatbotId}/${this.sessionId}`
       );
-      
+
       if (response.ok) {
         const data: StoredConversation = await response.json();
-        
+
         if (data.messages && data.messages.length > 0) {
+          // Store conversation ID for feedback
+          if (data.id) {
+            this.conversationId = data.id;
+            // Check if feedback already submitted
+            this.checkExistingFeedback();
+          }
+
           // Convert stored messages to ChatMessage format
           this.messages = data.messages.map((msg) => ({
             role: msg.role,
             content: msg.content,
             timestamp: new Date(msg.timestamp),
           }));
+          this.messageCount = data.messages.filter(m => m.role === "user").length;
           return;
         }
       }
     } catch (error) {
       console.warn("ChatAI: Failed to load conversation history");
     }
-    
+
     // No history found - add welcome message
     this.messages = [{
       role: "assistant",
       content: this.config.welcomeMessage,
       timestamp: new Date(),
     }];
+  }
+
+  /**
+   * Check if feedback was already submitted for this conversation
+   */
+  private async checkExistingFeedback(): Promise<void> {
+    if (!this.conversationId) return;
+
+    try {
+      const response = await fetch(
+        `${this.config.apiUrl}/api/feedback/${this.conversationId}`
+      );
+
+      if (response.ok) {
+        const data = await response.json();
+        this.feedbackSubmitted = data.hasFeedback;
+      }
+    } catch {
+      // Ignore errors
+    }
   }
 
   private async init(): Promise<void> {
@@ -482,6 +514,69 @@ class ChatAIWidget {
           max-height: 500px;
         }
       }
+
+      #chatai-feedback-prompt {
+        padding: 12px 16px;
+        background: rgba(255, 255, 255, 0.05);
+        border-top: 1px solid rgba(255, 255, 255, 0.1);
+        text-align: center;
+      }
+
+      #chatai-feedback-prompt p {
+        color: rgba(255, 255, 255, 0.7);
+        font-size: 13px;
+        margin: 0 0 10px 0;
+      }
+
+      .chatai-feedback-buttons {
+        display: flex;
+        gap: 12px;
+        justify-content: center;
+      }
+
+      .chatai-feedback-btn {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding: 8px 16px;
+        border-radius: 20px;
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        background: transparent;
+        color: rgba(255, 255, 255, 0.8);
+        font-size: 13px;
+        cursor: pointer;
+        transition: all 0.2s;
+      }
+
+      .chatai-feedback-btn:hover {
+        background: rgba(255, 255, 255, 0.1);
+      }
+
+      .chatai-feedback-btn.positive:hover {
+        background: rgba(34, 197, 94, 0.2);
+        border-color: #22c55e;
+        color: #22c55e;
+      }
+
+      .chatai-feedback-btn.negative:hover {
+        background: rgba(239, 68, 68, 0.2);
+        border-color: #ef4444;
+        color: #ef4444;
+      }
+
+      .chatai-feedback-btn svg {
+        width: 16px;
+        height: 16px;
+      }
+
+      #chatai-feedback-thanks {
+        padding: 12px 16px;
+        background: rgba(34, 197, 94, 0.1);
+        border-top: 1px solid rgba(34, 197, 94, 0.2);
+        text-align: center;
+        color: #22c55e;
+        font-size: 13px;
+      }
     `;
     document.head.appendChild(style);
   }
@@ -526,6 +621,7 @@ class ChatAIWidget {
             </button>
           </form>
         </div>
+        <div id="chatai-feedback-container"></div>
         <div id="chatai-powered-by">
           Powered by <a href="__WIDGET_POWERED_BY_URL__" target="_blank">ChatAI</a>
         </div>
@@ -609,6 +705,83 @@ class ChatAIWidget {
     }
 
     this.chatContainer.scrollTop = this.chatContainer.scrollHeight;
+
+    // Render feedback prompt
+    this.renderFeedbackPrompt();
+  }
+
+  /**
+   * Render feedback prompt if conditions are met
+   */
+  private renderFeedbackPrompt(): void {
+    const feedbackContainer = this.container?.querySelector("#chatai-feedback-container");
+    if (!feedbackContainer) return;
+
+    // Show feedback prompt after 3+ user messages and not already submitted
+    if (this.messageCount >= 3 && !this.feedbackSubmitted && this.conversationId) {
+      feedbackContainer.innerHTML = `
+        <div id="chatai-feedback-prompt">
+          <p>Was this conversation helpful?</p>
+          <div class="chatai-feedback-buttons">
+            <button class="chatai-feedback-btn positive" data-rating="positive">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3zM7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"/>
+              </svg>
+              Yes
+            </button>
+            <button class="chatai-feedback-btn negative" data-rating="negative">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M10 15v4a3 3 0 0 0 3 3l4-9V2H5.72a2 2 0 0 0-2 1.7l-1.38 9a2 2 0 0 0 2 2.3zm7-13h2.67A2.31 2.31 0 0 1 22 4v7a2.31 2.31 0 0 1-2.33 2H17"/>
+              </svg>
+              No
+            </button>
+          </div>
+        </div>
+      `;
+
+      // Add click handlers
+      const positiveBtn = feedbackContainer.querySelector('[data-rating="positive"]');
+      const negativeBtn = feedbackContainer.querySelector('[data-rating="negative"]');
+
+      positiveBtn?.addEventListener("click", () => this.submitFeedback("positive"));
+      negativeBtn?.addEventListener("click", () => this.submitFeedback("negative"));
+    } else if (this.feedbackSubmitted) {
+      feedbackContainer.innerHTML = `
+        <div id="chatai-feedback-thanks">
+          Thank you for your feedback! 🙏
+        </div>
+      `;
+    } else {
+      feedbackContainer.innerHTML = "";
+    }
+  }
+
+  /**
+   * Submit feedback to the API
+   */
+  private async submitFeedback(rating: "positive" | "negative"): Promise<void> {
+    if (!this.conversationId || this.feedbackSubmitted) return;
+
+    try {
+      const response = await fetch(`${this.config.apiUrl}/api/feedback`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          conversationId: this.conversationId,
+          chatbotId: this.config.chatbotId,
+          rating,
+        }),
+      });
+
+      if (response.ok) {
+        this.feedbackSubmitted = true;
+        this.renderFeedbackPrompt();
+      }
+    } catch (error) {
+      console.error("ChatAI: Failed to submit feedback", error);
+    }
   }
 
   private escapeHtml(text: string): string {
@@ -632,6 +805,7 @@ class ChatAIWidget {
       content: message,
       timestamp: new Date(),
     });
+    this.messageCount++;
 
     input.value = "";
     this.isLoading = true;
@@ -667,24 +841,41 @@ class ChatAIWidget {
         content: "",
         timestamp: new Date(),
       });
-      this.isLoading = false;
+      // Keep loading true until first chunk
       this.renderMessages();
 
       if (reader) {
+        let buffer = "";
+
         while (true) {
           const { done, value } = await reader.read();
           if (done) break;
 
-          const chunk = decoder.decode(value);
-          const lines = chunk.split("\n");
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split("\n");
+
+          // Keep the last part in buffer as it might be incomplete
+          buffer = lines.pop() || "";
 
           for (const line of lines) {
-            if (line.startsWith("data: ")) {
+            const trimmed = line.trim();
+            if (!trimmed) continue;
+
+            if (trimmed.startsWith("data: ")) {
               try {
-                const data = JSON.parse(line.slice(6));
+                const data = JSON.parse(trimmed.slice(6));
+
                 if (data.type === "chunk") {
+                  this.isLoading = false;
                   assistantMessage += data.content;
                   this.messages[this.messages.length - 1].content = assistantMessage;
+                  this.renderMessages();
+                } else if (data.type === "error") {
+                  this.isLoading = false;
+                  this.messages[this.messages.length - 1].content = data.message || "Error";
+                  this.renderMessages();
+                } else if (data.type === "done") {
+                  this.isLoading = false;
                   this.renderMessages();
                 }
               } catch {
@@ -694,6 +885,9 @@ class ChatAIWidget {
           }
         }
       }
+
+      this.isLoading = false;
+      this.renderMessages();
     } catch (error) {
       console.error("ChatAI: Error sending message", error);
       this.messages.push({

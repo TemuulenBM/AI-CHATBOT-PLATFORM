@@ -29,10 +29,18 @@ interface ChatOptions {
 
 const DEFAULT_OPTIONS: ChatOptions = {
   provider: "openai",
-  model: "gpt-5.2",
+  model: "gpt-5-mini",
   temperature: 0.7,
   maxTokens: 1000,
 };
+
+/**
+ * Check if a model requires max_completion_tokens instead of max_tokens
+ * GPT-5 series and o1 models use max_completion_tokens
+ */
+export function requiresMaxCompletionTokens(model: string): boolean {
+  return model.startsWith("gpt-5") || model.includes("o1");
+}
 
 export class AIService {
   /**
@@ -165,12 +173,26 @@ export class AIService {
       { role: "user", content: message },
     ];
 
-    const response = await openai.chat.completions.create({
-      model: options.model || "gpt-5.2",
+    const model = options.model || "gpt-5-mini";
+    const requestParams: Record<string, unknown> = {
+      model,
       messages,
-      temperature: options.temperature,
-      max_tokens: options.maxTokens,
-    });
+    };
+
+    // GPT-5 series models don't support temperature parameter (only default value 1)
+    // Only add temperature for non-GPT-5 models
+    if (!requiresMaxCompletionTokens(model)) {
+      requestParams.temperature = options.temperature;
+    }
+
+    // Use max_completion_tokens for GPT-5 series and o1 models
+    if (requiresMaxCompletionTokens(model)) {
+      requestParams.max_completion_tokens = options.maxTokens;
+    } else {
+      requestParams.max_tokens = options.maxTokens;
+    }
+
+    const response = await openai.chat.completions.create(requestParams as unknown as OpenAI.ChatCompletionCreateParamsNonStreaming);
 
     return response.choices[0]?.message?.content || "I apologize, I couldn't generate a response.";
   }
@@ -247,13 +269,27 @@ export class AIService {
       { role: "user", content: message },
     ];
 
-    const stream = await openai.chat.completions.create({
-      model: options.model || "gpt-5.2",
+    const model = options.model || "gpt-5-mini";
+    const requestParams: Record<string, unknown> = {
+      model,
       messages,
-      temperature: options.temperature,
-      max_tokens: options.maxTokens,
       stream: true,
-    });
+    };
+
+    // GPT-5 series models don't support temperature parameter (only default value 1)
+    // Only add temperature for non-GPT-5 models
+    if (!requiresMaxCompletionTokens(model)) {
+      requestParams.temperature = options.temperature;
+    }
+
+    // Use max_completion_tokens for GPT-5 series and o1 models
+    if (requiresMaxCompletionTokens(model)) {
+      requestParams.max_completion_tokens = options.maxTokens;
+    } else {
+      requestParams.max_tokens = options.maxTokens;
+    }
+
+    const stream = await openai.chat.completions.create(requestParams as unknown as OpenAI.ChatCompletionCreateParamsStreaming);
 
     for await (const chunk of stream) {
       const content = chunk.choices[0]?.delta?.content;

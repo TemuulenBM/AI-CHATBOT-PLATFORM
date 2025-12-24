@@ -14,8 +14,8 @@ const features = [
   },
   {
     icon: Cpu,
-    title: "GPT-5.2 & Claude 4.5 Powered",
-    description: "Leverage the latest flagship reasoning models from OpenAI (GPT-5.2) and Anthropic (Claude 4.5 Opus) for unmatched intelligence."
+    title: "GPT-5 & Claude Powered",
+    description: "Leverage the latest flagship reasoning models from OpenAI (GPT-5) and Anthropic (Claude) for unmatched intelligence."
   },
   {
     icon: Globe,

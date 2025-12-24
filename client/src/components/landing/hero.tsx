@@ -20,7 +20,7 @@ export function Hero() {
         >
           <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/5 border border-white/10 mb-6 backdrop-blur-sm">
             <span className="flex h-2 w-2 rounded-full bg-green-500 animate-pulse" />
-            <span className="text-sm font-medium text-muted-foreground">GPT-4o Powered Intelligence</span>
+            <span className="text-sm font-medium text-muted-foreground">GPT-5 Powered Intelligence</span>
           </div>
           
           <h1 className="text-5xl md:text-7xl font-bold tracking-tight mb-6 leading-tight">

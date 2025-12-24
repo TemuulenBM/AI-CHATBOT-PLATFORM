@@ -6,7 +6,8 @@ import { AreaChart, Area, ResponsiveContainer, Tooltip, XAxis, YAxis } from "rec
 import { useAuth, useUser } from "@clerk/clerk-react";
 import { useChatbotStore } from "@/store/chatbot-store";
 import { useLocation } from "wouter";
-import { Bot, Loader2, TrendingUp } from "lucide-react";
+import { Bot, Loader2, TrendingUp, ThumbsUp, ThumbsDown, Smile, Meh, Frown } from "lucide-react";
+import { PieChart, Pie, Cell, Legend } from "recharts";
 import { Button } from "@/components/ui/button";
 import { Link } from "wouter";
 
@@ -17,6 +18,8 @@ export default function Dashboard() {
   const [, setLocation] = useLocation();
   const [isLoading, setIsLoading] = useState(true);
   const [selectedDays, setSelectedDays] = useState(7);
+  const [sentimentData, setSentimentData] = useState<any>(null);
+  const [satisfactionData, setSatisfactionData] = useState<any>(null);
 
   useEffect(() => {
     if (isLoaded && !isSignedIn) {
@@ -28,6 +31,19 @@ export default function Dashboard() {
       const loadData = async () => {
         setIsLoading(true);
         await Promise.all([fetchStats(), fetchChatbots(), fetchMessageVolume(selectedDays)]);
+
+        // Fetch analytics for the first active chatbot if available
+        const activeBot = chatbots.find(b => b.status === "ready");
+        if (activeBot) {
+          const { fetchSentimentBreakdown, fetchSatisfactionMetrics } = useChatbotStore.getState();
+          const [sentiment, satisfaction] = await Promise.all([
+            fetchSentimentBreakdown(activeBot.id),
+            fetchSatisfactionMetrics(activeBot.id)
+          ]);
+          setSentimentData(sentiment);
+          setSatisfactionData(satisfaction);
+        }
+
         setIsLoading(false);
       };
 
@@ -131,8 +147,8 @@ export default function Dashboard() {
                     <AreaChart data={chartData}>
                       <defs>
                         <linearGradient id="colorMessages" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%" stopColor="#8B5CF6" stopOpacity={0.3}/>
-                          <stop offset="95%" stopColor="#8B5CF6" stopOpacity={0}/>
+                          <stop offset="5%" stopColor="#8B5CF6" stopOpacity={0.3} />
+                          <stop offset="95%" stopColor="#8B5CF6" stopOpacity={0} />
                         </linearGradient>
                       </defs>
                       <XAxis dataKey="name" stroke="#525252" fontSize={12} tickLine={false} axisLine={false} />
@@ -183,10 +199,9 @@ export default function Dashboard() {
                 <div className="space-y-6">
                   {recentChatbots.map((bot) => (
                     <div key={bot.id} className="flex gap-4 items-start">
-                      <div className={`h-2 w-2 mt-2 rounded-full shrink-0 ${
-                        bot.status === 'ready' ? 'bg-green-400' : 
+                      <div className={`h-2 w-2 mt-2 rounded-full shrink-0 ${bot.status === 'ready' ? 'bg-green-400' :
                         bot.status === 'failed' ? 'bg-red-400' : 'bg-yellow-400'
-                      }`} />
+                        }`} />
                       <div>
                         <p className="text-sm">
                           <span className="font-medium">{bot.name}</span>{' '}
@@ -202,6 +217,116 @@ export default function Dashboard() {
               )}
             </GlassCard>
           </div>
+        </div>
+
+        <div className="grid lg:grid-cols-2 gap-8 mt-8">
+          <GlassCard className="p-6">
+            <h3 className="text-lg font-semibold mb-6 flex items-center gap-2">
+              <Smile className="h-5 w-5 text-blue-400" />
+              Sentiment Analysis
+            </h3>
+            {isLoading ? (
+              <div className="flex items-center justify-center h-48">
+                <Loader2 className="h-6 w-6 animate-spin text-primary" />
+              </div>
+            ) : sentimentData && sentimentData.total > 0 ? (
+              <div className="flex items-center justify-around">
+                <div className="h-[200px] w-[200px]">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie
+                        data={[
+                          { name: 'Positive', value: sentimentData.positive },
+                          { name: 'Neutral', value: sentimentData.neutral },
+                          { name: 'Negative', value: sentimentData.negative },
+                        ]}
+                        cx="50%"
+                        cy="50%"
+                        innerRadius={60}
+                        outerRadius={80}
+                        paddingAngle={5}
+                        dataKey="value"
+                      >
+                        <Cell fill="#4ade80" />
+                        <Cell fill="#94a3b8" />
+                        <Cell fill="#f87171" />
+                      </Pie>
+                      <Tooltip
+                        contentStyle={{ backgroundColor: '#1e293b', borderColor: '#334155', borderRadius: '8px' }}
+                        itemStyle={{ color: '#fff' }}
+                      />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </div>
+                <div className="space-y-4">
+                  <div className="flex items-center gap-2">
+                    <div className="h-3 w-3 rounded-full bg-green-400" />
+                    <div>
+                      <div className="text-sm font-medium">Positive</div>
+                      <div className="text-xs text-muted-foreground">{sentimentData.positiveRate}%</div>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="h-3 w-3 rounded-full bg-slate-400" />
+                    <div>
+                      <div className="text-sm font-medium">Neutral</div>
+                      <div className="text-xs text-muted-foreground">
+                        {Math.round((sentimentData.neutral / sentimentData.total) * 100)}%
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="h-3 w-3 rounded-full bg-red-400" />
+                    <div>
+                      <div className="text-sm font-medium">Negative</div>
+                      <div className="text-xs text-muted-foreground">{sentimentData.negativeRate}%</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="flex flex-col items-center justify-center h-48 text-center text-muted-foreground">
+                <Smile className="h-8 w-8 mb-2 opacity-20" />
+                <p>No sentiment data available yet</p>
+              </div>
+            )}
+          </GlassCard>
+
+          <GlassCard className="p-6">
+            <h3 className="text-lg font-semibold mb-6 flex items-center gap-2">
+              <ThumbsUp className="h-5 w-5 text-purple-400" />
+              Customer Satisfaction (CSAT)
+            </h3>
+            {isLoading ? (
+              <div className="flex items-center justify-center h-48">
+                <Loader2 className="h-6 w-6 animate-spin text-primary" />
+              </div>
+            ) : satisfactionData && satisfactionData.total > 0 ? (
+              <div className="flex flex-col items-center justify-center h-48">
+                <div className="text-5xl font-bold mb-2 text-primary">
+                  {satisfactionData.satisfactionRate}%
+                </div>
+                <div className="text-muted-foreground mb-6">Satisfaction Rate</div>
+                <div className="flex gap-8 w-full max-w-xs">
+                  <div className="flex-1 text-center p-3 rounded-lg bg-green-400/10 border border-green-400/20">
+                    <ThumbsUp className="h-5 w-5 mx-auto mb-1 text-green-400" />
+                    <div className="font-bold text-green-400">{satisfactionData.positive}</div>
+                    <div className="text-xs text-muted-foreground">Helpful</div>
+                  </div>
+                  <div className="flex-1 text-center p-3 rounded-lg bg-red-400/10 border border-red-400/20">
+                    <ThumbsDown className="h-5 w-5 mx-auto mb-1 text-red-400" />
+                    <div className="font-bold text-red-400">{satisfactionData.negative}</div>
+                    <div className="text-xs text-muted-foreground">Unhelpful</div>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="flex flex-col items-center justify-center h-48 text-center text-muted-foreground">
+                <ThumbsUp className="h-8 w-8 mb-2 opacity-20" />
+                <p>No feedback ratings yet</p>
+              </div>
+            )}
+          </GlassCard>
         </div>
       </main>
     </div>

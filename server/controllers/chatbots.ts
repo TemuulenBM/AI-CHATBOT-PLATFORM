@@ -448,6 +448,39 @@ export async function getChatbotAnalytics(
   }
 }
 
+// Get sentiment breakdown for a chatbot
+export async function getSentimentBreakdown(
+  req: AuthenticatedRequest,
+  res: Response,
+  next: NextFunction
+): Promise<void> {
+  try {
+    if (!req.user) {
+      throw new AuthorizationError();
+    }
+
+    const { id } = req.params;
+
+    // Verify ownership
+    const { data: chatbot, error } = await supabaseAdmin
+      .from("chatbots")
+      .select("id")
+      .eq("id", id)
+      .eq("user_id", req.user.userId)
+      .single();
+
+    if (error || !chatbot) {
+      throw new NotFoundError("Chatbot");
+    }
+
+    const breakdown = await analyticsService.getSentimentBreakdown(id);
+
+    res.json(breakdown);
+  } catch (error) {
+    next(error);
+  }
+}
+
 // Get conversations for a chatbot with pagination
 export async function getConversations(
   req: AuthenticatedRequest,

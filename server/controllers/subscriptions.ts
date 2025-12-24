@@ -161,7 +161,7 @@ export async function getPlans(
           "Priority support",
           "Remove branding",
           "API access",
-          "GPT-4 support",
+          "GPT-5 support",
         ],
       },
       {

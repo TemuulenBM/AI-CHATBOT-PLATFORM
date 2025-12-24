@@ -7,6 +7,7 @@ import chatbotRoutes from "./routes/chatbots";
 import chatRoutes from "./routes/chat";
 import subscriptionRoutes from "./routes/subscriptions";
 import widgetRoutes from "./routes/widget";
+import * as feedbackController from "./controllers/feedback";
 import { AppError } from "./utils/errors";
 import logger from "./utils/logger";
 import { redis } from "./utils/redis";
@@ -178,6 +179,11 @@ export async function registerRoutes(
 
   // Widget routes (served at root level for easy embedding)
   app.use("/", widgetRoutes);
+
+  // Feedback routes (public for widget access)
+  app.post("/api/feedback", feedbackController.submitFeedback);
+  app.get("/api/feedback/:conversationId", feedbackController.checkFeedback);
+  app.get("/api/chatbots/:chatbotId/satisfaction", feedbackController.getSatisfactionMetrics);
 
   // 404 handler for API routes
   app.use("/api/*", (_req: Request, res: Response) => {

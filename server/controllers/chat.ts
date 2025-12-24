@@ -3,7 +3,8 @@ import { supabaseAdmin, ConversationMessage } from "../utils/supabase";
 import { AuthenticatedRequest, checkUsageLimit, incrementUsage } from "../middleware/auth";
 import { NotFoundError, ValidationError } from "../utils/errors";
 import { ChatMessageInput } from "../middleware/validation";
-import { aiService } from "../services/ai";
+import { aiService, requiresMaxCompletionTokens } from "../services/ai";
+import { analyzeSentiment } from "../services/sentiment";
 import logger from "../utils/logger";
 import OpenAI from "openai";
 
@@ -18,7 +19,7 @@ const SUPPORT_BOT_SYSTEM_PROMPT = `You are the official support assistant for Co
 - ConvoAI lets users create AI chatbots that are trained on their website content
 - Users can scrape their website URLs, and the system automatically extracts content and creates embeddings
 - The chatbots can be embedded on any website using a simple JavaScript widget
-- Built with modern tech: React, Node.js, OpenAI GPT-4, PostgreSQL with vector search
+- Built with modern tech: React, Node.js, OpenAI GPT-5, PostgreSQL with vector search
 
 ## Key Features:
 - **Easy Setup**: Just enter your website URL and we automatically scrape and train
@@ -129,6 +130,36 @@ export async function sendMessage(
     res.json({
       message: response,
       sources: context.sources,
+    });
+
+    // Analyze sentiment asynchronously (don't block the response)
+    analyzeSentiment(message).then(async (sentiment) => {
+      try {
+        // Update the user message with sentiment
+        const updatedMessages = [...newMessages];
+        // Find the user message we just added (second to last)
+        const userMsgIndex = updatedMessages.length - 2;
+        if (userMsgIndex >= 0 && updatedMessages[userMsgIndex].role === "user") {
+          updatedMessages[userMsgIndex].sentiment = sentiment;
+
+          // Get conversation ID
+          const { data: conv } = await supabaseAdmin
+            .from("conversations")
+            .select("id")
+            .eq("chatbot_id", chatbotId)
+            .eq("session_id", sessionId)
+            .single();
+
+          if (conv) {
+            await supabaseAdmin
+              .from("conversations")
+              .update({ messages: updatedMessages })
+              .eq("id", conv.id);
+          }
+        }
+      } catch (err) {
+        logger.error("Failed to update sentiment", { error: err });
+      }
     });
   } catch (error) {
     next(error);
@@ -247,6 +278,36 @@ export async function streamMessage(
       sessionId,
       responseLength: fullResponse.length,
     });
+
+    // Analyze sentiment asynchronously (don't block the response)
+    analyzeSentiment(message).then(async (sentiment) => {
+      try {
+        // Update the user message with sentiment
+        const updatedMessages = [...newMessages];
+        // Find the user message we just added (second to last)
+        const userMsgIndex = updatedMessages.length - 2;
+        if (userMsgIndex >= 0 && updatedMessages[userMsgIndex].role === "user") {
+          updatedMessages[userMsgIndex].sentiment = sentiment;
+
+          // Get conversation ID
+          const { data: conv } = await supabaseAdmin
+            .from("conversations")
+            .select("id")
+            .eq("chatbot_id", chatbotId)
+            .eq("session_id", sessionId)
+            .single();
+
+          if (conv) {
+            await supabaseAdmin
+              .from("conversations")
+              .update({ messages: updatedMessages })
+              .eq("id", conv.id);
+          }
+        }
+      } catch (err) {
+        logger.error("Failed to update sentiment", { error: err });
+      }
+    });
   } catch (error) {
     // For SSE, we need to handle errors differently if headers are already sent
     if (res.headersSent) {
@@ -315,7 +376,7 @@ export async function supportBotMessage(
     }
 
     const sid = sessionId || "anonymous";
-    
+
     // Get conversation history
     const history = supportConversations.get(sid) || [];
 
@@ -337,13 +398,31 @@ export async function supportBotMessage(
         { role: "user", content: message },
       ];
 
-      const stream = await openai.chat.completions.create({
-        model: "gpt-4o-mini",
+      const model = "gpt-5-mini";
+      const maxTokens = 500;
+      
+      const requestParams: Record<string, unknown> = {
+        model,
         messages,
-        temperature: 0.7,
-        max_tokens: 500,
         stream: true,
-      });
+      };
+
+      // GPT-5 series models don't support temperature parameter (only default value 1)
+      // Only add temperature for non-GPT-5 models
+      if (!requiresMaxCompletionTokens(model)) {
+        requestParams.temperature = 0.7;
+      }
+
+      // Use max_completion_tokens for GPT-5 series models
+      if (requiresMaxCompletionTokens(model)) {
+        requestParams.max_completion_tokens = maxTokens;
+      } else {
+        requestParams.max_tokens = maxTokens;
+      }
+
+      const stream = await openai.chat.completions.create(
+        requestParams as unknown as OpenAI.ChatCompletionCreateParamsStreaming
+      );
 
       for await (const chunk of stream) {
         const content = chunk.choices[0]?.delta?.content;

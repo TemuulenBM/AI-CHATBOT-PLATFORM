@@ -90,6 +90,16 @@ export interface Database {
         };
         Insert: Omit<Database["public"]["Tables"]["subscriptions"]["Row"], "created_at" | "updated_at">;
       };
+      feedback: {
+        Row: {
+          id: string;
+          conversation_id: string;
+          chatbot_id: string;
+          rating: 'positive' | 'negative';
+          created_at: string;
+        };
+        Insert: Omit<Database["public"]["Tables"]["feedback"]["Row"], "id" | "created_at">;
+      };
     };
   };
 }
@@ -105,6 +115,7 @@ export interface ConversationMessage {
   role: "user" | "assistant";
   content: string;
   timestamp: string;
+  sentiment?: "positive" | "neutral" | "negative";
 }
 
 export interface UsageData {

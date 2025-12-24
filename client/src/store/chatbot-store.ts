@@ -45,6 +45,22 @@ export interface ConversationSummary {
   updatedAt: string;
 }
 
+export interface SentimentBreakdown {
+  positive: number;
+  neutral: number;
+  negative: number;
+  total: number;
+  positiveRate: number | null;
+  negativeRate: number | null;
+}
+
+export interface SatisfactionMetrics {
+  positive: number;
+  negative: number;
+  total: number;
+  satisfactionRate: number | null;
+}
+
 interface ChatbotStore {
   chatbots: Chatbot[];
   currentChatbot: Chatbot | null;
@@ -61,6 +77,8 @@ interface ChatbotStore {
   createChatbot: (name: string, websiteUrl: string, settings?: Partial<ChatbotSettings>) => Promise<Chatbot | null>;
   updateChatbot: (id: string, updates: { name?: string; settings?: Partial<ChatbotSettings> }) => Promise<boolean>;
   deleteChatbot: (id: string) => Promise<boolean>;
+  fetchSentimentBreakdown: (chatbotId: string) => Promise<SentimentBreakdown | null>;
+  fetchSatisfactionMetrics: (chatbotId: string) => Promise<SatisfactionMetrics | null>;
   clearError: () => void;
   clearCurrentChatbot: () => void;
 }
@@ -257,4 +275,38 @@ export const useChatbotStore = create<ChatbotStore>((set, get) => ({
 
   clearError: () => set({ error: null }),
   clearCurrentChatbot: () => set({ currentChatbot: null }),
+
+  fetchSentimentBreakdown: async (chatbotId: string) => {
+    try {
+      const response = await fetch(`/api/chatbots/${chatbotId}/sentiment`, {
+        headers: {
+          ...getAuthHeader(),
+        },
+      });
+
+      if (response.ok) {
+        return await response.json();
+      }
+    } catch (error) {
+      console.error('Failed to fetch sentiment breakdown:', error);
+    }
+    return null;
+  },
+
+  fetchSatisfactionMetrics: async (chatbotId: string) => {
+    try {
+      const response = await fetch(`/api/chatbots/${chatbotId}/satisfaction`, {
+        headers: {
+          ...getAuthHeader(),
+        },
+      });
+
+      if (response.ok) {
+        return await response.json();
+      }
+    } catch (error) {
+      console.error('Failed to fetch satisfaction metrics:', error);
+    }
+    return null;
+  },
 }));

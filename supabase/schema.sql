@@ -65,6 +65,19 @@ CREATE INDEX IF NOT EXISTS idx_embeddings_chatbot_id ON embeddings(chatbot_id);
 CREATE INDEX IF NOT EXISTS idx_conversations_chatbot_session ON conversations(chatbot_id, session_id);
 CREATE INDEX IF NOT EXISTS idx_subscriptions_stripe_customer ON subscriptions(stripe_customer_id);
 
+-- Feedback table for CSAT (Customer Satisfaction)
+CREATE TABLE IF NOT EXISTS feedback (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  conversation_id UUID NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
+  chatbot_id UUID NOT NULL REFERENCES chatbots(id) ON DELETE CASCADE,
+  rating TEXT NOT NULL CHECK (rating IN ('positive', 'negative')),
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_feedback_chatbot_id ON feedback(chatbot_id);
+CREATE INDEX IF NOT EXISTS idx_feedback_conversation_id ON feedback(conversation_id);
+CREATE INDEX IF NOT EXISTS idx_feedback_created_at ON feedback(created_at);
+
 -- Vector similarity search index (IVFFlat for performance)
 CREATE INDEX IF NOT EXISTS idx_embeddings_vector ON embeddings
 USING ivfflat (embedding vector_cosine_ops)
