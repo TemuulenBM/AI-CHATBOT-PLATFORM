@@ -43,7 +43,7 @@ export interface WidgetConfig {
   chatbotId: string;
   primaryColor: string;
   welcomeMessage: string;
-  position: "bottom-right" | "bottom-left";
+  position: "bottom-right" | "bottom-left" | "bottom-center";
   apiUrl: string;
   // New configuration options
   locale?: string;
@@ -59,6 +59,16 @@ export interface WidgetConfig {
   soundEnabled?: boolean;
   offlineMessage?: string;
   translations?: WidgetTranslations;
+
+  // Advanced customization options
+  widgetSize?: "compact" | "standard" | "large";
+  borderRadius?: number;
+  fontFamily?: string;
+  headerStyle?: "solid" | "gradient" | "glass";
+  showBranding?: boolean;
+  openDelay?: number;
+  showInitially?: boolean;
+  animationStyle?: "slide" | "fade" | "bounce" | "none";
 }
 
 export interface WidgetTranslations {
@@ -89,6 +99,17 @@ export interface ChatbotInfo {
     proactiveTriggers?: ProactiveTrigger[];
     allowedDomains?: string[];
     locale?: string;
+    // Advanced customization
+    position?: "bottom-right" | "bottom-left" | "bottom-center";
+    widgetSize?: "compact" | "standard" | "large";
+    borderRadius?: number;
+    fontFamily?: string;
+    headerStyle?: "solid" | "gradient" | "glass";
+    showBranding?: boolean;
+    openDelay?: number;
+    showInitially?: boolean;
+    soundEnabled?: boolean;
+    animationStyle?: "slide" | "fade" | "bounce" | "none";
   };
   isTraining?: boolean;
 }

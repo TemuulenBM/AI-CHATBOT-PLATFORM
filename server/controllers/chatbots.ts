@@ -760,6 +760,16 @@ export async function getChatbotPublic(
         proactiveTriggers: chatbot.settings.proactiveTriggers,
         locale: chatbot.settings.locale,
         soundEnabled: chatbot.settings.soundEnabled,
+        // Advanced customization settings
+        position: chatbot.settings.position,
+        widgetSize: chatbot.settings.widgetSize,
+        borderRadius: chatbot.settings.borderRadius,
+        fontFamily: chatbot.settings.fontFamily,
+        headerStyle: chatbot.settings.headerStyle,
+        showBranding: chatbot.settings.showBranding,
+        openDelay: chatbot.settings.openDelay,
+        showInitially: chatbot.settings.showInitially,
+        animationStyle: chatbot.settings.animationStyle,
       },
       isTraining: (embeddingCount || 0) === 0, // Still training if no embeddings
     });

@@ -4,9 +4,42 @@
 
 import { getMarkdownStyles } from "./utils/markdown";
 
-export function getWidgetStyles(primaryColor: string, position: "bottom-right" | "bottom-left"): string {
-  const positionStyles = position === "bottom-right" ? "right: 20px;" : "left: 20px;";
-  const windowPosition = position === "bottom-right" ? "right: 0;" : "left: 0;";
+interface StyleConfig {
+  primaryColor: string;
+  position: "bottom-right" | "bottom-left" | "bottom-center";
+  widgetSize?: "compact" | "standard" | "large";
+  borderRadius?: number;
+  fontFamily?: string;
+  headerStyle?: "solid" | "gradient" | "glass";
+  animationStyle?: "slide" | "fade" | "bounce" | "none";
+}
+
+export function getWidgetStyles(
+  primaryColor: string,
+  position: "bottom-right" | "bottom-left" | "bottom-center",
+  config?: Partial<StyleConfig>
+): string {
+  const positionStyles =
+    position === "bottom-right" ? "right: 20px;" :
+    position === "bottom-left" ? "left: 20px;" :
+    "left: 50%; transform: translateX(-50%);";
+
+  const windowPosition =
+    position === "bottom-right" ? "right: 0;" :
+    position === "bottom-left" ? "left: 0;" :
+    "left: 50%; transform: translateX(-50%);";
+
+  const widgetSize = config?.widgetSize || "standard";
+  const borderRadius = config?.borderRadius ?? 12;
+  const fontFamily = config?.fontFamily || "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif";
+
+  // Size mappings
+  const sizeMap = {
+    compact: { width: "320px", maxHeight: "450px", fontSize: "13px" },
+    standard: { width: "380px", maxHeight: "600px", fontSize: "14px" },
+    large: { width: "450px", maxHeight: "700px", fontSize: "15px" }
+  };
+  const size = sizeMap[widgetSize];
 
   return `
     :host {
@@ -20,8 +53,11 @@ export function getWidgetStyles(primaryColor: string, position: "bottom-right" |
       --chatai-success: #22c55e;
       --chatai-error: #ef4444;
       --chatai-shadow: 0 10px 40px rgba(0, 0, 0, 0.4);
-      --chatai-radius: 16px;
-      --chatai-font: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      --chatai-radius: ${borderRadius}px;
+      --chatai-font: ${fontFamily};
+      --chatai-widget-width: ${size.width};
+      --chatai-widget-height: ${size.maxHeight};
+      --chatai-font-size: ${size.fontSize};
     }
 
     * {

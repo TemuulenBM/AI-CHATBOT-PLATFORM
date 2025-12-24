@@ -7,6 +7,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Slider } from "@/components/ui/slider";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
 import { useChatbotStore } from "@/store/chatbot-store";
 import { useAuth } from "@clerk/clerk-react";
 import { useToast } from "@/hooks/use-toast";
@@ -21,6 +24,9 @@ import {
   Brain,
   AlertCircle,
   ExternalLink,
+  Layout,
+  Type,
+  Zap,
 } from "lucide-react";
 
 const colorOptions = [
@@ -71,6 +77,19 @@ export default function ChatbotSettings() {
   const [primaryColor, setPrimaryColor] = useState("#8B5CF6");
   const [welcomeMessage, setWelcomeMessage] = useState("");
   const [systemPrompt, setSystemPrompt] = useState("");
+
+  // New customization state
+  const [position, setPosition] = useState<"bottom-right" | "bottom-left" | "bottom-center">("bottom-right");
+  const [widgetSize, setWidgetSize] = useState<"compact" | "standard" | "large">("standard");
+  const [borderRadius, setBorderRadius] = useState(12);
+  const [fontFamily, setFontFamily] = useState("Inter");
+  const [headerStyle, setHeaderStyle] = useState<"solid" | "gradient" | "glass">("gradient");
+  const [showBranding, setShowBranding] = useState(true);
+  const [openDelay, setOpenDelay] = useState(0);
+  const [showInitially, setShowInitially] = useState(false);
+  const [soundEnabled, setSoundEnabled] = useState(true);
+  const [animationStyle, setAnimationStyle] = useState<"slide" | "fade" | "bounce" | "none">("slide");
+
   const [hasChanges, setHasChanges] = useState(false);
 
   // Auth check
@@ -99,6 +118,19 @@ export default function ChatbotSettings() {
       setPrimaryColor(currentChatbot.settings?.primaryColor || "#8B5CF6");
       setWelcomeMessage(currentChatbot.settings?.welcomeMessage || "Hi! How can I help you today?");
       setSystemPrompt(currentChatbot.settings?.systemPrompt || "");
+
+      // New customization settings
+      setPosition(currentChatbot.settings?.position || "bottom-right");
+      setWidgetSize(currentChatbot.settings?.widgetSize || "standard");
+      setBorderRadius(currentChatbot.settings?.borderRadius ?? 12);
+      setFontFamily(currentChatbot.settings?.fontFamily || "Inter");
+      setHeaderStyle(currentChatbot.settings?.headerStyle || "gradient");
+      setShowBranding(currentChatbot.settings?.showBranding ?? true);
+      setOpenDelay(currentChatbot.settings?.openDelay ?? 0);
+      setShowInitially(currentChatbot.settings?.showInitially ?? false);
+      setSoundEnabled(currentChatbot.settings?.soundEnabled ?? true);
+      setAnimationStyle(currentChatbot.settings?.animationStyle || "slide");
+
       setHasChanges(false);
     }
   }, [currentChatbot]);
@@ -112,10 +144,22 @@ export default function ChatbotSettings() {
       personality !== (currentChatbot.settings?.personality ?? 50) ||
       primaryColor !== (currentChatbot.settings?.primaryColor || "#8B5CF6") ||
       welcomeMessage !== (currentChatbot.settings?.welcomeMessage || "Hi! How can I help you today?") ||
-      systemPrompt !== (currentChatbot.settings?.systemPrompt || "");
+      systemPrompt !== (currentChatbot.settings?.systemPrompt || "") ||
+      position !== (currentChatbot.settings?.position || "bottom-right") ||
+      widgetSize !== (currentChatbot.settings?.widgetSize || "standard") ||
+      borderRadius !== (currentChatbot.settings?.borderRadius ?? 12) ||
+      fontFamily !== (currentChatbot.settings?.fontFamily || "Inter") ||
+      headerStyle !== (currentChatbot.settings?.headerStyle || "gradient") ||
+      showBranding !== (currentChatbot.settings?.showBranding ?? true) ||
+      openDelay !== (currentChatbot.settings?.openDelay ?? 0) ||
+      showInitially !== (currentChatbot.settings?.showInitially ?? false) ||
+      soundEnabled !== (currentChatbot.settings?.soundEnabled ?? true) ||
+      animationStyle !== (currentChatbot.settings?.animationStyle || "slide");
 
     setHasChanges(changed);
-  }, [name, personality, primaryColor, welcomeMessage, systemPrompt, currentChatbot]);
+  }, [name, personality, primaryColor, welcomeMessage, systemPrompt,
+      position, widgetSize, borderRadius, fontFamily, headerStyle,
+      showBranding, openDelay, showInitially, soundEnabled, animationStyle, currentChatbot]);
 
   const handleSave = async () => {
     if (!id || !hasChanges) return;
@@ -127,6 +171,16 @@ export default function ChatbotSettings() {
         primaryColor,
         welcomeMessage: welcomeMessage.trim(),
         systemPrompt: systemPrompt.trim() || undefined,
+        position,
+        widgetSize,
+        borderRadius,
+        fontFamily,
+        headerStyle,
+        showBranding,
+        openDelay,
+        showInitially,
+        soundEnabled,
+        animationStyle,
       },
     });
 
@@ -363,6 +417,254 @@ export default function ChatbotSettings() {
                   </div>
                 </div>
               </GlassCard>
+
+              {/* Widget Layout */}
+              <GlassCard className="p-6">
+                <div className="flex items-center gap-3 mb-6">
+                  <div className="h-10 w-10 rounded-lg bg-blue-500/10 flex items-center justify-center text-blue-400">
+                    <Layout className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <h2 className="font-semibold">Widget Layout</h2>
+                    <p className="text-sm text-muted-foreground">Configure position and size</p>
+                  </div>
+                </div>
+                <div className="space-y-6">
+                  {/* Position */}
+                  <div>
+                    <Label className="mb-3 block">Position on Page</Label>
+                    <RadioGroup value={position} onValueChange={(value: any) => setPosition(value)}>
+                      <div className="flex items-center space-x-2">
+                        <RadioGroupItem value="bottom-right" id="bottom-right" />
+                        <Label htmlFor="bottom-right" className="font-normal cursor-pointer">Bottom Right</Label>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <RadioGroupItem value="bottom-left" id="bottom-left" />
+                        <Label htmlFor="bottom-left" className="font-normal cursor-pointer">Bottom Left</Label>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <RadioGroupItem value="bottom-center" id="bottom-center" />
+                        <Label htmlFor="bottom-center" className="font-normal cursor-pointer">Bottom Center</Label>
+                      </div>
+                    </RadioGroup>
+                  </div>
+
+                  {/* Widget Size */}
+                  <div>
+                    <Label className="mb-3 block">Widget Size</Label>
+                    <div className="flex gap-2">
+                      <Button
+                        type="button"
+                        variant={widgetSize === "compact" ? "default" : "outline"}
+                        size="sm"
+                        onClick={() => setWidgetSize("compact")}
+                      >
+                        Compact
+                      </Button>
+                      <Button
+                        type="button"
+                        variant={widgetSize === "standard" ? "default" : "outline"}
+                        size="sm"
+                        onClick={() => setWidgetSize("standard")}
+                      >
+                        Standard
+                      </Button>
+                      <Button
+                        type="button"
+                        variant={widgetSize === "large" ? "default" : "outline"}
+                        size="sm"
+                        onClick={() => setWidgetSize("large")}
+                      >
+                        Large
+                      </Button>
+                    </div>
+                  </div>
+
+                  {/* Border Radius */}
+                  <div>
+                    <div className="flex items-center justify-between mb-3">
+                      <Label>Corner Radius</Label>
+                      <span className="text-sm font-medium text-primary">{borderRadius}px</span>
+                    </div>
+                    <Slider
+                      value={[borderRadius]}
+                      onValueChange={(value) => setBorderRadius(value[0])}
+                      max={24}
+                      step={1}
+                      className="mb-2"
+                    />
+                    <div className="flex justify-between text-xs text-muted-foreground">
+                      <span>Square</span>
+                      <span>Rounded</span>
+                    </div>
+                  </div>
+                </div>
+              </GlassCard>
+
+              {/* Typography & Style */}
+              <GlassCard className="p-6">
+                <div className="flex items-center gap-3 mb-6">
+                  <div className="h-10 w-10 rounded-lg bg-purple-500/10 flex items-center justify-center text-purple-400">
+                    <Type className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <h2 className="font-semibold">Typography & Style</h2>
+                    <p className="text-sm text-muted-foreground">Customize fonts and header style</p>
+                  </div>
+                </div>
+                <div className="space-y-6">
+                  {/* Font Family */}
+                  <div>
+                    <Label className="mb-2 block">Font Family</Label>
+                    <Select value={fontFamily} onValueChange={setFontFamily}>
+                      <SelectTrigger className="bg-background/50">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Inter">Inter</SelectItem>
+                        <SelectItem value="Roboto">Roboto</SelectItem>
+                        <SelectItem value="Open Sans">Open Sans</SelectItem>
+                        <SelectItem value="Lato">Lato</SelectItem>
+                        <SelectItem value="Poppins">Poppins</SelectItem>
+                        <SelectItem value="Montserrat">Montserrat</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {/* Header Style */}
+                  <div>
+                    <Label className="mb-3 block">Header Style</Label>
+                    <div className="flex gap-2">
+                      <Button
+                        type="button"
+                        variant={headerStyle === "solid" ? "default" : "outline"}
+                        size="sm"
+                        onClick={() => setHeaderStyle("solid")}
+                      >
+                        Solid
+                      </Button>
+                      <Button
+                        type="button"
+                        variant={headerStyle === "gradient" ? "default" : "outline"}
+                        size="sm"
+                        onClick={() => setHeaderStyle("gradient")}
+                      >
+                        Gradient
+                      </Button>
+                      <Button
+                        type="button"
+                        variant={headerStyle === "glass" ? "default" : "outline"}
+                        size="sm"
+                        onClick={() => setHeaderStyle("glass")}
+                      >
+                        Glass
+                      </Button>
+                    </div>
+                  </div>
+
+                  {/* Show Branding */}
+                  <div className="flex items-center justify-between">
+                    <div className="space-y-0.5">
+                      <Label>Show "Powered by ConvoAI"</Label>
+                      <p className="text-xs text-muted-foreground">Display branding in widget footer</p>
+                    </div>
+                    <Switch checked={showBranding} onCheckedChange={setShowBranding} />
+                  </div>
+                </div>
+              </GlassCard>
+
+              {/* Behavior Settings */}
+              <GlassCard className="p-6">
+                <div className="flex items-center gap-3 mb-6">
+                  <div className="h-10 w-10 rounded-lg bg-orange-500/10 flex items-center justify-center text-orange-400">
+                    <Zap className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <h2 className="font-semibold">Behavior</h2>
+                    <p className="text-sm text-muted-foreground">Configure widget behavior</p>
+                  </div>
+                </div>
+                <div className="space-y-6">
+                  {/* Auto-open Delay */}
+                  <div>
+                    <div className="flex items-center justify-between mb-3">
+                      <Label>Auto-open Delay</Label>
+                      <span className="text-sm font-medium text-primary">
+                        {openDelay === 0 ? "Disabled" : `${openDelay}s`}
+                      </span>
+                    </div>
+                    <Slider
+                      value={[openDelay]}
+                      onValueChange={(value) => setOpenDelay(value[0])}
+                      max={30}
+                      step={1}
+                      className="mb-2"
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      {openDelay === 0
+                        ? "Widget will not auto-open"
+                        : `Widget will open automatically after ${openDelay} seconds`}
+                    </p>
+                  </div>
+
+                  {/* Start Expanded */}
+                  <div className="flex items-center justify-between">
+                    <div className="space-y-0.5">
+                      <Label>Start Expanded</Label>
+                      <p className="text-xs text-muted-foreground">Open widget by default on page load</p>
+                    </div>
+                    <Switch checked={showInitially} onCheckedChange={setShowInitially} />
+                  </div>
+
+                  {/* Sound Enabled */}
+                  <div className="flex items-center justify-between">
+                    <div className="space-y-0.5">
+                      <Label>Enable Sound Notifications</Label>
+                      <p className="text-xs text-muted-foreground">Play sound when new messages arrive</p>
+                    </div>
+                    <Switch checked={soundEnabled} onCheckedChange={setSoundEnabled} />
+                  </div>
+
+                  {/* Animation Style */}
+                  <div>
+                    <Label className="mb-3 block">Animation Style</Label>
+                    <div className="grid grid-cols-2 gap-2">
+                      <Button
+                        type="button"
+                        variant={animationStyle === "slide" ? "default" : "outline"}
+                        size="sm"
+                        onClick={() => setAnimationStyle("slide")}
+                      >
+                        Slide
+                      </Button>
+                      <Button
+                        type="button"
+                        variant={animationStyle === "fade" ? "default" : "outline"}
+                        size="sm"
+                        onClick={() => setAnimationStyle("fade")}
+                      >
+                        Fade
+                      </Button>
+                      <Button
+                        type="button"
+                        variant={animationStyle === "bounce" ? "default" : "outline"}
+                        size="sm"
+                        onClick={() => setAnimationStyle("bounce")}
+                      >
+                        Bounce
+                      </Button>
+                      <Button
+                        type="button"
+                        variant={animationStyle === "none" ? "default" : "outline"}
+                        size="sm"
+                        onClick={() => setAnimationStyle("none")}
+                      >
+                        None
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              </GlassCard>
             </div>
 
             {/* Live Preview */}
@@ -379,31 +681,84 @@ export default function ChatbotSettings() {
                     </div>
                   </div>
 
+                  {/* Size Preview Info */}
+                  <div className="mb-4 flex items-center justify-between text-xs">
+                    <span className="text-muted-foreground">Preview Size: {widgetSize}</span>
+                    <span className="text-muted-foreground">Position: {position}</span>
+                  </div>
+
                   {/* Widget Preview */}
-                  <div className="bg-background rounded-xl border border-white/10 shadow-2xl overflow-hidden">
+                  <div
+                    className={`bg-background border border-white/10 shadow-2xl overflow-hidden transition-all duration-300 ${
+                      widgetSize === "compact" ? "max-w-[280px]" :
+                      widgetSize === "large" ? "max-w-[420px]" : "max-w-[350px]"
+                    }`}
+                    style={{
+                      borderRadius: `${borderRadius}px`,
+                      fontFamily: fontFamily
+                    }}
+                  >
                     {/* Header */}
                     <div
-                      className="p-4 text-white flex items-center gap-3"
-                      style={{ backgroundColor: primaryColor }}
+                      className={`p-4 text-white flex items-center gap-3 ${
+                        headerStyle === "gradient" ? "bg-gradient-to-r from-purple-600 to-blue-600" :
+                        headerStyle === "glass" ? "backdrop-blur-lg bg-white/10" : ""
+                      }`}
+                      style={{
+                        backgroundColor: headerStyle === "solid" ? primaryColor : undefined
+                      }}
                     >
-                      <div className="h-8 w-8 rounded-full bg-white/20 flex items-center justify-center">
+                      <div className={`h-8 w-8 rounded-full bg-white/20 flex items-center justify-center ${
+                        headerStyle === "glass" ? "backdrop-blur-sm" : ""
+                      }`}>
                         <Sparkles className="h-4 w-4" />
                       </div>
-                      <span className="font-medium text-sm">{name || "Support Bot"}</span>
+                      <span className={`font-medium ${
+                        widgetSize === "compact" ? "text-xs" :
+                        widgetSize === "large" ? "text-base" : "text-sm"
+                      }`}>{name || "Support Bot"}</span>
                     </div>
 
                     {/* Messages */}
-                    <div className="p-4 min-h-[300px] bg-card/50">
-                      <div className="bg-white/5 rounded-lg rounded-tl-none p-3 text-sm max-w-[85%] mb-3">
+                    <div className={`p-4 bg-card/50 ${
+                      widgetSize === "compact" ? "min-h-[240px]" :
+                      widgetSize === "large" ? "min-h-[360px]" : "min-h-[300px]"
+                    }`}>
+                      <div
+                        className={`bg-white/5 p-3 max-w-[85%] mb-3 ${
+                          widgetSize === "compact" ? "text-xs" :
+                          widgetSize === "large" ? "text-base" : "text-sm"
+                        }`}
+                        style={{
+                          borderRadius: `${Math.max(borderRadius - 4, 4)}px`,
+                          borderTopLeftRadius: '4px'
+                        }}
+                      >
                         {welcomeMessage || "Hi! How can I help you today?"}
                       </div>
                       <div
-                        className="rounded-lg rounded-tr-none p-3 text-sm max-w-[85%] ml-auto text-white"
-                        style={{ backgroundColor: primaryColor }}
+                        className={`p-3 max-w-[85%] ml-auto text-white ${
+                          widgetSize === "compact" ? "text-xs" :
+                          widgetSize === "large" ? "text-base" : "text-sm"
+                        }`}
+                        style={{
+                          backgroundColor: primaryColor,
+                          borderRadius: `${Math.max(borderRadius - 4, 4)}px`,
+                          borderTopRightRadius: '4px'
+                        }}
                       >
                         I have a question about your product.
                       </div>
-                      <div className="bg-white/5 rounded-lg rounded-tl-none p-3 text-sm max-w-[85%] mt-3">
+                      <div
+                        className={`bg-white/5 p-3 max-w-[85%] mt-3 ${
+                          widgetSize === "compact" ? "text-xs" :
+                          widgetSize === "large" ? "text-base" : "text-sm"
+                        }`}
+                        style={{
+                          borderRadius: `${Math.max(borderRadius - 4, 4)}px`,
+                          borderTopLeftRadius: '4px'
+                        }}
+                      >
                         {personality <= 40
                           ? "Thank you for your inquiry. I'd be happy to assist you with any product-related questions."
                           : personality <= 60
@@ -415,13 +770,26 @@ export default function ChatbotSettings() {
                     {/* Input */}
                     <div className="p-3 border-t border-white/5">
                       <div className="flex gap-2">
-                        <div className="flex-1 h-9 bg-white/5 rounded-lg" />
                         <div
-                          className="h-9 w-9 rounded-lg flex items-center justify-center"
-                          style={{ backgroundColor: primaryColor }}
+                          className={`flex-1 bg-white/5 ${
+                            widgetSize === "compact" ? "h-8" :
+                            widgetSize === "large" ? "h-11" : "h-9"
+                          }`}
+                          style={{ borderRadius: `${Math.max(borderRadius - 4, 4)}px` }}
+                        />
+                        <div
+                          className={`flex items-center justify-center ${
+                            widgetSize === "compact" ? "h-8 w-8" :
+                            widgetSize === "large" ? "h-11 w-11" : "h-9 w-9"
+                          }`}
+                          style={{
+                            backgroundColor: primaryColor,
+                            borderRadius: `${Math.max(borderRadius - 4, 4)}px`
+                          }}
                         >
                           <svg
-                            className="h-4 w-4 text-white"
+                            className={widgetSize === "compact" ? "h-3 w-3" :
+                                      widgetSize === "large" ? "h-5 w-5" : "h-4 w-4"}
                             fill="none"
                             stroke="currentColor"
                             viewBox="0 0 24 24"
@@ -436,17 +804,41 @@ export default function ChatbotSettings() {
                         </div>
                       </div>
                     </div>
+
+                    {/* Branding Footer */}
+                    {showBranding && (
+                      <div className="px-3 py-2 border-t border-white/5 bg-card/30">
+                        <p className="text-[10px] text-center text-muted-foreground">
+                          Powered by <span className="font-medium">ConvoAI</span>
+                        </p>
+                      </div>
+                    )}
                   </div>
 
-                  {/* Personality Badge */}
-                  <div className="mt-4 p-3 rounded-lg bg-primary/5 border border-primary/10">
-                    <div className="flex items-center gap-2 text-sm">
-                      <Sparkles className="h-4 w-4 text-primary" />
-                      <span className="font-medium">{getPersonalityLabel(personality)}</span>
+                  {/* Customization Info Cards */}
+                  <div className="mt-4 space-y-2">
+                    {/* Personality Badge */}
+                    <div className="p-3 rounded-lg bg-primary/5 border border-primary/10">
+                      <div className="flex items-center gap-2 text-sm">
+                        <Sparkles className="h-4 w-4 text-primary" />
+                        <span className="font-medium">{getPersonalityLabel(personality)}</span>
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        {getPersonalityDescription(personality)}
+                      </p>
                     </div>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      {getPersonalityDescription(personality)}
-                    </p>
+
+                    {/* Animation Info */}
+                    <div className="p-3 rounded-lg bg-blue-500/5 border border-blue-500/10">
+                      <div className="flex items-center gap-2 text-sm">
+                        <Zap className="h-4 w-4 text-blue-400" />
+                        <span className="font-medium">Animation: {animationStyle}</span>
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        {openDelay > 0 && `Auto-opens after ${openDelay}s • `}
+                        {showInitially ? "Starts expanded" : "Starts minimized"}
+                      </p>
+                    </div>
                   </div>
                 </GlassCard>
               </div>

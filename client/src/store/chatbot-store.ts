@@ -6,6 +6,18 @@ export interface ChatbotSettings {
   welcomeMessage?: string;
   personality?: number;
   systemPrompt?: string;
+
+  // Advanced customization options
+  position?: "bottom-right" | "bottom-left" | "bottom-center";
+  widgetSize?: "compact" | "standard" | "large";
+  borderRadius?: number;
+  fontFamily?: string;
+  headerStyle?: "solid" | "gradient" | "glass";
+  showBranding?: boolean;
+  openDelay?: number;
+  showInitially?: boolean;
+  soundEnabled?: boolean;
+  animationStyle?: "slide" | "fade" | "bounce" | "none";
 }
 
 export interface Chatbot {

@@ -66,6 +66,15 @@ export class ConvoAIWidget {
       proactiveTriggers: config.proactiveTriggers,
       soundEnabled: config.soundEnabled ?? true,
       translations: config.translations,
+      // Advanced customization with defaults
+      widgetSize: config.widgetSize || "standard",
+      borderRadius: config.borderRadius ?? 12,
+      fontFamily: config.fontFamily || "Inter, system-ui, -apple-system, sans-serif",
+      headerStyle: config.headerStyle || "gradient",
+      showBranding: config.showBranding ?? true,
+      openDelay: config.openDelay ?? 0,
+      showInitially: config.showInitially ?? false,
+      animationStyle: config.animationStyle || "slide",
     };
 
     // Set up translations
@@ -107,6 +116,21 @@ export class ConvoAIWidget {
         if (data.settings.proactiveTriggers) {
           this.config.proactiveTriggers = data.settings.proactiveTriggers;
         }
+
+        // Load advanced customization settings
+        if (data.settings.position) this.config.position = data.settings.position;
+        if (data.settings.widgetSize) this.config.widgetSize = data.settings.widgetSize;
+        if (data.settings.borderRadius !== undefined) this.config.borderRadius = data.settings.borderRadius;
+        if (data.settings.fontFamily) this.config.fontFamily = data.settings.fontFamily;
+        if (data.settings.headerStyle) this.config.headerStyle = data.settings.headerStyle;
+        if (data.settings.showBranding !== undefined) this.config.showBranding = data.settings.showBranding;
+        if (data.settings.openDelay !== undefined) this.config.openDelay = data.settings.openDelay;
+        if (data.settings.showInitially !== undefined) this.config.showInitially = data.settings.showInitially;
+        if (data.settings.soundEnabled !== undefined) {
+          this.config.soundEnabled = data.settings.soundEnabled;
+          setSoundEnabled(data.settings.soundEnabled);
+        }
+        if (data.settings.animationStyle) this.config.animationStyle = data.settings.animationStyle;
       }
     } catch (error) {
       console.warn("ConvoAI: Failed to load chatbot config, using defaults");
@@ -145,7 +169,13 @@ export class ConvoAIWidget {
     if (this.config.cspNonce) {
       style.nonce = this.config.cspNonce;
     }
-    style.textContent = getWidgetStyles(this.config.primaryColor, this.config.position);
+    style.textContent = getWidgetStyles(this.config.primaryColor, this.config.position, {
+      widgetSize: this.config.widgetSize,
+      borderRadius: this.config.borderRadius,
+      fontFamily: this.config.fontFamily,
+      headerStyle: this.config.headerStyle,
+      animationStyle: this.config.animationStyle,
+    });
     this.shadowRoot.appendChild(style);
 
     // Add custom CSS if provided

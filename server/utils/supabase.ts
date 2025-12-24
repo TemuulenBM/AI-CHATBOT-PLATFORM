@@ -136,6 +136,23 @@ export interface ChatbotSettings {
   proactiveTriggers?: ProactiveTrigger[];
   locale?: string;
   soundEnabled?: boolean;
+
+  // Position & Layout
+  position?: "bottom-right" | "bottom-left" | "bottom-center";
+  widgetSize?: "compact" | "standard" | "large";
+  borderRadius?: number; // 0-24px
+
+  // Appearance
+  fontFamily?: string; // "Inter", "Roboto", "Open Sans", etc.
+  headerStyle?: "solid" | "gradient" | "glass";
+  showBranding?: boolean; // "Powered by ConvoAI"
+
+  // Behavior
+  openDelay?: number; // Auto-open after X seconds (0 = disabled)
+  showInitially?: boolean; // Start expanded vs minimized
+
+  // Animations
+  animationStyle?: "slide" | "fade" | "bounce" | "none";
 }
 
 export interface ConversationMessage {
