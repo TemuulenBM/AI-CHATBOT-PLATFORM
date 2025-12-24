@@ -96,4 +96,25 @@ router.delete(
   chatbotsController.deleteChatbot
 );
 
+// POST /api/chatbots/:id/rescrape - Trigger manual re-scraping
+router.post(
+  "/:id/rescrape",
+  validate({ params: schemas.uuidParam }),
+  chatbotsController.triggerRescrape
+);
+
+// PATCH /api/chatbots/:id/scrape-schedule - Configure auto-scraping
+router.patch(
+  "/:id/scrape-schedule",
+  validate({ params: schemas.uuidParam, body: schemas.scrapeSchedule }),
+  chatbotsController.updateScrapeSchedule
+);
+
+// GET /api/chatbots/:id/scrape-history - View scraping history
+router.get(
+  "/:id/scrape-history",
+  validate({ params: schemas.uuidParam }),
+  chatbotsController.getScrapeHistory
+);
+
 export default router;

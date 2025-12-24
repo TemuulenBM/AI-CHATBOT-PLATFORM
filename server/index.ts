@@ -4,7 +4,7 @@ import express from "express";
 import { registerRoutes } from "./routes";
 import { serveStatic } from "./static";
 import { createServer } from "http";
-import { closeQueues } from "./jobs/queues";
+import { closeQueues, initScheduledRescrape } from "./jobs/queues";
 import logger from "./utils/logger";
 import { initializeEnvironment } from "./utils/env";
 import { applySecurity } from "./middleware/security";
@@ -128,9 +128,16 @@ app.use((req, res, next) => {
   httpServer.listen(
     port,
     host,
-    () => {
+    async () => {
       log(`serving on ${host}:${port}`);
       logger.info(`Server started on ${host}:${port}`);
+
+      // Initialize scheduled re-scraping cron job
+      try {
+        await initScheduledRescrape();
+      } catch (error) {
+        logger.warn("Failed to initialize scheduled re-scrape (Redis may be unavailable)", { error });
+      }
     },
   );
 

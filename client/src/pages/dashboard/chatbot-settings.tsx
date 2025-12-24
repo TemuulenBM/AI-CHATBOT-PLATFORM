@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useParams, useLocation } from "wouter";
 import { Sidebar } from "@/components/dashboard/sidebar";
 import { GlassCard } from "@/components/ui/glass-card";
@@ -10,7 +10,7 @@ import { Slider } from "@/components/ui/slider";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
-import { useChatbotStore } from "@/store/chatbot-store";
+import { useChatbotStore, ScrapeFrequency, ScrapeHistoryResponse } from "@/store/chatbot-store";
 import { useAuth } from "@clerk/clerk-react";
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -27,7 +27,21 @@ import {
   Layout,
   Type,
   Zap,
+  RefreshCw,
+  Database,
+  Calendar,
+  Clock,
+  CheckCircle2,
+  XCircle,
 } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 const colorOptions = [
   { name: "Blue", value: "#3B82F6", class: "bg-blue-500" },
@@ -64,11 +78,15 @@ export default function ChatbotSettings() {
     currentChatbot,
     isLoading,
     isSaving,
+    isRescraping,
     error,
     fetchChatbot,
     updateChatbot,
     clearCurrentChatbot,
     clearError,
+    triggerRescrape,
+    updateScrapeSchedule,
+    fetchScrapeHistory,
   } = useChatbotStore();
 
   // Local form state
@@ -92,6 +110,12 @@ export default function ChatbotSettings() {
 
   const [hasChanges, setHasChanges] = useState(false);
 
+  // Re-scraping state
+  const [scrapeHistory, setScrapeHistory] = useState<ScrapeHistoryResponse | null>(null);
+  const [autoScrapeEnabled, setAutoScrapeEnabled] = useState(false);
+  const [scrapeFrequency, setScrapeFrequency] = useState<ScrapeFrequency>("manual");
+  const [showRescrapeDialog, setShowRescrapeDialog] = useState(false);
+
   // Auth check
   useEffect(() => {
     if (isLoaded && !isSignedIn) {
@@ -109,6 +133,24 @@ export default function ChatbotSettings() {
       clearError();
     };
   }, [id, isSignedIn]);
+
+  // Fetch scrape history
+  const loadScrapeHistory = useCallback(async () => {
+    if (id) {
+      const history = await fetchScrapeHistory(id);
+      if (history) {
+        setScrapeHistory(history);
+        setAutoScrapeEnabled(history.autoScrapeEnabled);
+        setScrapeFrequency(history.scrapeFrequency);
+      }
+    }
+  }, [id, fetchScrapeHistory]);
+
+  useEffect(() => {
+    if (id && isSignedIn) {
+      loadScrapeHistory();
+    }
+  }, [id, isSignedIn, loadScrapeHistory]);
 
   // Sync form state with chatbot data
   useEffect(() => {
@@ -197,6 +239,93 @@ export default function ChatbotSettings() {
         variant: "destructive",
       });
     }
+  };
+
+  // Handle re-scrape confirmation
+  const handleRescrape = async () => {
+    if (!id) return;
+    setShowRescrapeDialog(false);
+
+    const result = await triggerRescrape(id);
+
+    if (result.success) {
+      toast({
+        title: "Re-scraping started",
+        description: "Your chatbot is being updated. This may take a few minutes.",
+      });
+      // Refresh history after a short delay
+      setTimeout(() => loadScrapeHistory(), 2000);
+    } else {
+      toast({
+        title: "Error",
+        description: result.message,
+        variant: "destructive",
+      });
+    }
+  };
+
+  // Handle schedule update
+  const handleScheduleUpdate = async (enabled: boolean, frequency: ScrapeFrequency) => {
+    if (!id) return;
+
+    setAutoScrapeEnabled(enabled);
+    setScrapeFrequency(frequency);
+
+    const success = await updateScrapeSchedule(id, {
+      autoScrapeEnabled: enabled,
+      scrapeFrequency: frequency,
+    });
+
+    if (success) {
+      toast({
+        title: "Schedule updated",
+        description: enabled
+          ? `Auto re-scraping enabled (${frequency})`
+          : "Auto re-scraping disabled",
+      });
+      loadScrapeHistory();
+    } else {
+      // Revert on failure
+      if (scrapeHistory) {
+        setAutoScrapeEnabled(scrapeHistory.autoScrapeEnabled);
+        setScrapeFrequency(scrapeHistory.scrapeFrequency);
+      }
+      toast({
+        title: "Error",
+        description: "Failed to update schedule",
+        variant: "destructive",
+      });
+    }
+  };
+
+  // Format relative time
+  const formatRelativeTime = (dateString: string | null) => {
+    if (!dateString) return "Never";
+    const date = new Date(dateString);
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMins / 60);
+    const diffDays = Math.floor(diffHours / 24);
+
+    if (diffMins < 1) return "Just now";
+    if (diffMins < 60) return `${diffMins} minute${diffMins > 1 ? "s" : ""} ago`;
+    if (diffHours < 24) return `${diffHours} hour${diffHours > 1 ? "s" : ""} ago`;
+    if (diffDays < 7) return `${diffDays} day${diffDays > 1 ? "s" : ""} ago`;
+    return date.toLocaleDateString();
+  };
+
+  // Format future date
+  const formatFutureDate = (dateString: string | null) => {
+    if (!dateString) return null;
+    const date = new Date(dateString);
+    return date.toLocaleString(undefined, {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+    });
   };
 
   if (isLoading && !currentChatbot) {
@@ -314,6 +443,149 @@ export default function ChatbotSettings() {
                       className="bg-background/50"
                     />
                   </div>
+                </div>
+              </GlassCard>
+
+              {/* Training Data & Content */}
+              <GlassCard className="p-6">
+                <div className="flex items-center gap-3 mb-6">
+                  <div className="h-10 w-10 rounded-lg bg-emerald-500/10 flex items-center justify-center text-emerald-400">
+                    <Database className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <h2 className="font-semibold">Training Data & Content</h2>
+                    <p className="text-sm text-muted-foreground">Manage your chatbot's knowledge base</p>
+                  </div>
+                </div>
+                <div className="space-y-6">
+                  {/* Training Stats */}
+                  <div className="grid grid-cols-3 gap-4">
+                    <div className="p-4 rounded-lg bg-background/50 border border-white/5">
+                      <div className="flex items-center gap-2 text-muted-foreground mb-1">
+                        <Clock className="h-4 w-4" />
+                        <span className="text-xs">Last Trained</span>
+                      </div>
+                      <p className="font-medium">
+                        {formatRelativeTime(scrapeHistory?.lastScrapedAt || null)}
+                      </p>
+                    </div>
+                    <div className="p-4 rounded-lg bg-background/50 border border-white/5">
+                      <div className="flex items-center gap-2 text-muted-foreground mb-1">
+                        <Database className="h-4 w-4" />
+                        <span className="text-xs">Embeddings</span>
+                      </div>
+                      <p className="font-medium">{currentChatbot?.stats?.embeddings || 0} chunks</p>
+                    </div>
+                    <div className="p-4 rounded-lg bg-background/50 border border-white/5">
+                      <div className="flex items-center gap-2 text-muted-foreground mb-1">
+                        <ExternalLink className="h-4 w-4" />
+                        <span className="text-xs">Source</span>
+                      </div>
+                      <p className="font-medium text-xs truncate" title={currentChatbot?.website_url}>
+                        {currentChatbot?.website_url ? new URL(currentChatbot.website_url).hostname : "N/A"}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Re-scrape Button */}
+                  <div>
+                    <Button
+                      variant="outline"
+                      className="w-full"
+                      onClick={() => setShowRescrapeDialog(true)}
+                      disabled={isRescraping}
+                    >
+                      {isRescraping ? (
+                        <>
+                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                          Re-scraping in progress...
+                        </>
+                      ) : (
+                        <>
+                          <RefreshCw className="h-4 w-4 mr-2" />
+                          Re-scrape Website Now
+                        </>
+                      )}
+                    </Button>
+                  </div>
+
+                  {/* Automatic Re-scraping */}
+                  <div className="space-y-4 pt-4 border-t border-white/5">
+                    <div className="flex items-center justify-between">
+                      <div className="space-y-0.5">
+                        <Label>Automatic Re-scraping</Label>
+                        <p className="text-xs text-muted-foreground">Keep your chatbot's knowledge up-to-date</p>
+                      </div>
+                      <Switch
+                        checked={autoScrapeEnabled}
+                        onCheckedChange={(checked) => handleScheduleUpdate(checked, scrapeFrequency)}
+                      />
+                    </div>
+
+                    {autoScrapeEnabled && (
+                      <div>
+                        <Label className="mb-2 block">Frequency</Label>
+                        <Select
+                          value={scrapeFrequency}
+                          onValueChange={(value: ScrapeFrequency) => handleScheduleUpdate(autoScrapeEnabled, value)}
+                        >
+                          <SelectTrigger className="bg-background/50">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="daily">Daily</SelectItem>
+                            <SelectItem value="weekly">Weekly</SelectItem>
+                            <SelectItem value="monthly">Monthly</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    )}
+
+                    {autoScrapeEnabled && scrapeHistory?.nextScheduledScrape && (
+                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                        <Calendar className="h-4 w-4" />
+                        <span>Next scheduled: {formatFutureDate(scrapeHistory.nextScheduledScrape)}</span>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Recent Scrape History */}
+                  {scrapeHistory?.history && scrapeHistory.history.length > 0 && (
+                    <div className="space-y-3 pt-4 border-t border-white/5">
+                      <Label>Recent History</Label>
+                      <div className="space-y-2">
+                        {scrapeHistory.history.slice(0, 3).map((entry) => (
+                          <div
+                            key={entry.id}
+                            className="flex items-center justify-between p-3 rounded-lg bg-background/50 border border-white/5"
+                          >
+                            <div className="flex items-center gap-3">
+                              {entry.status === "completed" ? (
+                                <CheckCircle2 className="h-4 w-4 text-green-400" />
+                              ) : entry.status === "failed" ? (
+                                <XCircle className="h-4 w-4 text-red-400" />
+                              ) : (
+                                <Loader2 className="h-4 w-4 animate-spin text-yellow-400" />
+                              )}
+                              <div>
+                                <p className="text-sm font-medium capitalize">{entry.triggered_by} scrape</p>
+                                <p className="text-xs text-muted-foreground">
+                                  {entry.status === "completed"
+                                    ? `${entry.pages_scraped} pages, ${entry.embeddings_created} embeddings`
+                                    : entry.status === "failed"
+                                    ? entry.error_message || "Failed"
+                                    : "In progress..."}
+                                </p>
+                              </div>
+                            </div>
+                            <span className="text-xs text-muted-foreground">
+                              {formatRelativeTime(entry.started_at)}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
               </GlassCard>
 
@@ -846,6 +1118,38 @@ export default function ChatbotSettings() {
           </div>
         </div>
       </main>
+
+      {/* Re-scrape Confirmation Dialog */}
+      <Dialog open={showRescrapeDialog} onOpenChange={setShowRescrapeDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Re-scrape Website</DialogTitle>
+            <DialogDescription>
+              This will update your chatbot's knowledge by re-scraping your website. The process may take a few minutes depending on the number of pages.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-4">
+            <div className="flex items-start gap-3 p-4 rounded-lg bg-yellow-500/10 border border-yellow-500/20">
+              <AlertCircle className="h-5 w-5 text-yellow-500 mt-0.5" />
+              <div className="text-sm">
+                <p className="font-medium text-yellow-500">Important</p>
+                <p className="text-muted-foreground mt-1">
+                  Your chatbot will continue working during the re-scrape. Once complete, it will automatically use the updated content.
+                </p>
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowRescrapeDialog(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleRescrape} className="btn-gradient">
+              <RefreshCw className="h-4 w-4 mr-2" />
+              Start Re-scraping
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -20,6 +20,29 @@ export interface ChatbotSettings {
   animationStyle?: "slide" | "fade" | "bounce" | "none";
 }
 
+export type ScrapeFrequency = "manual" | "daily" | "weekly" | "monthly";
+
+export interface ScrapeHistoryEntry {
+  id: string;
+  chatbot_id: string;
+  status: "pending" | "in_progress" | "completed" | "failed";
+  pages_scraped: number;
+  embeddings_created: number;
+  error_message: string | null;
+  triggered_by: "manual" | "scheduled" | "initial";
+  started_at: string;
+  completed_at: string | null;
+  created_at: string;
+}
+
+export interface ScrapeHistoryResponse {
+  history: ScrapeHistoryEntry[];
+  lastScrapedAt: string | null;
+  scrapeFrequency: ScrapeFrequency;
+  autoScrapeEnabled: boolean;
+  nextScheduledScrape: string | null;
+}
+
 export interface Chatbot {
   id: string;
   name: string;
@@ -29,6 +52,9 @@ export interface Chatbot {
   pages_scraped: number;
   created_at: string;
   updated_at: string;
+  last_scraped_at?: string;
+  scrape_frequency?: ScrapeFrequency;
+  auto_scrape_enabled?: boolean;
   stats?: {
     embeddings: number;
     conversations: number;
@@ -94,6 +120,7 @@ interface ChatbotStore {
   conversationsTotalPages: number;
   isLoading: boolean;
   isSaving: boolean;
+  isRescraping: boolean;
   error: string | null;
 
   fetchChatbots: () => Promise<void>;
@@ -106,6 +133,9 @@ interface ChatbotStore {
   fetchSentimentBreakdown: (chatbotId: string) => Promise<SentimentBreakdown | null>;
   fetchSatisfactionMetrics: (chatbotId: string) => Promise<SatisfactionMetrics | null>;
   fetchAllConversations: (page?: number, limit?: number, chatbotId?: string) => Promise<ConversationsResponse | null>;
+  triggerRescrape: (chatbotId: string) => Promise<{ success: boolean; message: string }>;
+  updateScrapeSchedule: (chatbotId: string, config: { autoScrapeEnabled: boolean; scrapeFrequency: ScrapeFrequency }) => Promise<boolean>;
+  fetchScrapeHistory: (chatbotId: string) => Promise<ScrapeHistoryResponse | null>;
   clearError: () => void;
   clearCurrentChatbot: () => void;
 }
@@ -127,6 +157,7 @@ export const useChatbotStore = create<ChatbotStore>((set, get) => ({
   conversationsTotalPages: 0,
   isLoading: false,
   isSaving: false,
+  isRescraping: false,
   error: null,
 
   fetchChatbots: async () => {
@@ -306,6 +337,86 @@ export const useChatbotStore = create<ChatbotStore>((set, get) => ({
 
   clearError: () => set({ error: null }),
   clearCurrentChatbot: () => set({ currentChatbot: null }),
+
+  triggerRescrape: async (chatbotId: string) => {
+    set({ isRescraping: true, error: null });
+
+    try {
+      const response = await fetch(`/api/chatbots/${chatbotId}/rescrape`, {
+        method: 'POST',
+        headers: {
+          ...getAuthHeader(),
+        },
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        set({ isRescraping: false, error: data.message || 'Failed to trigger re-scrape' });
+        return { success: false, message: data.message || 'Failed to trigger re-scrape' };
+      }
+
+      set({ isRescraping: false });
+      return { success: true, message: data.message };
+    } catch (error) {
+      set({ isRescraping: false, error: 'Network error. Please try again.' });
+      return { success: false, message: 'Network error. Please try again.' };
+    }
+  },
+
+  updateScrapeSchedule: async (chatbotId: string, config: { autoScrapeEnabled: boolean; scrapeFrequency: ScrapeFrequency }) => {
+    set({ isSaving: true, error: null });
+
+    try {
+      const response = await fetch(`/api/chatbots/${chatbotId}/scrape-schedule`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          ...getAuthHeader(),
+        },
+        body: JSON.stringify(config),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        set({ isSaving: false, error: data.message || 'Failed to update scrape schedule' });
+        return false;
+      }
+
+      // Update local state
+      set((state) => ({
+        currentChatbot: state.currentChatbot ? {
+          ...state.currentChatbot,
+          auto_scrape_enabled: config.autoScrapeEnabled,
+          scrape_frequency: config.scrapeFrequency,
+        } : null,
+        isSaving: false,
+      }));
+
+      return true;
+    } catch (error) {
+      set({ isSaving: false, error: 'Network error. Please try again.' });
+      return false;
+    }
+  },
+
+  fetchScrapeHistory: async (chatbotId: string) => {
+    try {
+      const response = await fetch(`/api/chatbots/${chatbotId}/scrape-history`, {
+        headers: {
+          ...getAuthHeader(),
+        },
+      });
+
+      if (response.ok) {
+        return await response.json();
+      }
+    } catch (error) {
+      console.error('Failed to fetch scrape history:', error);
+    }
+    return null;
+  },
 
   fetchSentimentBreakdown: async (chatbotId: string) => {
     try {

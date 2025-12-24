@@ -108,6 +108,12 @@ export const schemas = {
     cancelUrl: z.string().url(),
   }),
 
+  // Scrape schedule schema
+  scrapeSchedule: z.object({
+    autoScrapeEnabled: z.boolean(),
+    scrapeFrequency: z.enum(["manual", "daily", "weekly", "monthly"]),
+  }),
+
   // Common param schemas
   uuidParam: z.object({
     id: z.string().uuid("Invalid ID format"),
@@ -146,3 +152,4 @@ export type CreateChatbotInput = z.infer<typeof schemas.createChatbot>;
 export type UpdateChatbotInput = z.infer<typeof schemas.updateChatbot>;
 export type ChatMessageInput = z.infer<typeof schemas.chatMessage>;
 export type CreateCheckoutInput = z.infer<typeof schemas.createCheckout>;
+export type ScrapeScheduleInput = z.infer<typeof schemas.scrapeSchedule>;

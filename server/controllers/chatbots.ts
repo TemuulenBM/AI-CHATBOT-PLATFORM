@@ -2,9 +2,10 @@ import { Response, NextFunction } from "express";
 import { supabaseAdmin, ChatbotSettings } from "../utils/supabase";
 import { AuthenticatedRequest, checkUsageLimit, incrementUsage } from "../middleware/auth";
 import { NotFoundError, AuthorizationError } from "../utils/errors";
-import { CreateChatbotInput, UpdateChatbotInput } from "../middleware/validation";
+import { CreateChatbotInput, UpdateChatbotInput, ScrapeScheduleInput } from "../middleware/validation";
 import { deleteCache, deleteCachePattern, getCache, setCache } from "../utils/redis";
 import { scrapeQueue } from "../jobs/queues";
+import { rescrapeService } from "../services/rescrape";
 import logger from "../utils/logger";
 import * as analyticsService from "../services/analytics";
 
@@ -772,6 +773,171 @@ export async function getChatbotPublic(
         animationStyle: chatbot.settings.animationStyle,
       },
       isTraining: (embeddingCount || 0) === 0, // Still training if no embeddings
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
+// Trigger manual re-scrape for a chatbot
+export async function triggerRescrape(
+  req: AuthenticatedRequest,
+  res: Response,
+  next: NextFunction
+): Promise<void> {
+  try {
+    if (!req.user) {
+      throw new AuthorizationError();
+    }
+
+    const { id } = req.params;
+
+    // Verify ownership
+    const { data: chatbot, error: fetchError } = await supabaseAdmin
+      .from("chatbots")
+      .select("id, user_id")
+      .eq("id", id)
+      .eq("user_id", req.user.userId)
+      .single();
+
+    if (fetchError || !chatbot) {
+      throw new NotFoundError("Chatbot");
+    }
+
+    // Check if there's already a scrape in progress
+    const { data: inProgressScrape } = await supabaseAdmin
+      .from("scrape_history")
+      .select("id")
+      .eq("chatbot_id", id)
+      .in("status", ["pending", "in_progress"])
+      .limit(1)
+      .single();
+
+    if (inProgressScrape) {
+      res.status(409).json({
+        message: "A scraping operation is already in progress for this chatbot.",
+        error: "SCRAPE_IN_PROGRESS",
+      });
+      return;
+    }
+
+    // Trigger the re-scrape
+    const result = await rescrapeService.triggerRescrape(id, "manual");
+
+    logger.info("Manual re-scrape triggered", {
+      chatbotId: id,
+      userId: req.user.userId,
+      historyId: result.historyId,
+    });
+
+    // Invalidate cache
+    await deleteCache(`chatbot:${id}`);
+
+    res.json({
+      message: "Re-scraping started. Your chatbot will be updated shortly.",
+      historyId: result.historyId,
+      jobId: result.jobId,
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
+// Update scrape schedule configuration
+export async function updateScrapeSchedule(
+  req: AuthenticatedRequest,
+  res: Response,
+  next: NextFunction
+): Promise<void> {
+  try {
+    if (!req.user) {
+      throw new AuthorizationError();
+    }
+
+    const { id } = req.params;
+    const { autoScrapeEnabled, scrapeFrequency } = req.body as ScrapeScheduleInput;
+
+    // Verify ownership
+    const { data: chatbot, error: fetchError } = await supabaseAdmin
+      .from("chatbots")
+      .select("id, user_id")
+      .eq("id", id)
+      .eq("user_id", req.user.userId)
+      .single();
+
+    if (fetchError || !chatbot) {
+      throw new NotFoundError("Chatbot");
+    }
+
+    // Update the schedule
+    await rescrapeService.updateScrapeSchedule(id, {
+      autoScrapeEnabled,
+      scrapeFrequency,
+    });
+
+    // Invalidate cache
+    await deleteCache(`chatbot:${id}`);
+    await deleteCachePattern(`chatbots:${req.user.userId}:*`);
+
+    logger.info("Scrape schedule updated", {
+      chatbotId: id,
+      userId: req.user.userId,
+      autoScrapeEnabled,
+      scrapeFrequency,
+    });
+
+    res.json({
+      message: "Scrape schedule updated successfully",
+      autoScrapeEnabled,
+      scrapeFrequency,
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
+// Get scrape history for a chatbot
+export async function getScrapeHistory(
+  req: AuthenticatedRequest,
+  res: Response,
+  next: NextFunction
+): Promise<void> {
+  try {
+    if (!req.user) {
+      throw new AuthorizationError();
+    }
+
+    const { id } = req.params;
+    const limit = Math.min(parseInt(req.query.limit as string) || 10, 50);
+
+    // Verify ownership
+    const { data: chatbot, error: fetchError } = await supabaseAdmin
+      .from("chatbots")
+      .select("id, user_id, last_scraped_at, scrape_frequency, auto_scrape_enabled")
+      .eq("id", id)
+      .eq("user_id", req.user.userId)
+      .single();
+
+    if (fetchError || !chatbot) {
+      throw new NotFoundError("Chatbot");
+    }
+
+    // Get scrape history
+    const history = await rescrapeService.getScrapeHistory(id, limit);
+
+    // Calculate next scheduled scrape
+    const nextScheduledScrape = rescrapeService.getNextScheduledScrape(
+      chatbot.last_scraped_at,
+      chatbot.scrape_frequency,
+      chatbot.auto_scrape_enabled
+    );
+
+    res.json({
+      history,
+      lastScrapedAt: chatbot.last_scraped_at,
+      scrapeFrequency: chatbot.scrape_frequency,
+      autoScrapeEnabled: chatbot.auto_scrape_enabled,
+      nextScheduledScrape: nextScheduledScrape?.toISOString() || null,
     });
   } catch (error) {
     next(error);
