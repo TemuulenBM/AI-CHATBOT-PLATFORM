@@ -11,6 +11,7 @@ import ChatbotsList from "@/pages/dashboard/chatbots";
 import CreateChatbot from "@/pages/dashboard/create-chatbot";
 import ChatbotSettings from "@/pages/dashboard/chatbot-settings";
 import Conversations from "@/pages/dashboard/conversations";
+import Settings from "@/pages/dashboard/settings";
 
 function Router() {
   return (
@@ -39,6 +40,7 @@ function Router() {
       <Route path="/dashboard/conversations" component={Conversations} />
       <Route path="/dashboard/create" component={CreateChatbot} />
       <Route path="/dashboard/chatbots/:id/settings" component={ChatbotSettings} />
+      <Route path="/dashboard/settings" component={Settings} />
       <Route component={NotFound} />
     </Switch>
   );
