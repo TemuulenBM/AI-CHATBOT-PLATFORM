@@ -47,6 +47,8 @@ function corsOriginValidator(origin: string | undefined, callback: (err: Error |
  * Helmet configuration with CSP for widget embedding
  */
 export function configureHelmet(app: Express): void {
+  const isDevelopment = process.env.NODE_ENV !== "production";
+
   app.use(
     helmet({
       // Content Security Policy
@@ -55,29 +57,44 @@ export function configureHelmet(app: Express): void {
           defaultSrc: ["'self'"],
           scriptSrc: [
             "'self'",
-            "'unsafe-inline'", // Needed for widget demo page
+            "'unsafe-inline'", // Needed for Vite dev, widget demo, React
+            ...(isDevelopment ? ["'unsafe-eval'"] : []), // Vite HMR in development
             "https://js.stripe.com", // Stripe checkout
+            "https://*.clerk.accounts.dev", // Clerk authentication
+            "https://challenges.cloudflare.com", // Cloudflare turnstile
           ],
           styleSrc: [
             "'self'",
-            "'unsafe-inline'", // Needed for dynamic styles
+            "'unsafe-inline'", // Needed for dynamic styles, Tailwind
+            "https://fonts.googleapis.com", // Google Fonts
           ],
           imgSrc: [
             "'self'",
             "data:",
             "https:",
+            "blob:", // For uploaded images
           ],
           connectSrc: [
             "'self'",
+            ...(isDevelopment ? ["ws://localhost:5000", "ws://localhost:*"] : []), // Vite HMR WebSocket
             "https://api.openai.com",
             "https://api.stripe.com",
             "https://*.sentry.io",
+            "https://*.clerk.accounts.dev", // Clerk API
+            "https://clerk.accounts.dev", // Clerk API
           ],
           frameSrc: [
             "'self'",
             "https://js.stripe.com", // Stripe checkout iframe
+            "https://*.clerk.accounts.dev", // Clerk authentication iframe
+            "https://challenges.cloudflare.com", // Cloudflare turnstile
           ],
-          fontSrc: ["'self'", "data:"],
+          fontSrc: [
+            "'self'",
+            "data:",
+            "https://fonts.gstatic.com", // Google Fonts
+            "https://fonts.googleapis.com", // Google Fonts
+          ],
           objectSrc: ["'none'"],
           mediaSrc: ["'self'"],
           childSrc: ["'none'"],
