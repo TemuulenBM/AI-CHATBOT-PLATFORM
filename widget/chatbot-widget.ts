@@ -6,7 +6,16 @@
 interface ChatMessage {
   role: "user" | "assistant";
   content: string;
-  timestamp: Date;
+  timestamp: Date | string;
+}
+
+interface StoredConversation {
+  messages: Array<{
+    role: "user" | "assistant";
+    content: string;
+    timestamp: string;
+  }>;
+  created_at: string | null;
 }
 
 interface WidgetConfig {
@@ -34,6 +43,7 @@ class ChatAIWidget {
   private container: HTMLDivElement | null = null;
   private chatContainer: HTMLDivElement | null = null;
   private isLoading: boolean = false;
+  private storageAvailable: boolean = false;
 
   constructor(config: Partial<WidgetConfig>) {
     this.config = {
@@ -44,12 +54,115 @@ class ChatAIWidget {
       apiUrl: config.apiUrl || window.location.origin,
     };
 
-    this.sessionId = this.generateSessionId();
+    this.storageAvailable = this.checkStorageAvailable();
+    this.sessionId = this.getOrCreateSessionId();
     this.init();
   }
 
-  private generateSessionId(): string {
+  /**
+   * Check if localStorage is available (may be blocked in private browsing)
+   */
+  private checkStorageAvailable(): boolean {
+    try {
+      const testKey = "__chatai_test__";
+      localStorage.setItem(testKey, "1");
+      localStorage.removeItem(testKey);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * Get existing session ID from localStorage or create a new one
+   */
+  private getOrCreateSessionId(): string {
+    const storageKey = `chatai_session_${this.config.chatbotId}`;
+    
+    if (this.storageAvailable) {
+      try {
+        const existingSession = localStorage.getItem(storageKey);
+        if (existingSession) {
+          return existingSession;
+        }
+        
+        const newSession = "session_" + Math.random().toString(36).substring(2, 15);
+        localStorage.setItem(storageKey, newSession);
+        return newSession;
+      } catch {
+        // Fall through to generate new session
+      }
+    }
+    
     return "session_" + Math.random().toString(36).substring(2, 15);
+  }
+
+  /**
+   * Clear the current session and start fresh
+   */
+  private clearSession(): void {
+    const storageKey = `chatai_session_${this.config.chatbotId}`;
+    
+    if (this.storageAvailable) {
+      try {
+        localStorage.removeItem(storageKey);
+      } catch {
+        // Ignore storage errors
+      }
+    }
+    
+    // Generate new session
+    this.sessionId = "session_" + Math.random().toString(36).substring(2, 15);
+    
+    if (this.storageAvailable) {
+      try {
+        localStorage.setItem(storageKey, this.sessionId);
+      } catch {
+        // Ignore storage errors
+      }
+    }
+    
+    // Reset messages to welcome message only
+    this.messages = [{
+      role: "assistant",
+      content: this.config.welcomeMessage,
+      timestamp: new Date(),
+    }];
+    this.renderMessages();
+  }
+
+  /**
+   * Load conversation history from the server
+   */
+  private async loadConversationHistory(): Promise<void> {
+    try {
+      const response = await fetch(
+        `${this.config.apiUrl}/api/chat/${this.config.chatbotId}/${this.sessionId}`
+      );
+      
+      if (response.ok) {
+        const data: StoredConversation = await response.json();
+        
+        if (data.messages && data.messages.length > 0) {
+          // Convert stored messages to ChatMessage format
+          this.messages = data.messages.map((msg) => ({
+            role: msg.role,
+            content: msg.content,
+            timestamp: new Date(msg.timestamp),
+          }));
+          return;
+        }
+      }
+    } catch (error) {
+      console.warn("ChatAI: Failed to load conversation history");
+    }
+    
+    // No history found - add welcome message
+    this.messages = [{
+      role: "assistant",
+      content: this.config.welcomeMessage,
+      timestamp: new Date(),
+    }];
   }
 
   private async init(): Promise<void> {
@@ -70,12 +183,8 @@ class ChatAIWidget {
     this.injectStyles();
     this.render();
 
-    // Add welcome message
-    this.messages.push({
-      role: "assistant",
-      content: this.config.welcomeMessage,
-      timestamp: new Date(),
-    });
+    // Load existing conversation or show welcome message
+    await this.loadConversationHistory();
     this.renderMessages();
   }
 
@@ -178,6 +287,13 @@ class ChatAIWidget {
         50% { opacity: 0.5; }
       }
 
+      #chatai-header-actions {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+      }
+
+      #chatai-clear-btn,
       #chatai-close-btn {
         background: rgba(255, 255, 255, 0.2);
         border: none;
@@ -191,14 +307,26 @@ class ChatAIWidget {
         transition: background 0.2s;
       }
 
+      #chatai-clear-btn:hover,
       #chatai-close-btn:hover {
         background: rgba(255, 255, 255, 0.3);
       }
 
+      #chatai-clear-btn svg,
       #chatai-close-btn svg {
         width: 18px;
         height: 18px;
         stroke: white;
+      }
+
+      #chatai-clear-btn {
+        width: 28px;
+        height: 28px;
+      }
+
+      #chatai-clear-btn svg {
+        width: 14px;
+        height: 14px;
       }
 
       #chatai-messages {
@@ -374,11 +502,18 @@ class ChatAIWidget {
       <div id="chatai-chat-window">
         <div id="chatai-header">
           <span id="chatai-header-title">AI Assistant</span>
-          <button id="chatai-close-btn">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M18 6L6 18M6 6l12 12"/>
-            </svg>
-          </button>
+          <div id="chatai-header-actions">
+            <button id="chatai-clear-btn" title="Start new conversation">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/>
+              </svg>
+            </button>
+            <button id="chatai-close-btn" title="Close">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M18 6L6 18M6 6l12 12"/>
+              </svg>
+            </button>
+          </div>
         </div>
         <div id="chatai-messages"></div>
         <div id="chatai-input-container">
@@ -410,11 +545,13 @@ class ChatAIWidget {
     // Event listeners
     const button = this.container.querySelector("#chatai-widget-button") as HTMLButtonElement;
     const closeBtn = this.container.querySelector("#chatai-close-btn") as HTMLButtonElement;
+    const clearBtn = this.container.querySelector("#chatai-clear-btn") as HTMLButtonElement;
     const form = this.container.querySelector("#chatai-input-form") as HTMLFormElement;
     const chatWindow = this.container.querySelector("#chatai-chat-window") as HTMLDivElement;
 
     button.addEventListener("click", () => this.toggle());
     closeBtn.addEventListener("click", () => this.close());
+    clearBtn.addEventListener("click", () => this.clearSession());
     form.addEventListener("submit", (e) => this.handleSubmit(e));
 
     // Close on outside click
