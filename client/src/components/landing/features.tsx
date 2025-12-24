@@ -4,8 +4,8 @@ import { Bot, Zap, Shield, Globe, Cpu, BarChart3, Workflow, Link2, DollarSign, T
 const features = [
   {
     icon: Zap,
-    title: "Deploy in Seconds",
-    description: "Simply input your website URL and get a fully trained chatbot in under 60 seconds. No coding required."
+    title: "Instant Deploy",
+    description: "Enter your website URL and your chatbot goes live immediately! It learns your content in the background while serving customers right away."
   },
   {
     icon: Bot,

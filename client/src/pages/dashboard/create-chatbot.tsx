@@ -93,7 +93,7 @@ export default function CreateChatbot() {
       setStep(3);
       toast({
         title: "Success!",
-        description: "Your chatbot is being created. Website scraping will begin shortly.",
+        description: "Your chatbot is deployed and ready to use! Training on your website content in the background.",
       });
     } else {
       toast({
@@ -265,12 +265,12 @@ export default function CreateChatbot() {
                 <div className="h-16 w-16 rounded-full bg-green-500/10 flex items-center justify-center mx-auto mb-6 text-green-500">
                   <Check className="h-8 w-8" />
                 </div>
-                <h2 className="text-2xl font-bold mb-4">Chatbot Created Successfully!</h2>
+                <h2 className="text-2xl font-bold mb-4">Chatbot Deployed Successfully!</h2>
                 <p className="text-muted-foreground mb-2">
-                  Your chatbot "<span className="text-foreground font-medium">{createdChatbot.name}</span>" is being processed.
+                  Your chatbot "<span className="text-foreground font-medium">{createdChatbot.name}</span>" is <span className="text-green-400 font-medium">ready to use</span>!
                 </p>
                 <p className="text-muted-foreground mb-8">
-                  Website scraping is in progress. Once complete, copy the code below and paste it into your website's HTML.
+                  It's learning about your website in the background. Copy the code below and paste it into your website's HTML.
                 </p>
 
                 <div className="relative bg-black/50 rounded-lg p-6 text-left font-mono text-sm border border-white/10 mb-8 group">
@@ -287,10 +287,10 @@ export default function CreateChatbot() {
                   </Button>
                 </div>
 
-                <div className="bg-yellow-500/10 border border-yellow-500/20 rounded-lg p-4 mb-8 text-left">
-                  <p className="text-sm text-yellow-400">
-                    <strong>Note:</strong> The chatbot will be available once the website scraping is complete. 
-                    This usually takes a few minutes depending on your website size.
+                <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-4 mb-8 text-left">
+                  <p className="text-sm text-blue-400">
+                    <strong>Instant Deploy:</strong> Your chatbot is live right now! It will provide general assistance while learning about your website content (usually takes 5-10 minutes).
+                    Responses will become more specific as training completes.
                   </p>
                 </div>
 

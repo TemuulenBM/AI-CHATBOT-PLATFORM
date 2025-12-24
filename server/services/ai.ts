@@ -37,28 +37,36 @@ const DEFAULT_OPTIONS: ChatOptions = {
 export class AIService {
   /**
    * Build context from similar embeddings
+   * Returns empty context if chatbot is still training (no embeddings yet)
    */
   async buildContext(
     chatbotId: string,
     message: string
   ): Promise<ChatContext> {
-    const similar = await embeddingService.findSimilar(chatbotId, message, 5, 0.6);
+    try {
+      const similar = await embeddingService.findSimilar(chatbotId, message, 5, 0.6);
 
-    if (similar.length === 0) {
+      if (similar.length === 0) {
+        return { relevantContent: "", sources: [] };
+      }
+
+      const relevantContent = similar
+        .map((s, i) => `[${i + 1}] ${s.content}`)
+        .join("\n\n");
+
+      const sources = Array.from(new Set(similar.map((s) => s.pageUrl)));
+
+      return { relevantContent, sources };
+    } catch (error) {
+      // If embeddings don't exist yet, return empty context (training mode)
+      logger.warn("Failed to build context, using fallback mode", { chatbotId, error });
       return { relevantContent: "", sources: [] };
     }
-
-    const relevantContent = similar
-      .map((s, i) => `[${i + 1}] ${s.content}`)
-      .join("\n\n");
-
-    const sources = Array.from(new Set(similar.map((s) => s.pageUrl)));
-
-    return { relevantContent, sources };
   }
 
   /**
    * Build system prompt for chatbot
+   * Handles both training mode (no context) and trained mode (with context)
    */
   buildSystemPrompt(
     websiteName: string,
@@ -77,15 +85,24 @@ export class AIService {
     prompt += `\n\nPersonality: Be ${personalityDesc}.`;
 
     if (relevantContent) {
+      // Trained mode - has website context
       prompt += `\n\n## Relevant Context from the website:\n${relevantContent}`;
-    }
-
-    prompt += `\n\n## Guidelines:
+      prompt += `\n\n## Guidelines:
 - Answer questions based on the context provided above when available
 - Be helpful, accurate, and concise
 - If you don't have enough information to answer accurately, say "I don't have specific information about that, but I'd be happy to help with other questions about ${websiteName}."
 - Don't make up information that isn't in the context
 - Keep responses conversational but informative`;
+    } else {
+      // Training mode - no context yet (chatbot is being trained)
+      prompt += `\n\n## Training Mode - Important Instructions:
+- I'm currently learning about ${websiteName}'s website content
+- Training is happening in the background and will be complete shortly
+- For now, provide helpful, general responses and let users know you're still being trained
+- Be polite and offer to help with general questions
+- Suggest users check back in a few minutes for more specific, detailed answers about ${websiteName}
+- Keep a friendly, apologetic tone about the training process`;
+    }
 
     return prompt;
   }

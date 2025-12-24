@@ -36,11 +36,8 @@ export const scrapeWorker = new Worker<ScrapeJobData>(
     logger.info("Starting scrape job", { chatbotId, websiteUrl, jobId: job.id });
 
     try {
-      // Update status to scraping
-      await supabaseAdmin
-        .from("chatbots")
-        .update({ status: "scraping" })
-        .eq("id", chatbotId);
+      // Chatbot remains "ready" - it's already live and serving requests
+      // No status update needed - chatbot stays ready during training
 
       // Scrape website
       const pages = await scrapeWebsite(websiteUrl, maxPages);
@@ -65,11 +62,9 @@ export const scrapeWorker = new Worker<ScrapeJobData>(
     } catch (error) {
       logger.error("Scrape job failed", { chatbotId, error });
 
-      // Update status to failed
-      await supabaseAdmin
-        .from("chatbots")
-        .update({ status: "failed" })
-        .eq("id", chatbotId);
+      // Keep chatbot ready even if scraping fails - it will use fallback mode
+      // Only log the error, don't mark as failed
+      logger.warn("Chatbot will continue operating in fallback mode", { chatbotId });
 
       throw error;
     }
@@ -93,13 +88,10 @@ export const embeddingWorker = new Worker<EmbeddingJobData>(
     logger.info("Starting embedding job", { chatbotId, pageCount: pages.length, jobId: job.id });
 
     try {
-      // Update status to embedding
-      await supabaseAdmin
-        .from("chatbots")
-        .update({ status: "embedding" })
-        .eq("id", chatbotId);
+      // Chatbot remains "ready" throughout embedding process
+      // It's already serving requests in fallback mode
 
-      // Delete existing embeddings
+      // Delete existing embeddings (if any from previous training)
       await embeddingService.deleteEmbeddings(chatbotId);
 
       // Create embeddings for each page
@@ -112,15 +104,12 @@ export const embeddingWorker = new Worker<EmbeddingJobData>(
         await job.updateProgress((processed / pages.length) * 100);
       }
 
-      // Update status to ready
-      await supabaseAdmin
-        .from("chatbots")
-        .update({ status: "ready" })
-        .eq("id", chatbotId);
+      // Chatbot stays "ready" - no status change needed
+      // Once embeddings exist, responses will automatically become more specific
 
       const embeddingCount = await embeddingService.getEmbeddingCount(chatbotId);
 
-      logger.info("Embedding job completed", {
+      logger.info("Embedding job completed - chatbot now fully trained", {
         chatbotId,
         pagesProcessed: pages.length,
         embeddingsCreated: embeddingCount,
@@ -130,11 +119,9 @@ export const embeddingWorker = new Worker<EmbeddingJobData>(
     } catch (error) {
       logger.error("Embedding job failed", { chatbotId, error });
 
-      // Update status to failed
-      await supabaseAdmin
-        .from("chatbots")
-        .update({ status: "failed" })
-        .eq("id", chatbotId);
+      // Keep chatbot ready even if embedding fails
+      // It will continue operating in fallback mode
+      logger.warn("Chatbot will continue operating in fallback mode", { chatbotId });
 
       throw error;
     }

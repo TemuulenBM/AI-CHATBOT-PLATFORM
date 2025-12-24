@@ -23,14 +23,15 @@ export async function createChatbot(
     // Check usage limit
     await checkUsageLimit(req.user.userId, "chatbot");
 
-    // Create chatbot
+    // Create chatbot with "ready" status for instant deployment
+    // Training will happen in background, chatbot uses fallback mode until "trained"
     const { data: chatbot, error } = await supabaseAdmin
       .from("chatbots")
       .insert({
         user_id: req.user.userId,
         name,
         website_url: websiteUrl,
-        status: "pending",
+        status: "ready", // Instant deployment - chatbot is immediately usable
         settings: settings as ChatbotSettings,
       })
       .select()
@@ -67,7 +68,7 @@ export async function createChatbot(
     await deleteCachePattern(`chatbots:${req.user.userId}:*`);
 
     res.status(201).json({
-      message: "Chatbot created successfully. Scraping will begin shortly.",
+      message: "Chatbot deployed successfully! It's ready to use while we train it on your website content.",
       chatbot,
     });
   } catch (error) {
@@ -589,6 +590,12 @@ export async function getChatbotPublic(
       throw new NotFoundError("Chatbot");
     }
 
+    // Get embedding count to determine training status
+    const { count: embeddingCount } = await supabaseAdmin
+      .from("embeddings")
+      .select("*", { count: "exact", head: true })
+      .eq("chatbot_id", id);
+
     res.json({
       id: chatbot.id,
       name: chatbot.name,
@@ -596,6 +603,7 @@ export async function getChatbotPublic(
         primaryColor: chatbot.settings.primaryColor,
         welcomeMessage: chatbot.settings.welcomeMessage,
       },
+      isTraining: (embeddingCount || 0) === 0, // Still training if no embeddings
     });
   } catch (error) {
     next(error);
