@@ -623,6 +623,30 @@ export async function getChatbotPublic(
       throw new NotFoundError("Chatbot");
     }
 
+    // Domain whitelist validation
+    const origin = req.get("origin") || req.get("referer");
+    if (chatbot.settings.allowedDomains && chatbot.settings.allowedDomains.length > 0 && origin) {
+      try {
+        const originUrl = new URL(origin);
+        const originHost = originUrl.hostname.toLowerCase();
+        const isAllowed = chatbot.settings.allowedDomains.some((domain: string) => {
+          const normalizedDomain = domain.toLowerCase().replace(/^https?:\/\//, "").replace(/\/$/, "");
+          // Allow exact match or subdomain match
+          return originHost === normalizedDomain || originHost.endsWith(`.${normalizedDomain}`);
+        });
+
+        if (!isAllowed) {
+          res.status(403).json({
+            error: "Domain not authorized",
+            message: "This chatbot is not authorized to run on this domain.",
+          });
+          return;
+        }
+      } catch {
+        // Invalid origin URL, allow request to proceed (could be direct API call)
+      }
+    }
+
     // Get embedding count to determine training status
     const { count: embeddingCount } = await supabaseAdmin
       .from("embeddings")
@@ -635,6 +659,11 @@ export async function getChatbotPublic(
       settings: {
         primaryColor: chatbot.settings.primaryColor,
         welcomeMessage: chatbot.settings.welcomeMessage,
+        // Widget v2.0 settings
+        preChatForm: chatbot.settings.preChatForm,
+        proactiveTriggers: chatbot.settings.proactiveTriggers,
+        locale: chatbot.settings.locale,
+        soundEnabled: chatbot.settings.soundEnabled,
       },
       isTraining: (embeddingCount || 0) === 0, // Still training if no embeddings
     });

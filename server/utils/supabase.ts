@@ -104,11 +104,38 @@ export interface Database {
   };
 }
 
+export interface PreChatField {
+  name: string;
+  type: "text" | "email" | "phone" | "select";
+  label: string;
+  placeholder?: string;
+  required: boolean;
+  options?: string[]; // For select type
+}
+
+export interface ProactiveTrigger {
+  id: string;
+  type: "time_on_page" | "scroll_depth" | "exit_intent" | "page_url";
+  value: number | string;
+  message: string;
+  enabled: boolean;
+}
+
 export interface ChatbotSettings {
   personality: number; // 0-100 scale (0 = professional, 100 = casual)
   primaryColor: string;
   welcomeMessage: string;
   systemPrompt?: string;
+  // Widget v2.0 settings
+  allowedDomains?: string[]; // Domain whitelist for widget embedding
+  preChatForm?: {
+    enabled: boolean;
+    title?: string;
+    fields: PreChatField[];
+  };
+  proactiveTriggers?: ProactiveTrigger[];
+  locale?: string;
+  soundEnabled?: boolean;
 }
 
 export interface ConversationMessage {

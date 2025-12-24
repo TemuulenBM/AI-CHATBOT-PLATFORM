@@ -82,11 +82,40 @@ export default function ChatbotsList() {
   };
 
   const handleCopyEmbed = (id: string) => {
-    const embedCode = `<script src="${window.location.origin}/widget.js" data-chatbot-id="${id}"></script>`;
+    // Industry-standard async embed code
+    const embedCode = `<script async src="${window.location.origin}/widget.js" data-chatbot-id="${id}"></script>`;
     navigator.clipboard.writeText(embedCode);
     toast({
       title: "Copied!",
-      description: "Embed code copied to clipboard",
+      description: "Embed code copied to clipboard. Paste it before </body> on your website.",
+    });
+  };
+
+  const handleCopyAdvancedEmbed = (id: string) => {
+    // Advanced embed with all options
+    const embedCode = `<!-- ConvoAI Widget - Lazy Loading -->
+<script async
+  src="${window.location.origin}/widget/loader.js"
+  data-chatbot-id="${id}"
+  data-position="bottom-right"
+  data-lazy="true"
+></script>
+
+<!-- JavaScript API available after load -->
+<script>
+  // Open widget programmatically
+  // ConvoAI('open');
+
+  // Identify logged-in users
+  // ConvoAI('identify', { name: 'User Name', email: 'user@example.com' });
+
+  // Listen to events
+  // ConvoAI('on', 'message', function(data) { console.log(data); });
+</script>`;
+    navigator.clipboard.writeText(embedCode);
+    toast({
+      title: "Copied!",
+      description: "Advanced embed code with JavaScript API examples copied.",
     });
   };
 
@@ -153,6 +182,9 @@ export default function ChatbotsList() {
                           </DropdownMenuItem>
                           <DropdownMenuItem onClick={() => handleCopyEmbed(bot.id)}>
                             <Copy className="h-4 w-4 mr-2" /> Copy Embed Code
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => handleCopyAdvancedEmbed(bot.id)}>
+                            <Copy className="h-4 w-4 mr-2" /> Copy Advanced Embed
                           </DropdownMenuItem>
                           <DropdownMenuItem
                             onClick={() => window.open(`/widget/demo?id=${bot.id}`, '_blank')}
