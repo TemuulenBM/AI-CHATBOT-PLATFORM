@@ -560,6 +560,102 @@ export async function getConversations(
   }
 }
 
+// Get all conversations across all user's chatbots
+export async function getAllConversations(
+  req: AuthenticatedRequest,
+  res: Response,
+  next: NextFunction
+): Promise<void> {
+  try {
+    if (!req.user) {
+      throw new AuthorizationError();
+    }
+
+    // Query params are already validated and transformed by middleware
+    const page = typeof req.query.page === "number" ? req.query.page : 1;
+    const limit = typeof req.query.limit === "number" ? Math.min(req.query.limit, 50) : 20;
+    const offset = (page - 1) * limit;
+    const chatbotId = req.query.chatbotId as string | undefined;
+    const startDate = req.query.startDate as string | undefined;
+    const endDate = req.query.endDate as string | undefined;
+
+    // Get all user's chatbot IDs
+    let chatbotQuery = supabaseAdmin
+      .from("chatbots")
+      .select("id, name")
+      .eq("user_id", req.user.userId);
+
+    if (chatbotId) {
+      chatbotQuery = chatbotQuery.eq("id", chatbotId);
+    }
+
+    const { data: chatbots, error: chatbotsError } = await chatbotQuery;
+
+    if (chatbotsError || !chatbots || chatbots.length === 0) {
+      res.json({
+        conversations: [],
+        total: 0,
+        page,
+        limit,
+        totalPages: 0,
+      });
+      return;
+    }
+
+    const chatbotIds = chatbots.map((c) => c.id);
+    const chatbotMap = new Map(chatbots.map((c) => [c.id, c.name]));
+
+    // Build query for conversations
+    let query = supabaseAdmin
+      .from("conversations")
+      .select("id, chatbot_id, session_id, messages, created_at, updated_at", { count: "exact" })
+      .in("chatbot_id", chatbotIds)
+      .order("updated_at", { ascending: false })
+      .range(offset, offset + limit - 1);
+
+    if (startDate) {
+      query = query.gte("created_at", startDate);
+    }
+    if (endDate) {
+      query = query.lte("created_at", endDate);
+    }
+
+    const { data: conversations, error, count } = await query;
+
+    if (error) {
+      logger.error("Failed to fetch all conversations", { error, userId: req.user.userId });
+      throw new Error("Failed to fetch conversations");
+    }
+
+    // Transform conversations to include message count, preview, and chatbot name
+    const transformedConversations = (conversations || []).map((conv) => {
+      const messages = conv.messages as { role: string; content: string; timestamp: string }[];
+      const firstUserMessage = messages?.find((m) => m.role === "user");
+
+      return {
+        id: conv.id,
+        chatbotId: conv.chatbot_id,
+        chatbotName: chatbotMap.get(conv.chatbot_id) || "Unknown",
+        sessionId: conv.session_id,
+        messageCount: Array.isArray(messages) ? messages.length : 0,
+        preview: firstUserMessage?.content?.substring(0, 100) || "No messages",
+        createdAt: conv.created_at,
+        updatedAt: conv.updated_at,
+      };
+    });
+
+    res.json({
+      conversations: transformedConversations,
+      total: count || 0,
+      page,
+      limit,
+      totalPages: Math.ceil((count || 0) / limit),
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
 // Get a single conversation with full messages
 export async function getConversation(
   req: AuthenticatedRequest,

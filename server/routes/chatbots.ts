@@ -16,6 +16,13 @@ router.get("/stats", chatbotsController.getStats);
 // GET /api/chatbots/stats/volume - Get message volume trends
 router.get("/stats/volume", chatbotsController.getMessageVolume);
 
+// GET /api/chatbots/conversations - Get all conversations across all user's chatbots
+router.get(
+  "/conversations",
+  validate({ query: schemas.conversationsQuery }),
+  chatbotsController.getAllConversations
+);
+
 // POST /api/chatbots - Create chatbot
 router.post(
   "/",

@@ -112,6 +112,32 @@ export const schemas = {
   uuidParam: z.object({
     id: z.string().uuid("Invalid ID format"),
   }),
+
+  // Conversations query schema
+  conversationsQuery: z.object({
+    page: z
+      .union([z.string().regex(/^\d+$/), z.number()])
+      .transform((val) => (typeof val === "string" ? parseInt(val, 10) : val))
+      .pipe(z.number().int().positive())
+      .optional()
+      .default(1),
+    limit: z
+      .union([z.string().regex(/^\d+$/), z.number()])
+      .transform((val) => (typeof val === "string" ? parseInt(val, 10) : val))
+      .pipe(z.number().int().positive().max(50))
+      .optional()
+      .default(20),
+    chatbotId: z
+      .string()
+      .optional()
+      .refine(
+        (val) => !val || val === "" || z.string().uuid().safeParse(val).success,
+        { message: "Invalid chatbot ID format" }
+      )
+      .transform((val) => (val === "" ? undefined : val)),
+    startDate: z.string().optional(),
+    endDate: z.string().optional(),
+  }),
 };
 
 export type SignupInput = z.infer<typeof schemas.signup>;

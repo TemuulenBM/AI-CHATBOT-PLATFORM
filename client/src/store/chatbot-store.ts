@@ -38,6 +38,8 @@ export interface MessageVolumePoint {
 
 export interface ConversationSummary {
   id: string;
+  chatbotId?: string;
+  chatbotName?: string;
   sessionId: string;
   messageCount: number;
   preview: string;
@@ -61,11 +63,23 @@ export interface SatisfactionMetrics {
   satisfactionRate: number | null;
 }
 
+interface ConversationsResponse {
+  conversations: ConversationSummary[];
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
+}
+
 interface ChatbotStore {
   chatbots: Chatbot[];
   currentChatbot: Chatbot | null;
   stats: ChatbotStats;
   messageVolume: MessageVolumePoint[];
+  allConversations: ConversationSummary[];
+  conversationsTotal: number;
+  conversationsPage: number;
+  conversationsTotalPages: number;
   isLoading: boolean;
   isSaving: boolean;
   error: string | null;
@@ -79,6 +93,7 @@ interface ChatbotStore {
   deleteChatbot: (id: string) => Promise<boolean>;
   fetchSentimentBreakdown: (chatbotId: string) => Promise<SentimentBreakdown | null>;
   fetchSatisfactionMetrics: (chatbotId: string) => Promise<SatisfactionMetrics | null>;
+  fetchAllConversations: (page?: number, limit?: number, chatbotId?: string) => Promise<ConversationsResponse | null>;
   clearError: () => void;
   clearCurrentChatbot: () => void;
 }
@@ -94,6 +109,10 @@ export const useChatbotStore = create<ChatbotStore>((set, get) => ({
     avgResponseTime: null,
   },
   messageVolume: [],
+  allConversations: [],
+  conversationsTotal: 0,
+  conversationsPage: 1,
+  conversationsTotalPages: 0,
   isLoading: false,
   isSaving: false,
   error: null,
@@ -306,6 +325,50 @@ export const useChatbotStore = create<ChatbotStore>((set, get) => ({
       }
     } catch (error) {
       console.error('Failed to fetch satisfaction metrics:', error);
+    }
+    return null;
+  },
+
+  fetchAllConversations: async (page: number = 1, limit: number = 20, chatbotId?: string) => {
+    set({ isLoading: true, error: null });
+    try {
+      const params = new URLSearchParams({
+        page: page.toString(),
+        limit: limit.toString(),
+      });
+      if (chatbotId) {
+        params.append('chatbotId', chatbotId);
+      }
+
+      const response = await fetch(`/api/chatbots/conversations?${params.toString()}`, {
+        headers: {
+          ...getAuthHeader(),
+        },
+      });
+
+      if (response.ok) {
+        const data: ConversationsResponse = await response.json();
+        set({
+          allConversations: data.conversations,
+          conversationsTotal: data.total,
+          conversationsPage: data.page,
+          conversationsTotalPages: data.totalPages,
+          isLoading: false,
+        });
+        return data;
+      } else {
+        const errorData = await response.json().catch(() => ({ message: 'Failed to fetch conversations' }));
+        set({ 
+          isLoading: false, 
+          error: errorData.message || 'Failed to fetch conversations' 
+        });
+      }
+    } catch (error) {
+      console.error('Failed to fetch all conversations:', error);
+      set({ 
+        isLoading: false, 
+        error: 'Network error. Please try again.' 
+      });
     }
     return null;
   },
