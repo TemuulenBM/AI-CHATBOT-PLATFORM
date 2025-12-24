@@ -10,6 +10,7 @@ vite.config.ts.*
 .env
 .env.local
 .env.*.local
+client/.env.local
 
 # Logs
 logs/

@@ -1,7 +1,14 @@
 import { createRoot } from "react-dom/client";
 import * as Sentry from "@sentry/react";
+import { ClerkProvider } from "@clerk/clerk-react";
 import App from "./App";
 import "./index.css";
+
+// Initialize Clerk
+const PUBLISHABLE_KEY = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;
+if (!PUBLISHABLE_KEY) {
+  throw new Error("Missing Clerk Publishable Key");
+}
 
 // Initialize Sentry for frontend error tracking
 const SENTRY_DSN = import.meta.env.VITE_SENTRY_DSN;
@@ -70,14 +77,16 @@ function ErrorFallback({ error, resetError }: { error: Error; resetError: () => 
 }
 
 createRoot(document.getElementById("root")!).render(
-  <Sentry.ErrorBoundary
-    fallback={({ error, resetError }) => (
-      <ErrorFallback error={error} resetError={resetError} />
-    )}
-    onError={(error, componentStack) => {
-      console.error("React Error Boundary caught error:", error, componentStack);
-    }}
-  >
-    <App />
-  </Sentry.ErrorBoundary>
+  <ClerkProvider publishableKey={PUBLISHABLE_KEY} afterSignOutUrl="/">
+    <Sentry.ErrorBoundary
+      fallback={({ error, resetError }) => (
+        <ErrorFallback error={error} resetError={resetError} />
+      )}
+      onError={(error, componentStack) => {
+        console.error("React Error Boundary caught error:", error, componentStack);
+      }}
+    >
+      <App />
+    </Sentry.ErrorBoundary>
+  </ClerkProvider>
 );

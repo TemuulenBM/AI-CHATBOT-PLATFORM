@@ -3,7 +3,7 @@ import { Sidebar } from "@/components/dashboard/sidebar";
 import { StatsCards } from "@/components/dashboard/stats-cards";
 import { GlassCard } from "@/components/ui/glass-card";
 import { AreaChart, Area, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
-import { useAuthStore } from "@/store/authStore";
+import { useAuth, useUser } from "@clerk/clerk-react";
 import { useChatbotStore } from "@/store/chatbot-store";
 import { useLocation } from "wouter";
 import { Bot, Loader2, TrendingUp } from "lucide-react";
@@ -11,26 +11,29 @@ import { Button } from "@/components/ui/button";
 import { Link } from "wouter";
 
 export default function Dashboard() {
-  const { isAuthenticated, user } = useAuthStore();
+  const { isSignedIn, isLoaded } = useAuth();
+  const { user } = useUser();
   const { stats, fetchStats, chatbots, fetchChatbots, messageVolume, fetchMessageVolume } = useChatbotStore();
   const [, setLocation] = useLocation();
   const [isLoading, setIsLoading] = useState(true);
   const [selectedDays, setSelectedDays] = useState(7);
 
   useEffect(() => {
-    if (!isAuthenticated) {
+    if (isLoaded && !isSignedIn) {
       setLocation('/login');
       return;
     }
 
-    const loadData = async () => {
-      setIsLoading(true);
-      await Promise.all([fetchStats(), fetchChatbots(), fetchMessageVolume(selectedDays)]);
-      setIsLoading(false);
-    };
+    if (isSignedIn) {
+      const loadData = async () => {
+        setIsLoading(true);
+        await Promise.all([fetchStats(), fetchChatbots(), fetchMessageVolume(selectedDays)]);
+        setIsLoading(false);
+      };
 
-    loadData();
-  }, [isAuthenticated, selectedDays]);
+      loadData();
+    }
+  }, [isLoaded, isSignedIn, selectedDays]);
 
   // Format date for chart display
   const formatChartData = () => {
@@ -84,7 +87,7 @@ export default function Dashboard() {
             <div>
               <h1 className="text-3xl font-bold mb-2">Dashboard</h1>
               <p className="text-muted-foreground">
-                Welcome back{user?.email ? `, ${user.email.split('@')[0]}` : ''}!
+                Welcome back{user?.firstName ? `, ${user.firstName}` : user?.emailAddresses?.[0]?.emailAddress ? `, ${user.emailAddresses[0].emailAddress.split('@')[0]}` : ''}!
               </p>
             </div>
           </header>

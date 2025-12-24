@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Link } from "wouter";
 import { Bot } from "lucide-react";
 import { ChatbotWidget } from "@/components/chatbot-widget/widget";
+import { SignedIn, SignedOut, SignInButton, UserButton } from "@clerk/clerk-react";
 
 export default function Landing() {
   return (
@@ -26,12 +27,20 @@ export default function Landing() {
           </div>
 
           <div className="flex items-center gap-4">
-            <Link href="/login">
-              <Button variant="ghost" className="hidden sm:flex">Log In</Button>
-            </Link>
-            <Link href="/signup">
-              <Button className="btn-gradient">Get Started</Button>
-            </Link>
+            <SignedOut>
+              <SignInButton mode="modal">
+                <Button variant="ghost" className="hidden sm:flex">Log In</Button>
+              </SignInButton>
+              <Link href="/signup">
+                <Button className="btn-gradient">Get Started</Button>
+              </Link>
+            </SignedOut>
+            <SignedIn>
+              <Link href="/dashboard">
+                <Button variant="ghost" className="hidden sm:flex">Dashboard</Button>
+              </Link>
+              <UserButton afterSignOutUrl="/" />
+            </SignedIn>
           </div>
         </div>
       </nav>

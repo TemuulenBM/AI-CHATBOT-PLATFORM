@@ -1,7 +1,8 @@
 import { Link, useLocation } from "wouter";
 import { cn } from "@/lib/utils";
-import { Bot, LayoutDashboard, Settings, MessageSquare, LogOut, Plus } from "lucide-react";
+import { Bot, LayoutDashboard, Settings, MessageSquare, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { UserButton } from "@clerk/clerk-react";
 
 const navItems = [
   { icon: LayoutDashboard, label: "Overview", href: "/dashboard" },
@@ -50,11 +51,16 @@ export function Sidebar() {
         ))}
       </nav>
 
-      <div className="p-4 border-t border-white/5">
-        <Button variant="ghost" className="w-full justify-start text-muted-foreground hover:text-destructive gap-3">
-          <LogOut className="h-5 w-5" />
-          Sign Out
-        </Button>
+      <div className="p-4 border-t border-white/5 flex items-center gap-3">
+        <UserButton
+          afterSignOutUrl="/"
+          appearance={{
+            elements: {
+              avatarBox: "w-10 h-10",
+            },
+          }}
+        />
+        <span className="text-sm text-muted-foreground">Account</span>
       </div>
     </aside>
   );

@@ -2,7 +2,7 @@ import { useEffect } from "react";
 import { Sidebar } from "@/components/dashboard/sidebar";
 import { GlassCard } from "@/components/ui/glass-card";
 import { useChatbotStore, Chatbot } from "@/store/chatbot-store";
-import { useAuthStore } from "@/store/authStore";
+import { useAuth } from "@clerk/clerk-react";
 import { Button } from "@/components/ui/button";
 import { Plus, MoreHorizontal, Globe, Trash2, ExternalLink, Loader2, Copy, AlertCircle } from "lucide-react";
 import { Link, useLocation } from "wouter";
@@ -49,17 +49,19 @@ function getStatusLabel(status: Chatbot['status']) {
 
 export default function ChatbotsList() {
   const { chatbots, isLoading, error, fetchChatbots, deleteChatbot } = useChatbotStore();
-  const { isAuthenticated } = useAuthStore();
+  const { isSignedIn, isLoaded } = useAuth();
   const [, setLocation] = useLocation();
   const { toast } = useToast();
 
   useEffect(() => {
-    if (!isAuthenticated) {
+    if (isLoaded && !isSignedIn) {
       setLocation('/login');
       return;
     }
-    fetchChatbots();
-  }, [isAuthenticated]);
+    if (isSignedIn) {
+      fetchChatbots();
+    }
+  }, [isLoaded, isSignedIn]);
 
   const handleDelete = async (id: string, name: string) => {
     if (!confirm(`Are you sure you want to delete "${name}"?`)) return;
