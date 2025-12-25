@@ -332,7 +332,7 @@ export default function ChatbotSettings() {
     return (
       <div className="min-h-screen bg-background">
         <Sidebar />
-        <main className="pl-64 p-8">
+        <main className="md:pl-64 px-4 md:px-8 pt-4 md:pt-8 pb-8">
           <div className="flex items-center justify-center h-64">
             <Loader2 className="h-8 w-8 animate-spin text-primary" />
           </div>
@@ -345,7 +345,7 @@ export default function ChatbotSettings() {
     return (
       <div className="min-h-screen bg-background">
         <Sidebar />
-        <main className="pl-64 p-8">
+        <main className="md:pl-64 px-4 md:px-8 pt-4 md:pt-8 pb-8">
           <GlassCard className="p-12 text-center max-w-lg mx-auto">
             <AlertCircle className="h-12 w-12 text-red-400 mx-auto mb-4" />
             <h2 className="text-xl font-bold mb-2">Chatbot not found</h2>
@@ -364,7 +364,7 @@ export default function ChatbotSettings() {
   return (
     <div className="min-h-screen bg-background">
       <Sidebar />
-      <main className="pl-64 p-8">
+      <main className="md:pl-64 px-4 md:px-8 pt-4 md:pt-8 pb-8">
         <div className="max-w-6xl mx-auto">
           {/* Header */}
           <header className="mb-8">

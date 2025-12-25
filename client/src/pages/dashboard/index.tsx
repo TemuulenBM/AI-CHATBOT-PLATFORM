@@ -5,8 +5,9 @@ import { GlassCard } from "@/components/ui/glass-card";
 import { AreaChart, Area, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { useAuth, useUser } from "@clerk/clerk-react";
 import { useChatbotStore, ChatbotComparisonItem } from "@/store/chatbot-store";
+import { useUserPreferencesStore } from "@/store/user-preferences-store";
 import { useLocation } from "wouter";
-import { Bot, Loader2, TrendingUp, ThumbsUp, ThumbsDown, Smile, BarChart3, ExternalLink, Clock } from "lucide-react";
+import { Bot, Loader2, TrendingUp, ThumbsUp, ThumbsDown, Smile, BarChart3, ExternalLink, Clock, HelpCircle } from "lucide-react";
 import { PieChart, Pie, Cell } from "recharts";
 import { Button } from "@/components/ui/button";
 import { Link } from "wouter";
@@ -18,25 +19,54 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { OnboardingModal } from "@/components/onboarding/onboarding-modal";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 export default function Dashboard() {
   const { isSignedIn, isLoaded } = useAuth();
   const { user } = useUser();
-  const { 
-    stats, 
-    fetchStats, 
-    chatbots, 
-    fetchChatbots, 
-    messageVolume, 
+  const {
+    stats,
+    fetchStats,
+    chatbots,
+    fetchChatbots,
+    messageVolume,
     fetchMessageVolume,
     fetchChatbotComparison,
     chatbotComparison,
   } = useChatbotStore();
+  const {
+    shouldShowOnboarding,
+    setOnboardingCompleted,
+    setOnboardingSkipped,
+    resetOnboarding,
+  } = useUserPreferencesStore();
   const [, setLocation] = useLocation();
   const [isLoading, setIsLoading] = useState(true);
   const [selectedDays, setSelectedDays] = useState(7);
   const [sentimentData, setSentimentData] = useState<any>(null);
   const [satisfactionData, setSatisfactionData] = useState<any>(null);
+  const [showOnboarding, setShowOnboarding] = useState(false);
+
+  // Check if should show onboarding on first visit
+  useEffect(() => {
+    if (isSignedIn && isLoaded && shouldShowOnboarding()) {
+      setShowOnboarding(true);
+    }
+  }, [isSignedIn, isLoaded]);
+
+  const handleOnboardingComplete = () => {
+    setOnboardingCompleted();
+    setShowOnboarding(false);
+    // Refresh data after onboarding
+    fetchChatbots();
+    fetchStats();
+  };
 
   useEffect(() => {
     if (isLoaded && !isSignedIn) {
@@ -119,22 +149,46 @@ export default function Dashboard() {
   return (
     <div className="min-h-screen bg-background">
       <Sidebar />
-      <main className="pl-72 px-8 pt-8 pb-8">
+      <main className="md:pl-64 px-4 md:px-8 pt-4 md:pt-8 pb-8">
         <div className="max-w-5xl mx-auto">
           <header className="mb-8 flex justify-between items-center">
             <div>
-              <h1 className="text-3xl font-bold mb-2">Dashboard</h1>
-              <p className="text-muted-foreground">
+              <h1 className="text-2xl md:text-3xl font-bold mb-2">Dashboard</h1>
+              <p className="text-muted-foreground text-sm md:text-base">
                 Welcome back{user?.firstName ? `, ${user.firstName}` : user?.emailAddresses?.[0]?.emailAddress ? `, ${user.emailAddresses[0].emailAddress.split('@')[0]}` : ''}!
               </p>
             </div>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="icon">
+                  <HelpCircle className="h-5 w-5" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={() => setShowOnboarding(true)}>
+                  Restart Onboarding Tour
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </header>
+
+          {/* Onboarding Modal */}
+          <OnboardingModal
+            open={showOnboarding}
+            onOpenChange={(open) => {
+              setShowOnboarding(open);
+              if (!open) {
+                setOnboardingSkipped();
+              }
+            }}
+            onComplete={handleOnboardingComplete}
+          />
 
           <StatsCards stats={stats} isLoading={isLoading} />
 
-          <div className="grid lg:grid-cols-3 gap-8">
-            <GlassCard className="col-span-2 p-6 min-h-[400px]">
-              <div className="flex items-center justify-between mb-6">
+          <div className="grid lg:grid-cols-3 gap-4 md:gap-8">
+            <GlassCard className="lg:col-span-2 p-4 md:p-6 min-h-[400px]">
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6">
                 <div className="flex items-center gap-3">
                   <div className="h-10 w-10 rounded-lg bg-purple-500/10 flex items-center justify-center text-purple-400">
                     <BarChart3 className="h-5 w-5" />
@@ -159,8 +213,14 @@ export default function Dashboard() {
               </div>
               <div className="h-[300px] w-full">
                 {isLoading ? (
-                  <div className="flex items-center justify-center h-full">
-                    <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                  <div className="h-full flex items-end justify-between gap-2 px-4 animate-pulse">
+                    {Array.from({ length: 7 }).map((_, i) => (
+                      <div
+                        key={i}
+                        className="flex-1 bg-primary/10 rounded-t-md"
+                        style={{ height: `${30 + Math.random() * 60}%` }}
+                      />
+                    ))}
                   </div>
                 ) : stats.totalMessages === 0 && chartData.every(d => d.messages === 0) ? (
                   <div className="flex flex-col items-center justify-center h-full text-center">
@@ -212,7 +272,7 @@ export default function Dashboard() {
               )}
             </GlassCard>
 
-            <GlassCard className="p-6">
+            <GlassCard className="p-4 md:p-6">
               <div className="flex items-center gap-3 mb-6">
                 <div className="h-10 w-10 rounded-lg bg-blue-500/10 flex items-center justify-center text-blue-400">
                   <Clock className="h-5 w-5" />
@@ -223,8 +283,16 @@ export default function Dashboard() {
                 </div>
               </div>
               {isLoading ? (
-                <div className="flex items-center justify-center h-48">
-                  <Loader2 className="h-6 w-6 animate-spin text-primary" />
+                <div className="space-y-6 animate-pulse">
+                  {Array.from({ length: 4 }).map((_, i) => (
+                    <div key={i} className="flex gap-4 items-start">
+                      <div className="h-2 w-2 mt-2 rounded-full bg-primary/10" />
+                      <div className="flex-1 space-y-2">
+                        <div className="h-4 w-3/4 bg-primary/10 rounded" />
+                        <div className="h-3 w-1/3 bg-primary/10 rounded" />
+                      </div>
+                    </div>
+                  ))}
                 </div>
               ) : recentChatbots.length === 0 ? (
                 <div className="text-center py-8">
