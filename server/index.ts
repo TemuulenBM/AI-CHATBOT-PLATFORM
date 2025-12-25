@@ -156,4 +156,35 @@ app.use((req, res, next) => {
 
   process.on("SIGTERM", shutdown);
   process.on("SIGINT", shutdown);
+
+  // Handle uncaught errors gracefully (e.g., ECONNRESET from Redis)
+  process.on("uncaughtException", (error: NodeJS.ErrnoException) => {
+    // Ignore ECONNRESET - these are typically harmless connection resets
+    // from Redis/health checks and don't require app restart
+    if (error.code === "ECONNRESET") {
+      logger.debug("Connection reset (ECONNRESET) - ignoring", { message: error.message });
+      return;
+    }
+    
+    logger.error("Uncaught exception", { error: error.message, stack: error.stack });
+    
+    // For critical errors, exit after logging
+    if (process.env.NODE_ENV === "production") {
+      Sentry.captureException(error);
+      // Give Sentry time to send the error
+      setTimeout(() => process.exit(1), 1000);
+    }
+  });
+
+  process.on("unhandledRejection", (reason: unknown) => {
+    const error = reason instanceof Error ? reason : new Error(String(reason));
+    
+    // Ignore ECONNRESET in promise rejections too
+    if ((error as NodeJS.ErrnoException).code === "ECONNRESET") {
+      logger.debug("Connection reset in promise (ECONNRESET) - ignoring");
+      return;
+    }
+    
+    logger.error("Unhandled promise rejection", { error: error.message, stack: error.stack });
+  });
 })();

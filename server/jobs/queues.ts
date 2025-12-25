@@ -5,10 +5,37 @@ import { embeddingService } from "../services/embedding";
 import { supabaseAdmin } from "../utils/supabase";
 import logger from "../utils/logger";
 
-const connection = {
-  host: new URL(process.env.REDIS_URL || "redis://localhost:6379").hostname,
-  port: parseInt(new URL(process.env.REDIS_URL || "redis://localhost:6379").port || "6379"),
-};
+// Parse Redis URL for BullMQ connection (supports Upstash with TLS)
+function getRedisConnection() {
+  const redisUrl = process.env.REDIS_URL || "redis://localhost:6379";
+  const url = new URL(redisUrl);
+  
+  const connection: {
+    host: string;
+    port: number;
+    password?: string;
+    tls?: { rejectUnauthorized: boolean };
+    maxRetriesPerRequest: null;
+  } = {
+    host: url.hostname,
+    port: parseInt(url.port || "6379"),
+    maxRetriesPerRequest: null, // Required for BullMQ workers
+  };
+  
+  // Extract password from URL (format: rediss://default:PASSWORD@host:port)
+  if (url.password) {
+    connection.password = url.password;
+  }
+  
+  // Enable TLS for rediss:// URLs (Upstash requires TLS)
+  if (url.protocol === "rediss:") {
+    connection.tls = { rejectUnauthorized: false };
+  }
+  
+  return connection;
+}
+
+const connection = getRedisConnection();
 
 // Scraping Queue
 export const scrapeQueue = new Queue("scrape", { connection });
