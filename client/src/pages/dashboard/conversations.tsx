@@ -80,7 +80,7 @@ export default function Conversations() {
   return (
     <div className="min-h-screen bg-background">
       <Sidebar />
-      <main className="pl-64 p-8">
+      <main className="pl-72 px-8 pt-8 pb-8">
         <div className="max-w-5xl mx-auto">
           <header className="mb-8 flex justify-between items-center">
             <div>
