@@ -54,22 +54,19 @@ export default function ChatbotsList() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
 
-  // Initialize Clerk token in store
-  useEffect(() => {
-    if (getToken) {
-      setGetToken(getToken);
-    }
-  }, [getToken, setGetToken]);
-
+  // Initialize Clerk token in store and fetch chatbots
   useEffect(() => {
     if (isLoaded && !isSignedIn) {
       setLocation('/login');
       return;
     }
-    if (isSignedIn) {
+
+    if (isSignedIn && getToken) {
+      // Set the token getter first, then fetch
+      setGetToken(getToken);
       fetchChatbots();
     }
-  }, [isLoaded, isSignedIn]);
+  }, [isLoaded, isSignedIn, getToken, setGetToken, fetchChatbots, setLocation]);
 
   const handleDelete = async (id: string, name: string) => {
     if (!confirm(`Are you sure you want to delete "${name}"?`)) return;
