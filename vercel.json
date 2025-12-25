@@ -2,17 +2,21 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "version": 2,
   "buildCommand": "npm run build",
-  "outputDirectory": "dist",
+  "outputDirectory": "dist/public",
   "installCommand": "npm install",
-  "framework": null,
+  "framework": "vite",
   "rewrites": [
     {
-      "source": "/api/(.*)",
-      "destination": "/api/$1"
+      "source": "/api/:path*",
+      "destination": "https://YOUR-RENDER-APP.onrender.com/api/:path*"
     },
     {
       "source": "/widget.js",
-      "destination": "/api/widget.js"
+      "destination": "https://YOUR-RENDER-APP.onrender.com/widget.js"
+    },
+    {
+      "source": "/widget/:path*",
+      "destination": "https://YOUR-RENDER-APP.onrender.com/widget/:path*"
     },
     {
       "source": "/(.*)",
@@ -34,31 +38,13 @@
       ]
     },
     {
-      "source": "/api/(.*)",
+      "source": "/assets/(.*)",
       "headers": [
         {
-          "key": "Access-Control-Allow-Origin",
-          "value": "*"
-        },
-        {
-          "key": "Access-Control-Allow-Methods",
-          "value": "GET, POST, PUT, DELETE, OPTIONS"
-        },
-        {
-          "key": "Access-Control-Allow-Headers",
-          "value": "Content-Type, Authorization"
+          "key": "Cache-Control",
+          "value": "public, max-age=31536000, immutable"
         }
       ]
     }
-  ],
-  "env": {
-    "NODE_ENV": "production"
-  },
-  "functions": {
-    "api/**/*.ts": {
-      "memory": 1024,
-      "maxDuration": 30
-    }
-  }
+  ]
 }
-

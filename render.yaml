@@ -1,0 +1,48 @@
+# Render.com Blueprint
+# This file configures automatic deployment on Render.com
+# See: https://render.com/docs/blueprint-spec
+
+services:
+  - type: web
+    name: convoai-backend
+    runtime: node
+    region: oregon # Choose: oregon, ohio, frankfurt, singapore
+    plan: free # free, starter, standard, pro
+    buildCommand: npm install && npm run build
+    startCommand: npm run start
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000
+      - key: SUPABASE_URL
+        sync: false # Set manually in dashboard
+      - key: SUPABASE_SERVICE_KEY
+        sync: false
+      - key: REDIS_URL
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: JWT_SECRET
+        generateValue: true # Auto-generate secure value
+      - key: APP_URL
+        fromService:
+          type: web
+          name: convoai-backend
+          property: host
+      - key: STRIPE_SECRET_KEY
+        sync: false
+      - key: STRIPE_WEBHOOK_SECRET
+        sync: false
+      - key: STRIPE_STARTER_PRICE_ID
+        sync: false
+      - key: STRIPE_GROWTH_PRICE_ID
+        sync: false
+      - key: STRIPE_BUSINESS_PRICE_ID
+        sync: false
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: SENTRY_DSN
+        sync: false
+
