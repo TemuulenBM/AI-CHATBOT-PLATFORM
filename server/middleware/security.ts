@@ -102,6 +102,7 @@ export function configureHelmet(app: Express): void {
           ],
           objectSrc: ["'none'"],
           mediaSrc: ["'self'"],
+          workerSrc: ["'self'", "blob:"], // Allow Web Workers for Clerk and other services
           childSrc: ["'none'"],
           formAction: ["'self'"],
           frameAncestors: ["'none'"], // Prevent clickjacking
