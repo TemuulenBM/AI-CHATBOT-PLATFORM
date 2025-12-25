@@ -1,6 +1,7 @@
 import { Router, Request, Response } from "express";
 import * as fs from "fs";
 import * as path from "path";
+import * as crypto from "crypto";
 import * as esbuild from "esbuild";
 import { getChatbotPublic } from "../controllers/chatbots";
 
@@ -24,7 +25,6 @@ function getBrandingUrl(): string {
 
 // Generate SRI integrity hash
 function generateIntegrity(content: string): string {
-  const crypto = require("crypto");
   const hash = crypto.createHash("sha384").update(content).digest("base64");
   return `sha384-${hash}`;
 }
@@ -233,54 +233,6 @@ router.get("/widget/manifest.json", async (req: Request, res: Response) => {
   }
 });
 
-// GET /widget/:id - Get chatbot config for widget
-router.get("/widget/:id", getChatbotPublic);
-
-// POST /widget/analytics - Receive widget analytics events
-router.post("/widget/analytics", (req: Request, res: Response) => {
-  try {
-    const { chatbotId, sessionId, events } = req.body;
-
-    // Log analytics (in production, you'd store these)
-    if (process.env.NODE_ENV !== "production") {
-      console.log("Widget analytics:", { chatbotId, sessionId, eventCount: events?.length });
-    }
-
-    // TODO: Store analytics in database
-    // await analyticsService.trackWidgetEvents(chatbotId, sessionId, events);
-
-    res.status(204).send();
-  } catch (error) {
-    console.error("Failed to process analytics:", error);
-    res.status(500).json({ error: "Failed to process analytics" });
-  }
-});
-
-// POST /widget/errors - Receive widget error reports
-router.post("/widget/errors", (req: Request, res: Response) => {
-  try {
-    const { chatbotId, sessionId, error } = req.body;
-
-    // Log errors
-    console.error("Widget error:", {
-      chatbotId,
-      sessionId,
-      message: error?.message,
-      stack: error?.stack,
-      widgetVersion: error?.widgetVersion,
-      userAgent: error?.userAgent,
-    });
-
-    // TODO: Store errors in database or send to error tracking service
-    // await errorService.trackWidgetError(chatbotId, sessionId, error);
-
-    res.status(204).send();
-  } catch (error) {
-    console.error("Failed to process error report:", error);
-    res.status(500).json({ error: "Failed to process error" });
-  }
-});
-
 // GET /widget/demo - Demo page to test the widget
 router.get("/widget/demo", (req: Request, res: Response) => {
   const chatbotId = req.query.id || "demo-chatbot-id";
@@ -486,5 +438,55 @@ ConvoAI('on', 'message', (msg) =&gt; console.log(msg));
 </html>
   `);
 });
+
+// GET /widget/:id - Get chatbot config for widget
+router.get("/widget/:id", getChatbotPublic);
+
+// POST /widget/analytics - Receive widget analytics events
+router.post("/widget/analytics", (req: Request, res: Response) => {
+  try {
+    const { chatbotId, sessionId, events } = req.body;
+
+    // Log analytics (in production, you'd store these)
+    if (process.env.NODE_ENV !== "production") {
+      console.log("Widget analytics:", { chatbotId, sessionId, eventCount: events?.length });
+    }
+
+    // TODO: Store analytics in database
+    // await analyticsService.trackWidgetEvents(chatbotId, sessionId, events);
+
+    res.status(204).send();
+  } catch (error) {
+    console.error("Failed to process analytics:", error);
+    res.status(500).json({ error: "Failed to process analytics" });
+  }
+});
+
+// POST /widget/errors - Receive widget error reports
+router.post("/widget/errors", (req: Request, res: Response) => {
+  try {
+    const { chatbotId, sessionId, error } = req.body;
+
+    // Log errors
+    console.error("Widget error:", {
+      chatbotId,
+      sessionId,
+      message: error?.message,
+      stack: error?.stack,
+      widgetVersion: error?.widgetVersion,
+      userAgent: error?.userAgent,
+    });
+
+    // TODO: Store errors in database or send to error tracking service
+    // await errorService.trackWidgetError(chatbotId, sessionId, error);
+
+    res.status(204).send();
+  } catch (error) {
+    console.error("Failed to process error report:", error);
+    res.status(500).json({ error: "Failed to process error" });
+  }
+});
+
+
 
 export default router;
