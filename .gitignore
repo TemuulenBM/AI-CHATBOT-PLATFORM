@@ -11,6 +11,8 @@ vite.config.ts.*
 .env.local
 .env.*.local
 client/.env.local
+RENDER_ENV_VARS.txt
+*_ENV_VARS.txt
 
 # Logs
 logs/

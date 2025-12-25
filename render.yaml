@@ -8,7 +8,7 @@ services:
     runtime: node
     region: oregon # Choose: oregon, ohio, frankfurt, singapore
     plan: free # free, starter, standard, pro
-    buildCommand: npm install && npx tsx script/build.ts && npx tsx widget/build.ts
+    buildCommand: npm install && npm run build
     startCommand: npm run start
     healthCheckPath: /api/health
     envVars:
