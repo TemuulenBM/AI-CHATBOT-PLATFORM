@@ -546,8 +546,8 @@
     SUPABASE_URL=https://xxx.supabase.co
     SUPABASE_SERVICE_KEY=xxx
 
-    # Redis
-    REDIS_URL=redis://default:xxx@xxx.upstash.io:6379
+    # Redis (use rediss:// for TLS - required by Upstash)
+    REDIS_URL=rediss://default:xxx@xxx.upstash.io:6379
 
     # AI
     OPENAI_API_KEY=sk-xxx

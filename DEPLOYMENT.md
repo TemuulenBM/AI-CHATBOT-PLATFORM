@@ -95,7 +95,7 @@ This guide covers deploying ConvoAI to production using:
 | `PORT` | `10000` |
 | `SUPABASE_URL` | Your Supabase URL |
 | `SUPABASE_SERVICE_KEY` | Your Supabase service key |
-| `REDIS_URL` | Your Upstash Redis URL |
+| `REDIS_URL` | Your Upstash Redis URL (use `rediss://` protocol for TLS) |
 | `OPENAI_API_KEY` | Your OpenAI API key |
 | `JWT_SECRET` | Generate with `openssl rand -base64 32` |
 | `APP_URL` | Your Render URL (e.g., `https://convoai-backend.onrender.com`) |

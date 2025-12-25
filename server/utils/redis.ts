@@ -1,4 +1,4 @@
-import Redis from "ioredis";
+import Redis, { RedisOptions } from "ioredis";
 import logger from "./logger";
 
 const redisUrl = (() => {
@@ -16,19 +16,40 @@ const redisUrl = (() => {
   return url;
 })();
 
-export const redis = new Redis(redisUrl, {
-  maxRetriesPerRequest: 3,
-  lazyConnect: true,
-  retryStrategy(times) {
-    const delay = Math.min(times * 50, 2000);
-    return delay;
-  },
-  reconnectOnError(err) {
-    // Only reconnect on connection-related errors
-    const targetErrors = ["READONLY", "ECONNRESET", "ETIMEDOUT"];
-    return targetErrors.some(e => err.message.includes(e));
-  },
-});
+// Parse Redis URL to extract connection options (supports Upstash with TLS)
+function parseRedisUrl(url: string): RedisOptions {
+  const parsedUrl = new URL(url);
+  
+  const options: RedisOptions = {
+    host: parsedUrl.hostname,
+    port: parseInt(parsedUrl.port || "6379"),
+    maxRetriesPerRequest: 3,
+    lazyConnect: true,
+    retryStrategy(times: number) {
+      const delay = Math.min(times * 50, 2000);
+      return delay;
+    },
+    reconnectOnError(err) {
+      // Only reconnect on connection-related errors
+      const targetErrors = ["READONLY", "ECONNRESET", "ETIMEDOUT"];
+      return targetErrors.some(e => err.message.includes(e));
+    },
+  };
+
+  // Extract password from URL (format: rediss://default:PASSWORD@host:port)
+  if (parsedUrl.password) {
+    options.password = parsedUrl.password;
+  }
+
+  // Enable TLS for rediss:// URLs (Upstash requires TLS)
+  if (parsedUrl.protocol === "rediss:") {
+    options.tls = { rejectUnauthorized: false };
+  }
+
+  return options;
+}
+
+export const redis = new Redis(parseRedisUrl(redisUrl));
 
 redis.on("connect", () => {
   logger.info("Redis connected");
