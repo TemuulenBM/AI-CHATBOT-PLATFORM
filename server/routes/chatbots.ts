@@ -2,7 +2,7 @@ import { Router } from "express";
 import * as chatbotsController from "../controllers/chatbots";
 import * as knowledgeBaseController from "../controllers/knowledge-base";
 import { validate, schemas } from "../middleware/validation";
-import { authMiddleware, loadSubscription } from "../middleware/auth";
+import { clerkAuthMiddleware as authMiddleware, loadSubscription } from "../middleware/clerkAuth";
 import { embeddingRateLimit } from "../middleware/rateLimit";
 
 const router = Router();

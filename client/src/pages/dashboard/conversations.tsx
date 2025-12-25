@@ -16,11 +16,18 @@ import {
 import { SkeletonConversation } from "@/components/ui/skeleton";
 
 export default function Conversations() {
-  const { allConversations, conversationsTotal, conversationsPage, conversationsTotalPages, fetchAllConversations, chatbots, fetchChatbots, isLoading, error } = useChatbotStore();
-  const { isSignedIn, isLoaded } = useAuth();
+  const { allConversations, conversationsTotal, conversationsPage, conversationsTotalPages, fetchAllConversations, chatbots, fetchChatbots, isLoading, error, setGetToken } = useChatbotStore();
+  const { isSignedIn, isLoaded, getToken } = useAuth();
   const [, setLocation] = useLocation();
   const [selectedChatbot, setSelectedChatbot] = useState<string>("all");
   const [currentPage, setCurrentPage] = useState(1);
+
+  // Initialize Clerk token in store
+  useEffect(() => {
+    if (getToken) {
+      setGetToken(getToken);
+    }
+  }, [getToken, setGetToken]);
 
   useEffect(() => {
     if (isLoaded && !isSignedIn) {

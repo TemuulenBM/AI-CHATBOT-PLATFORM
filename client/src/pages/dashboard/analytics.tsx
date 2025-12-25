@@ -60,12 +60,12 @@ import {
 import { Link, useParams } from "wouter";
 
 export default function Analytics() {
-  const { isSignedIn, isLoaded } = useAuth();
+  const { isSignedIn, isLoaded, getToken } = useAuth();
   const params = useParams<{ id: string }>();
   const chatbotId = params?.id;
-  const { 
-    chatbots, 
-    fetchChatbots, 
+  const {
+    chatbots,
+    fetchChatbots,
     fetchChatbot,
     currentChatbot,
     fetchConversationRate,
@@ -73,10 +73,18 @@ export default function Analytics() {
     fetchWidgetAnalytics,
     exportAnalytics,
     isExporting,
+    setGetToken,
   } = useChatbotStore();
   const [, setLocation] = useLocation();
   const [isLoading, setIsLoading] = useState(true);
   const [selectedDays, setSelectedDays] = useState(7);
+
+  // Initialize Clerk token in store
+  useEffect(() => {
+    if (getToken) {
+      setGetToken(getToken);
+    }
+  }, [getToken, setGetToken]);
 
   // Analytics data
   const [conversionRate, setConversionRate] = useState<ConversationRateMetrics | null>(null);

@@ -1,5 +1,5 @@
 import { Response, NextFunction } from "express";
-import { AuthenticatedRequest } from "../middleware/auth";
+import { AuthenticatedRequest } from "../middleware/clerkAuth";
 import { NotFoundError, AuthorizationError, ValidationError } from "../utils/errors";
 import { knowledgeBaseService } from "../services/knowledge-base";
 import logger from "../utils/logger";

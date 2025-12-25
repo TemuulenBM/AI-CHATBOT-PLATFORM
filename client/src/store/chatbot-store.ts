@@ -1,5 +1,4 @@
 import { create } from 'zustand';
-import { getAuthHeader } from './authStore';
 
 export interface ChatbotSettings {
   primaryColor?: string;
@@ -150,6 +149,9 @@ interface ConversationsResponse {
   totalPages: number;
 }
 
+// Type for the getToken function from Clerk's useAuth hook
+type GetTokenFunction = () => Promise<string | null>;
+
 interface ChatbotStore {
   chatbots: Chatbot[];
   currentChatbot: Chatbot | null;
@@ -167,6 +169,10 @@ interface ChatbotStore {
 
   // Chatbot comparison data
   chatbotComparison: ChatbotComparisonItem[];
+
+  // Clerk token function
+  _getToken: GetTokenFunction | null;
+  setGetToken: (getToken: GetTokenFunction) => void;
 
   fetchChatbots: () => Promise<void>;
   fetchChatbot: (id: string) => Promise<Chatbot | null>;
@@ -192,6 +198,17 @@ interface ChatbotStore {
   exportAnalytics: (chatbotId: string, options?: AnalyticsExportOptions) => Promise<boolean>;
 }
 
+// Helper function to get auth headers from Clerk token
+async function getAuthHeaders(getToken: GetTokenFunction | null): Promise<Record<string, string>> {
+  if (!getToken) return {};
+  try {
+    const token = await getToken();
+    return token ? { Authorization: `Bearer ${token}` } : {};
+  } catch {
+    return {};
+  }
+}
+
 export const useChatbotStore = create<ChatbotStore>((set, get) => ({
   chatbots: [],
   currentChatbot: null,
@@ -214,14 +231,17 @@ export const useChatbotStore = create<ChatbotStore>((set, get) => ({
   error: null,
   chatbotComparison: [],
 
+  // Clerk token function - will be set by components
+  _getToken: null,
+  setGetToken: (getToken: GetTokenFunction) => set({ _getToken: getToken }),
+
   fetchChatbots: async () => {
     set({ isLoading: true, error: null });
 
     try {
+      const headers = await getAuthHeaders(get()._getToken);
       const response = await fetch('/api/chatbots', {
-        headers: {
-          ...getAuthHeader(),
-        },
+        headers,
       });
 
       const data = await response.json();
@@ -241,10 +261,9 @@ export const useChatbotStore = create<ChatbotStore>((set, get) => ({
     set({ isLoading: true, error: null });
 
     try {
+      const headers = await getAuthHeaders(get()._getToken);
       const response = await fetch(`/api/chatbots/${id}`, {
-        headers: {
-          ...getAuthHeader(),
-        },
+        headers,
       });
 
       const data = await response.json();
@@ -264,10 +283,9 @@ export const useChatbotStore = create<ChatbotStore>((set, get) => ({
 
   fetchStats: async () => {
     try {
+      const headers = await getAuthHeaders(get()._getToken);
       const response = await fetch('/api/chatbots/stats', {
-        headers: {
-          ...getAuthHeader(),
-        },
+        headers,
       });
 
       const data = await response.json();
@@ -282,10 +300,9 @@ export const useChatbotStore = create<ChatbotStore>((set, get) => ({
 
   fetchMessageVolume: async (days: number = 7) => {
     try {
+      const headers = await getAuthHeaders(get()._getToken);
       const response = await fetch(`/api/chatbots/stats/volume?days=${days}`, {
-        headers: {
-          ...getAuthHeader(),
-        },
+        headers,
       });
 
       const data = await response.json();
@@ -302,11 +319,12 @@ export const useChatbotStore = create<ChatbotStore>((set, get) => ({
     set({ isLoading: true, error: null });
 
     try {
+      const headers = await getAuthHeaders(get()._getToken);
       const response = await fetch('/api/chatbots', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          ...getAuthHeader(),
+          ...headers,
         },
         body: JSON.stringify({ name, websiteUrl, settings }),
       });
@@ -335,11 +353,12 @@ export const useChatbotStore = create<ChatbotStore>((set, get) => ({
     set({ isSaving: true, error: null });
 
     try {
+      const headers = await getAuthHeaders(get()._getToken);
       const response = await fetch(`/api/chatbots/${id}`, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
-          ...getAuthHeader(),
+          ...headers,
         },
         body: JSON.stringify(updates),
       });
@@ -367,11 +386,10 @@ export const useChatbotStore = create<ChatbotStore>((set, get) => ({
 
   deleteChatbot: async (id: string) => {
     try {
+      const headers = await getAuthHeaders(get()._getToken);
       const response = await fetch(`/api/chatbots/${id}`, {
         method: 'DELETE',
-        headers: {
-          ...getAuthHeader(),
-        },
+        headers,
       });
 
       if (!response.ok) {
@@ -396,11 +414,10 @@ export const useChatbotStore = create<ChatbotStore>((set, get) => ({
     set({ isRescraping: true, error: null });
 
     try {
+      const headers = await getAuthHeaders(get()._getToken);
       const response = await fetch(`/api/chatbots/${chatbotId}/rescrape`, {
         method: 'POST',
-        headers: {
-          ...getAuthHeader(),
-        },
+        headers,
       });
 
       const data = await response.json();
@@ -422,11 +439,12 @@ export const useChatbotStore = create<ChatbotStore>((set, get) => ({
     set({ isSaving: true, error: null });
 
     try {
+      const headers = await getAuthHeaders(get()._getToken);
       const response = await fetch(`/api/chatbots/${chatbotId}/scrape-schedule`, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
-          ...getAuthHeader(),
+          ...headers,
         },
         body: JSON.stringify(config),
       });
@@ -457,10 +475,9 @@ export const useChatbotStore = create<ChatbotStore>((set, get) => ({
 
   fetchScrapeHistory: async (chatbotId: string) => {
     try {
+      const headers = await getAuthHeaders(get()._getToken);
       const response = await fetch(`/api/chatbots/${chatbotId}/scrape-history`, {
-        headers: {
-          ...getAuthHeader(),
-        },
+        headers,
       });
 
       if (response.ok) {
@@ -474,10 +491,9 @@ export const useChatbotStore = create<ChatbotStore>((set, get) => ({
 
   fetchSentimentBreakdown: async (chatbotId: string) => {
     try {
+      const headers = await getAuthHeaders(get()._getToken);
       const response = await fetch(`/api/chatbots/${chatbotId}/sentiment`, {
-        headers: {
-          ...getAuthHeader(),
-        },
+        headers,
       });
 
       if (response.ok) {
@@ -491,10 +507,9 @@ export const useChatbotStore = create<ChatbotStore>((set, get) => ({
 
   fetchSatisfactionMetrics: async (chatbotId: string) => {
     try {
+      const headers = await getAuthHeaders(get()._getToken);
       const response = await fetch(`/api/chatbots/${chatbotId}/satisfaction`, {
-        headers: {
-          ...getAuthHeader(),
-        },
+        headers,
       });
 
       if (response.ok) {
@@ -517,10 +532,9 @@ export const useChatbotStore = create<ChatbotStore>((set, get) => ({
         params.append('chatbotId', chatbotId);
       }
 
+      const headers = await getAuthHeaders(get()._getToken);
       const response = await fetch(`/api/chatbots/conversations?${params.toString()}`, {
-        headers: {
-          ...getAuthHeader(),
-        },
+        headers,
       });
 
       if (response.ok) {
@@ -535,16 +549,16 @@ export const useChatbotStore = create<ChatbotStore>((set, get) => ({
         return data;
       } else {
         const errorData = await response.json().catch(() => ({ message: 'Failed to fetch conversations' }));
-        set({ 
-          isLoading: false, 
-          error: errorData.message || 'Failed to fetch conversations' 
+        set({
+          isLoading: false,
+          error: errorData.message || 'Failed to fetch conversations'
         });
       }
     } catch (error) {
       console.error('Failed to fetch all conversations:', error);
-      set({ 
-        isLoading: false, 
-        error: 'Network error. Please try again.' 
+      set({
+        isLoading: false,
+        error: 'Network error. Please try again.'
       });
     }
     return null;
@@ -554,10 +568,9 @@ export const useChatbotStore = create<ChatbotStore>((set, get) => ({
 
   fetchConversationRate: async (chatbotId: string, days: number = 30) => {
     try {
+      const headers = await getAuthHeaders(get()._getToken);
       const response = await fetch(`/api/chatbots/${chatbotId}/analytics/conversation-rate?days=${days}`, {
-        headers: {
-          ...getAuthHeader(),
-        },
+        headers,
       });
 
       if (response.ok) {
@@ -571,10 +584,9 @@ export const useChatbotStore = create<ChatbotStore>((set, get) => ({
 
   fetchResponseTimeTrends: async (chatbotId: string, days: number = 7) => {
     try {
+      const headers = await getAuthHeaders(get()._getToken);
       const response = await fetch(`/api/chatbots/${chatbotId}/analytics/response-times?days=${days}`, {
-        headers: {
-          ...getAuthHeader(),
-        },
+        headers,
       });
 
       if (response.ok) {
@@ -589,10 +601,9 @@ export const useChatbotStore = create<ChatbotStore>((set, get) => ({
 
   fetchChatbotComparison: async () => {
     try {
+      const headers = await getAuthHeaders(get()._getToken);
       const response = await fetch('/api/analytics/compare', {
-        headers: {
-          ...getAuthHeader(),
-        },
+        headers,
       });
 
       if (response.ok) {
@@ -608,10 +619,9 @@ export const useChatbotStore = create<ChatbotStore>((set, get) => ({
 
   fetchWidgetAnalytics: async (chatbotId: string, days: number = 7) => {
     try {
+      const headers = await getAuthHeaders(get()._getToken);
       const response = await fetch(`/api/chatbots/${chatbotId}/analytics/widget?days=${days}`, {
-        headers: {
-          ...getAuthHeader(),
-        },
+        headers,
       });
 
       if (response.ok) {
@@ -627,7 +637,7 @@ export const useChatbotStore = create<ChatbotStore>((set, get) => ({
     set({ isExporting: true, error: null });
     try {
       const params = new URLSearchParams();
-      
+
       if (options.format) params.append('format', options.format);
       if (options.startDate) params.append('startDate', options.startDate);
       if (options.endDate) params.append('endDate', options.endDate);
@@ -641,22 +651,21 @@ export const useChatbotStore = create<ChatbotStore>((set, get) => ({
         params.append('includeRatings', String(options.includeRatings));
       }
 
+      const headers = await getAuthHeaders(get()._getToken);
       const response = await fetch(`/api/chatbots/${chatbotId}/analytics/export?${params.toString()}`, {
-        headers: {
-          ...getAuthHeader(),
-        },
+        headers,
       });
 
       if (response.ok) {
         const contentType = response.headers.get('content-type');
-        
+
         if (options.format === 'csv' || contentType?.includes('text/csv')) {
           // Download CSV file
           const blob = await response.blob();
           const url = window.URL.createObjectURL(blob);
           const a = document.createElement('a');
           a.href = url;
-          a.download = response.headers.get('content-disposition')?.split('filename=')[1]?.replace(/"/g, '') 
+          a.download = response.headers.get('content-disposition')?.split('filename=')[1]?.replace(/"/g, '')
             || `analytics_${new Date().toISOString().split('T')[0]}.csv`;
           document.body.appendChild(a);
           a.click();

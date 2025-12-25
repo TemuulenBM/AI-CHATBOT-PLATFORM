@@ -49,10 +49,17 @@ function getStatusLabel(status: Chatbot['status']) {
 }
 
 export default function ChatbotsList() {
-  const { chatbots, isLoading, error, fetchChatbots, deleteChatbot } = useChatbotStore();
-  const { isSignedIn, isLoaded } = useAuth();
+  const { chatbots, isLoading, error, fetchChatbots, deleteChatbot, setGetToken } = useChatbotStore();
+  const { isSignedIn, isLoaded, getToken } = useAuth();
   const [, setLocation] = useLocation();
   const { toast } = useToast();
+
+  // Initialize Clerk token in store
+  useEffect(() => {
+    if (getToken) {
+      setGetToken(getToken);
+    }
+  }, [getToken, setGetToken]);
 
   useEffect(() => {
     if (isLoaded && !isSignedIn) {

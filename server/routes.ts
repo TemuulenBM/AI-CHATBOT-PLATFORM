@@ -2,14 +2,14 @@ import type { Express, Request, Response, NextFunction } from "express";
 import { type Server } from "http";
 import * as Sentry from "@sentry/node";
 import { randomUUID } from "crypto";
-import authRoutes from "./routes/auth";
 import chatbotRoutes from "./routes/chatbots";
 import chatRoutes from "./routes/chat";
 import subscriptionRoutes from "./routes/subscriptions";
 import widgetRoutes from "./routes/widget";
 import * as feedbackController from "./controllers/feedback";
 import * as chatbotsController from "./controllers/chatbots";
-import { authMiddleware, loadSubscription } from "./middleware/auth";
+import { clerkAuthMiddleware as authMiddleware, loadSubscription } from "./middleware/clerkAuth";
+import { handleClerkWebhook } from "./middleware/clerkWebhook";
 import { AppError } from "./utils/errors";
 import logger from "./utils/logger";
 import { redis } from "./utils/redis";
@@ -180,8 +180,10 @@ export async function registerRoutes(
     });
   });
 
+  // Clerk Webhook (must be before JSON body parser for raw body)
+  app.post("/api/webhooks/clerk", handleClerkWebhook);
+
   // API Routes
-  app.use("/api/auth", authRoutes);
   app.use("/api/chatbots", chatbotRoutes);
   app.use("/api/chat", chatRoutes);
   app.use("/api/subscriptions", subscriptionRoutes);

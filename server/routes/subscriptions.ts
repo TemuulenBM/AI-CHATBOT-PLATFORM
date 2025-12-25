@@ -1,7 +1,7 @@
 import { Router } from "express";
 import * as subscriptionsController from "../controllers/subscriptions";
 import { validate, schemas } from "../middleware/validation";
-import { authMiddleware } from "../middleware/auth";
+import { clerkAuthMiddleware as authMiddleware } from "../middleware/clerkAuth";
 import { validatePaddleWebhookOrigin } from "../middleware/paddleWebhookValidator";
 
 const router = Router();

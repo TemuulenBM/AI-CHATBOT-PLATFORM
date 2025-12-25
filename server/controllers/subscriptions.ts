@@ -1,5 +1,5 @@
 import { Response, NextFunction, Request } from "express";
-import { AuthenticatedRequest } from "../middleware/auth";
+import { AuthenticatedRequest } from "../middleware/clerkAuth";
 import { AuthorizationError } from "../utils/errors";
 import { CreateCheckoutInput } from "../middleware/validation";
 import { paddleService } from "../services/paddle";

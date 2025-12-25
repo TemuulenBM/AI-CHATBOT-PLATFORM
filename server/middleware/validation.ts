@@ -45,26 +45,6 @@ export function validate(schemas: ValidationSchemas) {
 
 // Common validation schemas
 export const schemas = {
-  // Auth schemas
-  signup: z.object({
-    email: z.string().email("Invalid email address"),
-    password: z
-      .string()
-      .min(8, "Password must be at least 8 characters")
-      .regex(/[A-Z]/, "Password must contain at least one uppercase letter")
-      .regex(/[a-z]/, "Password must contain at least one lowercase letter")
-      .regex(/[0-9]/, "Password must contain at least one number"),
-  }),
-
-  login: z.object({
-    email: z.string().email("Invalid email address"),
-    password: z.string().min(1, "Password is required"),
-  }),
-
-  refreshToken: z.object({
-    refreshToken: z.string().min(1, "Refresh token is required"),
-  }),
-
   // Chatbot schemas
   createChatbot: z.object({
     name: z.string().min(1, "Name is required").max(100, "Name too long"),
@@ -146,8 +126,6 @@ export const schemas = {
   }),
 };
 
-export type SignupInput = z.infer<typeof schemas.signup>;
-export type LoginInput = z.infer<typeof schemas.login>;
 export type CreateChatbotInput = z.infer<typeof schemas.createChatbot>;
 export type UpdateChatbotInput = z.infer<typeof schemas.updateChatbot>;
 export type ChatMessageInput = z.infer<typeof schemas.chatMessage>;
