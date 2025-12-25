@@ -118,6 +118,36 @@ router.get(
   chatbotsController.getScrapeHistory
 );
 
+// ===== Phase 5: Analytics Enhancement Routes =====
+
+// GET /api/chatbots/:id/analytics/response-times - Get response time trends
+router.get(
+  "/:id/analytics/response-times",
+  validate({ params: schemas.uuidParam }),
+  chatbotsController.getResponseTimeTrends
+);
+
+// GET /api/chatbots/:id/analytics/conversation-rate - Get conversion metrics
+router.get(
+  "/:id/analytics/conversation-rate",
+  validate({ params: schemas.uuidParam }),
+  chatbotsController.getConversationRate
+);
+
+// GET /api/chatbots/:id/analytics/widget - Get widget analytics
+router.get(
+  "/:id/analytics/widget",
+  validate({ params: schemas.uuidParam }),
+  chatbotsController.getWidgetAnalytics
+);
+
+// GET /api/chatbots/:id/analytics/export - Export analytics data
+router.get(
+  "/:id/analytics/export",
+  validate({ params: schemas.uuidParam }),
+  chatbotsController.exportAnalytics
+);
+
 // ===== Knowledge Base Routes =====
 
 // GET /api/chatbots/:id/knowledge/stats - Get knowledge base statistics

@@ -698,3 +698,565 @@ export async function getSentimentTrends(
     throw new Error("Failed to get sentiment trends");
   }
 }
+
+// ==================== Phase 5: New Analytics Metrics ====================
+
+export interface ConversationRateMetrics {
+  widgetViews: number;
+  widgetOpens: number;
+  conversationsStarted: number;
+  conversionRate: number;
+  openRate: number;
+}
+
+export interface ResponseTimeTrendPoint {
+  date: string;
+  avgResponseTimeMs: number;
+  messageCount: number;
+}
+
+export interface ChatbotComparisonItem {
+  chatbotId: string;
+  chatbotName: string;
+  totalMessages: number;
+  totalConversations: number;
+  csatScore: number | null;
+  avgResponseTimeMs: number | null;
+  conversionRate: number | null;
+}
+
+export interface AnalyticsExportData {
+  chatbot: {
+    id: string;
+    name: string;
+    websiteUrl: string;
+    createdAt: string;
+  };
+  summary: {
+    totalConversations: number;
+    totalMessages: number;
+    avgMessagesPerConversation: number;
+    avgResponseTimeMs: number | null;
+    csatScore: number | null;
+    conversionRate: number | null;
+  };
+  conversations: Array<{
+    id: string;
+    sessionId: string;
+    createdAt: string;
+    messageCount: number;
+    messages: Array<{
+      role: string;
+      content: string;
+      timestamp: string;
+      sentiment?: string;
+    }>;
+    rating?: string;
+  }>;
+  dateRange: {
+    start: string;
+    end: string;
+  };
+  exportedAt: string;
+}
+
+/**
+ * Get conversation rate metrics (widget views vs conversations started)
+ */
+export async function getConversationRate(
+  chatbotId: string,
+  days: number = 30
+): Promise<ConversationRateMetrics> {
+  const cacheKey = `analytics:convrate:${chatbotId}:${days}`;
+  const cached = await getCache<ConversationRateMetrics>(cacheKey);
+
+  if (cached) {
+    return cached;
+  }
+
+  try {
+    const startDate = new Date();
+    startDate.setDate(startDate.getDate() - days);
+    startDate.setHours(0, 0, 0, 0);
+
+    // Get widget analytics events
+    const { data: widgetEvents } = await supabaseAdmin
+      .from("widget_analytics")
+      .select("event_type")
+      .eq("chatbot_id", chatbotId)
+      .gte("timestamp", startDate.toISOString());
+
+    const events = widgetEvents || [];
+    const widgetViews = events.filter((e) => e.event_type === "view").length;
+    const widgetOpens = events.filter((e) => e.event_type === "open").length;
+    const conversationsStarted = events.filter((e) => e.event_type === "first_message").length;
+
+    // Calculate rates
+    const conversionRate = widgetViews > 0
+      ? Math.round((conversationsStarted / widgetViews) * 10000) / 100
+      : 0;
+    const openRate = widgetViews > 0
+      ? Math.round((widgetOpens / widgetViews) * 10000) / 100
+      : 0;
+
+    const metrics: ConversationRateMetrics = {
+      widgetViews,
+      widgetOpens,
+      conversationsStarted,
+      conversionRate,
+      openRate,
+    };
+
+    // Cache for 5 minutes
+    await setCache(cacheKey, metrics, 300);
+
+    return metrics;
+  } catch (error) {
+    logger.error("Failed to get conversation rate", { error, chatbotId, days });
+    // Return empty metrics instead of throwing for graceful degradation
+    return {
+      widgetViews: 0,
+      widgetOpens: 0,
+      conversationsStarted: 0,
+      conversionRate: 0,
+      openRate: 0,
+    };
+  }
+}
+
+/**
+ * Get response time trends over time
+ */
+export async function getResponseTimeTrends(
+  chatbotId: string,
+  days: number = 7
+): Promise<ResponseTimeTrendPoint[]> {
+  const cacheKey = `analytics:responsetime-trends:${chatbotId}:${days}`;
+  const cached = await getCache<ResponseTimeTrendPoint[]>(cacheKey);
+
+  if (cached) {
+    return cached;
+  }
+
+  try {
+    const startDate = new Date();
+    startDate.setDate(startDate.getDate() - days);
+    startDate.setHours(0, 0, 0, 0);
+
+    const { data: conversations } = await supabaseAdmin
+      .from("conversations")
+      .select("messages, created_at")
+      .eq("chatbot_id", chatbotId)
+      .gte("created_at", startDate.toISOString());
+
+    // Initialize daily buckets
+    const dailyData: Map<string, { totalResponseTime: number; responseCount: number }> = new Map();
+
+    for (let i = 0; i < days; i++) {
+      const date = new Date();
+      date.setDate(date.getDate() - (days - 1 - i));
+      const dateKey = date.toISOString().split("T")[0];
+      dailyData.set(dateKey, { totalResponseTime: 0, responseCount: 0 });
+    }
+
+    // Calculate response times by day
+    if (conversations) {
+      for (const conv of conversations) {
+        const dateKey = conv.created_at.split("T")[0];
+        const existing = dailyData.get(dateKey);
+
+        if (existing) {
+          const messages = conv.messages as ConversationMessage[];
+          if (Array.isArray(messages)) {
+            for (let i = 1; i < messages.length; i++) {
+              if (messages[i].role === "assistant" && messages[i - 1].role === "user") {
+                const userTime = new Date(messages[i - 1].timestamp).getTime();
+                const assistantTime = new Date(messages[i].timestamp).getTime();
+                const responseTime = assistantTime - userTime;
+
+                // Only count reasonable response times (< 60 seconds, > 0)
+                if (responseTime > 0 && responseTime < 60000) {
+                  existing.totalResponseTime += responseTime;
+                  existing.responseCount++;
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+
+    const trends: ResponseTimeTrendPoint[] = Array.from(dailyData.entries()).map(
+      ([date, data]) => ({
+        date,
+        avgResponseTimeMs: data.responseCount > 0
+          ? Math.round(data.totalResponseTime / data.responseCount)
+          : 0,
+        messageCount: data.responseCount,
+      })
+    );
+
+    // Cache for 5 minutes
+    await setCache(cacheKey, trends, 300);
+
+    return trends;
+  } catch (error) {
+    logger.error("Failed to get response time trends", { error, chatbotId, days });
+    throw new Error("Failed to get response time trends");
+  }
+}
+
+/**
+ * Compare all chatbots for a user
+ */
+export async function compareChatbots(userId: string): Promise<ChatbotComparisonItem[]> {
+  const cacheKey = `analytics:compare:${userId}`;
+  const cached = await getCache<ChatbotComparisonItem[]>(cacheKey);
+
+  if (cached) {
+    return cached;
+  }
+
+  try {
+    // Get all user's chatbots
+    const { data: chatbots } = await supabaseAdmin
+      .from("chatbots")
+      .select("id, name, website_url, status")
+      .eq("user_id", userId)
+      .eq("status", "ready");
+
+    if (!chatbots || chatbots.length === 0) {
+      return [];
+    }
+
+    const comparisons: ChatbotComparisonItem[] = [];
+
+    for (const chatbot of chatbots) {
+      // Get analytics for each chatbot
+      const [analytics, satisfaction, conversionRate] = await Promise.all([
+        getChatbotAnalytics(chatbot.id),
+        getSatisfactionMetrics(chatbot.id),
+        getConversationRate(chatbot.id, 30),
+      ]);
+
+      comparisons.push({
+        chatbotId: chatbot.id,
+        chatbotName: chatbot.name,
+        totalMessages: analytics.totalMessages,
+        totalConversations: analytics.totalConversations,
+        csatScore: satisfaction.satisfactionRate,
+        avgResponseTimeMs: analytics.avgResponseTime,
+        conversionRate: conversionRate.conversionRate,
+      });
+    }
+
+    // Sort by message volume descending
+    comparisons.sort((a, b) => b.totalMessages - a.totalMessages);
+
+    // Cache for 5 minutes
+    await setCache(cacheKey, comparisons, 300);
+
+    return comparisons;
+  } catch (error) {
+    logger.error("Failed to compare chatbots", { error, userId });
+    throw new Error("Failed to compare chatbots");
+  }
+}
+
+/**
+ * Export analytics data for a chatbot
+ */
+export async function exportAnalytics(
+  chatbotId: string,
+  format: "csv" | "json",
+  options: {
+    startDate?: string;
+    endDate?: string;
+    includeConversations?: boolean;
+    includeMessages?: boolean;
+    includeRatings?: boolean;
+  } = {}
+): Promise<AnalyticsExportData | string> {
+  try {
+    const {
+      startDate = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(),
+      endDate = new Date().toISOString(),
+      includeConversations = true,
+      includeMessages = true,
+      includeRatings = true,
+    } = options;
+
+    // Get chatbot details
+    const { data: chatbot, error: chatbotError } = await supabaseAdmin
+      .from("chatbots")
+      .select("id, name, website_url, created_at")
+      .eq("id", chatbotId)
+      .single();
+
+    if (chatbotError || !chatbot) {
+      throw new Error("Chatbot not found");
+    }
+
+    // Get analytics summary
+    const analytics = await getChatbotAnalytics(chatbotId);
+    const satisfaction = await getSatisfactionMetrics(chatbotId);
+    const conversionRate = await getConversationRate(chatbotId, 30);
+
+    // Get conversations
+    let conversationsData: AnalyticsExportData["conversations"] = [];
+
+    if (includeConversations) {
+      const { data: conversations } = await supabaseAdmin
+        .from("conversations")
+        .select("id, session_id, messages, created_at")
+        .eq("chatbot_id", chatbotId)
+        .gte("created_at", startDate)
+        .lte("created_at", endDate)
+        .order("created_at", { ascending: false });
+
+      // Get feedback for all conversations
+      let feedbackMap: Map<string, string> = new Map();
+      if (includeRatings && conversations) {
+        const conversationIds = conversations.map((c) => c.id);
+        const { data: feedbackData } = await supabaseAdmin
+          .from("feedback")
+          .select("conversation_id, rating")
+          .in("conversation_id", conversationIds);
+
+        if (feedbackData) {
+          feedbackMap = new Map(feedbackData.map((f) => [f.conversation_id, f.rating]));
+        }
+      }
+
+      conversationsData = (conversations || []).map((conv) => {
+        const messages = conv.messages as ConversationMessage[];
+        return {
+          id: conv.id,
+          sessionId: conv.session_id,
+          createdAt: conv.created_at,
+          messageCount: Array.isArray(messages) ? messages.length : 0,
+          messages: includeMessages && Array.isArray(messages)
+            ? messages.map((m) => ({
+                role: m.role,
+                content: m.content,
+                timestamp: m.timestamp,
+                sentiment: m.sentiment,
+              }))
+            : [],
+          rating: feedbackMap.get(conv.id),
+        };
+      });
+    }
+
+    const exportData: AnalyticsExportData = {
+      chatbot: {
+        id: chatbot.id,
+        name: chatbot.name,
+        websiteUrl: chatbot.website_url,
+        createdAt: chatbot.created_at,
+      },
+      summary: {
+        totalConversations: analytics.totalConversations,
+        totalMessages: analytics.totalMessages,
+        avgMessagesPerConversation: analytics.avgMessagesPerConversation,
+        avgResponseTimeMs: analytics.avgResponseTime,
+        csatScore: satisfaction.satisfactionRate,
+        conversionRate: conversionRate.conversionRate,
+      },
+      conversations: conversationsData,
+      dateRange: {
+        start: startDate,
+        end: endDate,
+      },
+      exportedAt: new Date().toISOString(),
+    };
+
+    if (format === "json") {
+      return exportData;
+    }
+
+    // Convert to CSV
+    return convertToCSV(exportData);
+  } catch (error) {
+    logger.error("Failed to export analytics", { error, chatbotId, format });
+    throw new Error("Failed to export analytics");
+  }
+}
+
+/**
+ * Convert analytics data to CSV format
+ */
+function convertToCSV(data: AnalyticsExportData): string {
+  const lines: string[] = [];
+
+  // Add header section
+  lines.push("# Chatbot Analytics Export");
+  lines.push(`# Exported at: ${data.exportedAt}`);
+  lines.push(`# Date Range: ${data.dateRange.start} to ${data.dateRange.end}`);
+  lines.push("");
+
+  // Add chatbot info
+  lines.push("## Chatbot Information");
+  lines.push("Field,Value");
+  lines.push(`Name,"${data.chatbot.name}"`);
+  lines.push(`ID,${data.chatbot.id}`);
+  lines.push(`Website URL,"${data.chatbot.websiteUrl}"`);
+  lines.push(`Created At,${data.chatbot.createdAt}`);
+  lines.push("");
+
+  // Add summary
+  lines.push("## Summary");
+  lines.push("Metric,Value");
+  lines.push(`Total Conversations,${data.summary.totalConversations}`);
+  lines.push(`Total Messages,${data.summary.totalMessages}`);
+  lines.push(`Avg Messages Per Conversation,${data.summary.avgMessagesPerConversation}`);
+  lines.push(`Avg Response Time (ms),${data.summary.avgResponseTimeMs || "N/A"}`);
+  lines.push(`CSAT Score (%),${data.summary.csatScore || "N/A"}`);
+  lines.push(`Conversion Rate (%),${data.summary.conversionRate || "N/A"}`);
+  lines.push("");
+
+  // Add conversations
+  if (data.conversations.length > 0) {
+    lines.push("## Conversations");
+    lines.push("Conversation ID,Session ID,Created At,Message Count,Rating");
+
+    for (const conv of data.conversations) {
+      const rating = conv.rating || "N/A";
+      lines.push(`${conv.id},${conv.sessionId},${conv.createdAt},${conv.messageCount},${rating}`);
+    }
+    lines.push("");
+
+    // Add messages
+    const hasMessages = data.conversations.some((c) => c.messages.length > 0);
+    if (hasMessages) {
+      lines.push("## Messages");
+      lines.push("Conversation ID,Role,Timestamp,Sentiment,Content");
+
+      for (const conv of data.conversations) {
+        for (const msg of conv.messages) {
+          const content = msg.content.replace(/"/g, '""').replace(/\n/g, " ");
+          const sentiment = msg.sentiment || "N/A";
+          lines.push(`${conv.id},${msg.role},${msg.timestamp},${sentiment},"${content}"`);
+        }
+      }
+    }
+  }
+
+  return lines.join("\n");
+}
+
+/**
+ * Track widget analytics event
+ */
+export async function trackWidgetEvent(
+  chatbotId: string,
+  eventType: "view" | "open" | "close" | "message" | "first_message",
+  sessionId?: string,
+  metadata?: Record<string, unknown>
+): Promise<void> {
+  try {
+    await supabaseAdmin.from("widget_analytics").insert({
+      chatbot_id: chatbotId,
+      event_type: eventType,
+      session_id: sessionId,
+      metadata: metadata || {},
+    });
+  } catch (error) {
+    // Don't throw, just log - analytics should not break the main flow
+    logger.error("Failed to track widget event", { error, chatbotId, eventType });
+  }
+}
+
+/**
+ * Get widget analytics summary
+ */
+export async function getWidgetAnalyticsSummary(
+  chatbotId: string,
+  days: number = 7
+): Promise<{
+  dailyViews: Array<{ date: string; views: number; opens: number; messages: number }>;
+  totalViews: number;
+  totalOpens: number;
+  totalMessages: number;
+}> {
+  const cacheKey = `analytics:widget-summary:${chatbotId}:${days}`;
+  const cached = await getCache<{
+    dailyViews: Array<{ date: string; views: number; opens: number; messages: number }>;
+    totalViews: number;
+    totalOpens: number;
+    totalMessages: number;
+  }>(cacheKey);
+
+  if (cached) {
+    return cached;
+  }
+
+  try {
+    const startDate = new Date();
+    startDate.setDate(startDate.getDate() - days);
+    startDate.setHours(0, 0, 0, 0);
+
+    const { data: events } = await supabaseAdmin
+      .from("widget_analytics")
+      .select("event_type, timestamp")
+      .eq("chatbot_id", chatbotId)
+      .gte("timestamp", startDate.toISOString());
+
+    // Initialize daily buckets
+    const dailyData: Map<string, { views: number; opens: number; messages: number }> = new Map();
+
+    for (let i = 0; i < days; i++) {
+      const date = new Date();
+      date.setDate(date.getDate() - (days - 1 - i));
+      const dateKey = date.toISOString().split("T")[0];
+      dailyData.set(dateKey, { views: 0, opens: 0, messages: 0 });
+    }
+
+    let totalViews = 0;
+    let totalOpens = 0;
+    let totalMessages = 0;
+
+    if (events) {
+      for (const event of events) {
+        const dateKey = event.timestamp.split("T")[0];
+        const existing = dailyData.get(dateKey);
+
+        if (event.event_type === "view") {
+          totalViews++;
+          if (existing) existing.views++;
+        } else if (event.event_type === "open") {
+          totalOpens++;
+          if (existing) existing.opens++;
+        } else if (event.event_type === "message" || event.event_type === "first_message") {
+          totalMessages++;
+          if (existing) existing.messages++;
+        }
+      }
+    }
+
+    const summary = {
+      dailyViews: Array.from(dailyData.entries()).map(([date, data]) => ({
+        date,
+        views: data.views,
+        opens: data.opens,
+        messages: data.messages,
+      })),
+      totalViews,
+      totalOpens,
+      totalMessages,
+    };
+
+    // Cache for 5 minutes
+    await setCache(cacheKey, summary, 300);
+
+    return summary;
+  } catch (error) {
+    logger.error("Failed to get widget analytics summary", { error, chatbotId, days });
+    return {
+      dailyViews: [],
+      totalViews: 0,
+      totalOpens: 0,
+      totalMessages: 0,
+    };
+  }
+}

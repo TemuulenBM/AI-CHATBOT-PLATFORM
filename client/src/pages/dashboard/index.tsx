@@ -4,17 +4,34 @@ import { StatsCards } from "@/components/dashboard/stats-cards";
 import { GlassCard } from "@/components/ui/glass-card";
 import { AreaChart, Area, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { useAuth, useUser } from "@clerk/clerk-react";
-import { useChatbotStore } from "@/store/chatbot-store";
+import { useChatbotStore, ChatbotComparisonItem } from "@/store/chatbot-store";
 import { useLocation } from "wouter";
-import { Bot, Loader2, TrendingUp, ThumbsUp, ThumbsDown, Smile, Meh, Frown } from "lucide-react";
-import { PieChart, Pie, Cell, Legend } from "recharts";
+import { Bot, Loader2, TrendingUp, ThumbsUp, ThumbsDown, Smile, BarChart3, ExternalLink, Clock } from "lucide-react";
+import { PieChart, Pie, Cell } from "recharts";
 import { Button } from "@/components/ui/button";
 import { Link } from "wouter";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 
 export default function Dashboard() {
   const { isSignedIn, isLoaded } = useAuth();
   const { user } = useUser();
-  const { stats, fetchStats, chatbots, fetchChatbots, messageVolume, fetchMessageVolume } = useChatbotStore();
+  const { 
+    stats, 
+    fetchStats, 
+    chatbots, 
+    fetchChatbots, 
+    messageVolume, 
+    fetchMessageVolume,
+    fetchChatbotComparison,
+    chatbotComparison,
+  } = useChatbotStore();
   const [, setLocation] = useLocation();
   const [isLoading, setIsLoading] = useState(true);
   const [selectedDays, setSelectedDays] = useState(7);
@@ -30,7 +47,12 @@ export default function Dashboard() {
     if (isSignedIn) {
       const loadData = async () => {
         setIsLoading(true);
-        await Promise.all([fetchStats(), fetchChatbots(), fetchMessageVolume(selectedDays)]);
+        await Promise.all([
+          fetchStats(), 
+          fetchChatbots(), 
+          fetchMessageVolume(selectedDays),
+          fetchChatbotComparison(),
+        ]);
 
         // Fetch analytics for the first active chatbot if available
         const activeBot = chatbots.find(b => b.status === "ready");
@@ -218,6 +240,91 @@ export default function Dashboard() {
             </GlassCard>
           </div>
         </div>
+
+        {/* Chatbot Comparison Table */}
+        {chatbotComparison.length > 0 && (
+          <GlassCard className="p-6 mt-8">
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="text-lg font-semibold flex items-center gap-2">
+                <BarChart3 className="h-5 w-5 text-primary" />
+                Chatbot Performance Comparison
+              </h3>
+            </div>
+            {isLoading ? (
+              <div className="flex items-center justify-center h-32">
+                <Loader2 className="h-6 w-6 animate-spin text-primary" />
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="w-[200px]">Chatbot</TableHead>
+                      <TableHead className="text-right">Messages</TableHead>
+                      <TableHead className="text-right">CSAT</TableHead>
+                      <TableHead className="text-right">Avg Response</TableHead>
+                      <TableHead className="text-right">Conv. Rate</TableHead>
+                      <TableHead className="text-right">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {chatbotComparison.map((bot) => (
+                      <TableRow key={bot.chatbotId}>
+                        <TableCell className="font-medium">{bot.chatbotName}</TableCell>
+                        <TableCell className="text-right">
+                          {bot.totalMessages.toLocaleString()}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          {bot.csatScore !== null ? (
+                            <span className={`font-semibold ${
+                              bot.csatScore >= 80 ? 'text-green-500' : 
+                              bot.csatScore >= 60 ? 'text-amber-500' : 'text-red-500'
+                            }`}>
+                              {bot.csatScore}%
+                            </span>
+                          ) : (
+                            <span className="text-muted-foreground">-</span>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          {bot.avgResponseTimeMs !== null ? (
+                            <span className="flex items-center justify-end gap-1">
+                              <Clock className="h-3 w-3 text-muted-foreground" />
+                              {bot.avgResponseTimeMs < 1000 
+                                ? `${bot.avgResponseTimeMs}ms` 
+                                : `${(bot.avgResponseTimeMs / 1000).toFixed(1)}s`}
+                            </span>
+                          ) : (
+                            <span className="text-muted-foreground">-</span>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          {bot.conversionRate !== null ? (
+                            <span className={`font-semibold ${
+                              bot.conversionRate >= 30 ? 'text-green-500' : 
+                              bot.conversionRate >= 15 ? 'text-amber-500' : 'text-muted-foreground'
+                            }`}>
+                              {bot.conversionRate}%
+                            </span>
+                          ) : (
+                            <span className="text-muted-foreground">-</span>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <Link href={`/dashboard/chatbots/${bot.chatbotId}/analytics`}>
+                            <Button variant="ghost" size="sm">
+                              <ExternalLink className="h-4 w-4" />
+                            </Button>
+                          </Link>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            )}
+          </GlassCard>
+        )}
 
         <div className="grid lg:grid-cols-2 gap-8 mt-8">
           <GlassCard className="p-6">

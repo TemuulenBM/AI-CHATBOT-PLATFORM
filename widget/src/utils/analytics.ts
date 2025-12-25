@@ -96,11 +96,33 @@ class AnalyticsManager {
     const events = [...this.eventQueue];
     this.eventQueue = [];
 
-    await this.sendToServer("/api/widget/analytics", {
-      chatbotId: this.chatbotId,
-      sessionId: this.sessionId,
-      events,
-    });
+    // Track each event individually using the new analytics tracking endpoint
+    for (const event of events) {
+      await this.sendToServer("/api/analytics/widget/track", {
+        chatbotId: this.chatbotId,
+        sessionId: this.sessionId,
+        eventType: this.mapEventType(event.type),
+        metadata: event.data,
+      });
+    }
+  }
+
+  private mapEventType(type: WidgetAnalyticsEvent["type"]): string {
+    // Map internal event types to the new widget_analytics event types
+    switch (type) {
+      case "open":
+        return "open";
+      case "close":
+        return "close";
+      case "message_sent":
+        return "message";
+      case "message_received":
+        return "message";
+      case "prechat_submitted":
+        return "first_message";
+      default:
+        return type;
+    }
   }
 
   private async sendToServer(endpoint: string, data: unknown): Promise<void> {
@@ -112,11 +134,12 @@ class AnalyticsManager {
         const blob = new Blob([JSON.stringify(data)], { type: "application/json" });
         navigator.sendBeacon(`${this.apiUrl}${endpoint}`, blob);
       } else {
-        fetch(`${this.apiUrl}${endpoint}`, {
+        // Await the fetch to ensure the request completes before resolving
+        await fetch(`${this.apiUrl}${endpoint}`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(data),
-          keepalive: true,
+          keepalive: true, // Allows the request to outlive the page
         }).catch(() => {
           // Silently fail - analytics should never break the widget
         });
@@ -137,6 +160,10 @@ class AnalyticsManager {
 export const analytics = new AnalyticsManager();
 
 // Convenience functions
+export function trackWidgetView(): void {
+  analytics.track("view");
+}
+
 export function trackWidgetOpen(): void {
   analytics.track("open");
 }
@@ -151,6 +178,10 @@ export function trackMessageSent(): void {
 
 export function trackMessageReceived(): void {
   analytics.track("message_received");
+}
+
+export function trackFirstMessage(): void {
+  analytics.track("first_message");
 }
 
 export function trackFeedback(rating: "positive" | "negative"): void {

@@ -101,6 +101,47 @@ export interface SatisfactionMetrics {
   satisfactionRate: number | null;
 }
 
+// Phase 5: New Analytics Types
+export interface ConversationRateMetrics {
+  widgetViews: number;
+  widgetOpens: number;
+  conversationsStarted: number;
+  conversionRate: number;
+  openRate: number;
+}
+
+export interface ResponseTimeTrendPoint {
+  date: string;
+  avgResponseTimeMs: number;
+  messageCount: number;
+}
+
+export interface ChatbotComparisonItem {
+  chatbotId: string;
+  chatbotName: string;
+  totalMessages: number;
+  totalConversations: number;
+  csatScore: number | null;
+  avgResponseTimeMs: number | null;
+  conversionRate: number | null;
+}
+
+export interface WidgetAnalyticsSummary {
+  dailyViews: Array<{ date: string; views: number; opens: number; messages: number }>;
+  totalViews: number;
+  totalOpens: number;
+  totalMessages: number;
+}
+
+export interface AnalyticsExportOptions {
+  startDate?: string;
+  endDate?: string;
+  format?: 'csv' | 'json';
+  includeConversations?: boolean;
+  includeMessages?: boolean;
+  includeRatings?: boolean;
+}
+
 interface ConversationsResponse {
   conversations: ConversationSummary[];
   total: number;
@@ -121,7 +162,11 @@ interface ChatbotStore {
   isLoading: boolean;
   isSaving: boolean;
   isRescraping: boolean;
+  isExporting: boolean;
   error: string | null;
+
+  // Chatbot comparison data
+  chatbotComparison: ChatbotComparisonItem[];
 
   fetchChatbots: () => Promise<void>;
   fetchChatbot: (id: string) => Promise<Chatbot | null>;
@@ -138,6 +183,13 @@ interface ChatbotStore {
   fetchScrapeHistory: (chatbotId: string) => Promise<ScrapeHistoryResponse | null>;
   clearError: () => void;
   clearCurrentChatbot: () => void;
+
+  // Phase 5: New Analytics Methods
+  fetchConversationRate: (chatbotId: string, days?: number) => Promise<ConversationRateMetrics | null>;
+  fetchResponseTimeTrends: (chatbotId: string, days?: number) => Promise<ResponseTimeTrendPoint[] | null>;
+  fetchChatbotComparison: () => Promise<ChatbotComparisonItem[] | null>;
+  fetchWidgetAnalytics: (chatbotId: string, days?: number) => Promise<WidgetAnalyticsSummary | null>;
+  exportAnalytics: (chatbotId: string, options?: AnalyticsExportOptions) => Promise<boolean>;
 }
 
 export const useChatbotStore = create<ChatbotStore>((set, get) => ({
@@ -158,7 +210,9 @@ export const useChatbotStore = create<ChatbotStore>((set, get) => ({
   isLoading: false,
   isSaving: false,
   isRescraping: false,
+  isExporting: false,
   error: null,
+  chatbotComparison: [],
 
   fetchChatbots: async () => {
     set({ isLoading: true, error: null });
@@ -494,5 +548,144 @@ export const useChatbotStore = create<ChatbotStore>((set, get) => ({
       });
     }
     return null;
+  },
+
+  // Phase 5: New Analytics Methods
+
+  fetchConversationRate: async (chatbotId: string, days: number = 30) => {
+    try {
+      const response = await fetch(`/api/chatbots/${chatbotId}/analytics/conversation-rate?days=${days}`, {
+        headers: {
+          ...getAuthHeader(),
+        },
+      });
+
+      if (response.ok) {
+        return await response.json();
+      }
+    } catch (error) {
+      console.error('Failed to fetch conversation rate:', error);
+    }
+    return null;
+  },
+
+  fetchResponseTimeTrends: async (chatbotId: string, days: number = 7) => {
+    try {
+      const response = await fetch(`/api/chatbots/${chatbotId}/analytics/response-times?days=${days}`, {
+        headers: {
+          ...getAuthHeader(),
+        },
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        return data.trends;
+      }
+    } catch (error) {
+      console.error('Failed to fetch response time trends:', error);
+    }
+    return null;
+  },
+
+  fetchChatbotComparison: async () => {
+    try {
+      const response = await fetch('/api/analytics/compare', {
+        headers: {
+          ...getAuthHeader(),
+        },
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        set({ chatbotComparison: data.chatbots });
+        return data.chatbots;
+      }
+    } catch (error) {
+      console.error('Failed to fetch chatbot comparison:', error);
+    }
+    return null;
+  },
+
+  fetchWidgetAnalytics: async (chatbotId: string, days: number = 7) => {
+    try {
+      const response = await fetch(`/api/chatbots/${chatbotId}/analytics/widget?days=${days}`, {
+        headers: {
+          ...getAuthHeader(),
+        },
+      });
+
+      if (response.ok) {
+        return await response.json();
+      }
+    } catch (error) {
+      console.error('Failed to fetch widget analytics:', error);
+    }
+    return null;
+  },
+
+  exportAnalytics: async (chatbotId: string, options: AnalyticsExportOptions = {}) => {
+    set({ isExporting: true, error: null });
+    try {
+      const params = new URLSearchParams();
+      
+      if (options.format) params.append('format', options.format);
+      if (options.startDate) params.append('startDate', options.startDate);
+      if (options.endDate) params.append('endDate', options.endDate);
+      if (options.includeConversations !== undefined) {
+        params.append('includeConversations', String(options.includeConversations));
+      }
+      if (options.includeMessages !== undefined) {
+        params.append('includeMessages', String(options.includeMessages));
+      }
+      if (options.includeRatings !== undefined) {
+        params.append('includeRatings', String(options.includeRatings));
+      }
+
+      const response = await fetch(`/api/chatbots/${chatbotId}/analytics/export?${params.toString()}`, {
+        headers: {
+          ...getAuthHeader(),
+        },
+      });
+
+      if (response.ok) {
+        const contentType = response.headers.get('content-type');
+        
+        if (options.format === 'csv' || contentType?.includes('text/csv')) {
+          // Download CSV file
+          const blob = await response.blob();
+          const url = window.URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = response.headers.get('content-disposition')?.split('filename=')[1]?.replace(/"/g, '') 
+            || `analytics_${new Date().toISOString().split('T')[0]}.csv`;
+          document.body.appendChild(a);
+          a.click();
+          window.URL.revokeObjectURL(url);
+          document.body.removeChild(a);
+        } else {
+          // Download JSON file
+          const data = await response.json();
+          const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+          const url = window.URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = `analytics_${new Date().toISOString().split('T')[0]}.json`;
+          document.body.appendChild(a);
+          a.click();
+          window.URL.revokeObjectURL(url);
+          document.body.removeChild(a);
+        }
+
+        set({ isExporting: false });
+        return true;
+      } else {
+        const errorData = await response.json().catch(() => ({ message: 'Failed to export analytics' }));
+        set({ isExporting: false, error: errorData.message || 'Failed to export analytics' });
+      }
+    } catch (error) {
+      console.error('Failed to export analytics:', error);
+      set({ isExporting: false, error: 'Network error. Please try again.' });
+    }
+    return false;
   },
 }));

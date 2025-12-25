@@ -13,6 +13,7 @@ import ChatbotSettings from "@/pages/dashboard/chatbot-settings";
 import Conversations from "@/pages/dashboard/conversations";
 import Settings from "@/pages/dashboard/settings";
 import KnowledgeBase from "@/pages/dashboard/knowledge-base";
+import Analytics from "@/pages/dashboard/analytics";
 
 function Router() {
   return (
@@ -42,6 +43,7 @@ function Router() {
       <Route path="/dashboard/create" component={CreateChatbot} />
       <Route path="/dashboard/chatbots/:id/settings" component={ChatbotSettings} />
       <Route path="/dashboard/chatbots/:id/knowledge" component={KnowledgeBase} />
+      <Route path="/dashboard/chatbots/:id/analytics" component={Analytics} />
       <Route path="/dashboard/settings" component={Settings} />
       <Route component={NotFound} />
     </Switch>

@@ -1,4 +1,4 @@
-import { Response, NextFunction } from "express";
+import { Request, Response, NextFunction } from "express";
 import { supabaseAdmin, ChatbotSettings } from "../utils/supabase";
 import { AuthenticatedRequest, checkUsageLimit, incrementUsage } from "../middleware/auth";
 import { NotFoundError, AuthorizationError } from "../utils/errors";
@@ -939,6 +939,227 @@ export async function getScrapeHistory(
       autoScrapeEnabled: chatbot.auto_scrape_enabled,
       nextScheduledScrape: nextScheduledScrape?.toISOString() || null,
     });
+  } catch (error) {
+    next(error);
+  }
+}
+
+// ==================== Phase 5: Analytics Enhancement Endpoints ====================
+
+// Get response time trends for a chatbot
+export async function getResponseTimeTrends(
+  req: AuthenticatedRequest,
+  res: Response,
+  next: NextFunction
+): Promise<void> {
+  try {
+    if (!req.user) {
+      throw new AuthorizationError();
+    }
+
+    const { id } = req.params;
+    const days = parseInt(req.query.days as string) || 7;
+    const validDays = Math.min(Math.max(days, 1), 30);
+
+    // Verify ownership
+    const { data: chatbot, error } = await supabaseAdmin
+      .from("chatbots")
+      .select("id")
+      .eq("id", id)
+      .eq("user_id", req.user.userId)
+      .single();
+
+    if (error || !chatbot) {
+      throw new NotFoundError("Chatbot");
+    }
+
+    const trends = await analyticsService.getResponseTimeTrends(id, validDays);
+
+    res.json({ trends });
+  } catch (error) {
+    next(error);
+  }
+}
+
+// Get conversation rate metrics (widget views vs conversations)
+export async function getConversationRate(
+  req: AuthenticatedRequest,
+  res: Response,
+  next: NextFunction
+): Promise<void> {
+  try {
+    if (!req.user) {
+      throw new AuthorizationError();
+    }
+
+    const { id } = req.params;
+    const days = parseInt(req.query.days as string) || 30;
+    const validDays = Math.min(Math.max(days, 1), 90);
+
+    // Verify ownership
+    const { data: chatbot, error } = await supabaseAdmin
+      .from("chatbots")
+      .select("id")
+      .eq("id", id)
+      .eq("user_id", req.user.userId)
+      .single();
+
+    if (error || !chatbot) {
+      throw new NotFoundError("Chatbot");
+    }
+
+    const metrics = await analyticsService.getConversationRate(id, validDays);
+
+    res.json(metrics);
+  } catch (error) {
+    next(error);
+  }
+}
+
+// Compare all user's chatbots
+export async function compareChatbots(
+  req: AuthenticatedRequest,
+  res: Response,
+  next: NextFunction
+): Promise<void> {
+  try {
+    if (!req.user) {
+      throw new AuthorizationError();
+    }
+
+    const comparison = await analyticsService.compareChatbots(req.user.userId);
+
+    res.json({ chatbots: comparison });
+  } catch (error) {
+    next(error);
+  }
+}
+
+// Export analytics data
+export async function exportAnalytics(
+  req: AuthenticatedRequest,
+  res: Response,
+  next: NextFunction
+): Promise<void> {
+  try {
+    if (!req.user) {
+      throw new AuthorizationError();
+    }
+
+    const { id } = req.params;
+    const format = (req.query.format as "csv" | "json") || "json";
+    const startDate = req.query.startDate as string;
+    const endDate = req.query.endDate as string;
+    const includeConversations = req.query.includeConversations !== "false";
+    const includeMessages = req.query.includeMessages !== "false";
+    const includeRatings = req.query.includeRatings !== "false";
+
+    // Verify ownership
+    const { data: chatbot, error } = await supabaseAdmin
+      .from("chatbots")
+      .select("id, name")
+      .eq("id", id)
+      .eq("user_id", req.user.userId)
+      .single();
+
+    if (error || !chatbot) {
+      throw new NotFoundError("Chatbot");
+    }
+
+    const data = await analyticsService.exportAnalytics(id, format, {
+      startDate,
+      endDate,
+      includeConversations,
+      includeMessages,
+      includeRatings,
+    });
+
+    if (format === "csv") {
+      res.setHeader("Content-Type", "text/csv");
+      res.setHeader(
+        "Content-Disposition",
+        `attachment; filename="${chatbot.name.replace(/[^a-z0-9]/gi, "_")}_analytics_${new Date().toISOString().split("T")[0]}.csv"`
+      );
+      res.send(data);
+    } else {
+      res.json(data);
+    }
+  } catch (error) {
+    next(error);
+  }
+}
+
+// Get widget analytics summary
+export async function getWidgetAnalytics(
+  req: AuthenticatedRequest,
+  res: Response,
+  next: NextFunction
+): Promise<void> {
+  try {
+    if (!req.user) {
+      throw new AuthorizationError();
+    }
+
+    const { id } = req.params;
+    const days = parseInt(req.query.days as string) || 7;
+    const validDays = Math.min(Math.max(days, 1), 30);
+
+    // Verify ownership
+    const { data: chatbot, error } = await supabaseAdmin
+      .from("chatbots")
+      .select("id")
+      .eq("id", id)
+      .eq("user_id", req.user.userId)
+      .single();
+
+    if (error || !chatbot) {
+      throw new NotFoundError("Chatbot");
+    }
+
+    const summary = await analyticsService.getWidgetAnalyticsSummary(id, validDays);
+
+    res.json(summary);
+  } catch (error) {
+    next(error);
+  }
+}
+
+// Track widget event (public endpoint for widget)
+export async function trackWidgetEvent(
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> {
+  try {
+    const { chatbotId, eventType, sessionId, metadata } = req.body;
+
+    if (!chatbotId || !eventType) {
+      res.status(400).json({ error: "chatbotId and eventType are required" });
+      return;
+    }
+
+    const validEventTypes = ["view", "open", "close", "message", "first_message"];
+    if (!validEventTypes.includes(eventType)) {
+      res.status(400).json({ error: "Invalid eventType" });
+      return;
+    }
+
+    // Verify chatbot exists and is ready
+    const { data: chatbot, error } = await supabaseAdmin
+      .from("chatbots")
+      .select("id")
+      .eq("id", chatbotId)
+      .eq("status", "ready")
+      .single();
+
+    if (error || !chatbot) {
+      res.status(404).json({ error: "Chatbot not found" });
+      return;
+    }
+
+    await analyticsService.trackWidgetEvent(chatbotId, eventType, sessionId, metadata);
+
+    res.status(201).json({ success: true });
   } catch (error) {
     next(error);
   }

@@ -26,7 +26,7 @@ import { getWidgetStyles } from "./styles";
 import { getTranslations, detectLocale } from "./i18n";
 import { parseMarkdown } from "./utils/markdown";
 import { storage } from "./utils/storage";
-import { analytics, trackWidgetOpen, trackWidgetClose, trackMessageSent, trackFeedback } from "./utils/analytics";
+import { analytics, trackWidgetView, trackWidgetOpen, trackWidgetClose, trackMessageSent, trackFirstMessage, trackFeedback } from "./utils/analytics";
 import { playSimpleBeep, setSoundEnabled } from "./utils/sound";
 
 const WIDGET_VERSION = "2.0.0";
@@ -44,6 +44,7 @@ export class ConvoAIWidget {
   private feedbackSubmitted: boolean = false;
   private messageCount: number = 0;
   private unreadCount: number = 0;
+  private hasTrackedFirstMessage: boolean = false;
   private showPreChat: boolean = false;
   private userIdentity: UserIdentity | null = null;
   private proactiveTimers: number[] = [];
@@ -138,6 +139,9 @@ export class ConvoAIWidget {
 
     // Initialize analytics
     analytics.initialize(this.config.apiUrl, this.config.chatbotId, this.sessionId);
+
+    // Track widget view
+    trackWidgetView();
 
     // Create widget UI
     this.createWidget();
@@ -577,6 +581,9 @@ export class ConvoAIWidget {
             timestamp: new Date(msg.timestamp),
           }));
           this.messageCount = data.messages.filter((m) => m.role === "user").length;
+          // Mark that first message was already sent in a previous session
+          // so we don't double-count conversions for returning users
+          this.hasTrackedFirstMessage = this.messageCount > 0;
           return;
         }
       }
@@ -748,6 +755,11 @@ export class ConvoAIWidget {
     sendBtn.disabled = true;
     this.renderMessages();
 
+    // Track first message for conversion rate (only once per session)
+    if (!this.hasTrackedFirstMessage) {
+      this.hasTrackedFirstMessage = true;
+      trackFirstMessage();
+    }
     trackMessageSent();
 
     try {
@@ -945,6 +957,7 @@ export class ConvoAIWidget {
     this.conversationId = null;
     this.feedbackSubmitted = false;
     this.messageCount = 0;
+    this.hasTrackedFirstMessage = false;
 
     this.messages = [
       {

@@ -123,7 +123,7 @@ export interface UserIdentity {
 }
 
 export interface WidgetAnalyticsEvent {
-  type: "open" | "close" | "message_sent" | "message_received" | "feedback" | "prechat_submitted" | "proactive_shown";
+  type: "view" | "open" | "close" | "message_sent" | "message_received" | "first_message" | "feedback" | "prechat_submitted" | "proactive_shown";
   timestamp: number;
   data?: Record<string, unknown>;
 }

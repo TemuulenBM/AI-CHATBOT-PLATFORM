@@ -4,7 +4,7 @@ import { GlassCard } from "@/components/ui/glass-card";
 import { useChatbotStore, Chatbot } from "@/store/chatbot-store";
 import { useAuth } from "@clerk/clerk-react";
 import { Button } from "@/components/ui/button";
-import { Plus, MoreHorizontal, Globe, Trash2, ExternalLink, Loader2, Copy, AlertCircle, Settings, BookOpen } from "lucide-react";
+import { Plus, MoreHorizontal, Globe, Trash2, ExternalLink, Loader2, Copy, AlertCircle, Settings, BookOpen, BarChart3 } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import {
   DropdownMenu,
@@ -182,6 +182,9 @@ export default function ChatbotsList() {
                           </DropdownMenuItem>
                           <DropdownMenuItem onClick={() => setLocation(`/dashboard/chatbots/${bot.id}/knowledge`)}>
                             <BookOpen className="h-4 w-4 mr-2" /> Knowledge Base
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => setLocation(`/dashboard/chatbots/${bot.id}/analytics`)}>
+                            <BarChart3 className="h-4 w-4 mr-2" /> Analytics
                           </DropdownMenuItem>
                           <DropdownMenuItem onClick={() => handleCopyEmbed(bot.id)}>
                             <Copy className="h-4 w-4 mr-2" /> Copy Embed Code
