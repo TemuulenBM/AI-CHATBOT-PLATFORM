@@ -92,7 +92,7 @@ const ConvoAI: WidgetAPI = function (command: string, ...args: unknown[]): void 
 
       // Replay queued commands
       for (const { command, args } of queue) {
-        ConvoAI(command as any, ...args);
+        (ConvoAI as any)(command, ...(args as [unknown, ...unknown[]]));
       }
     } else {
       // Direct initialization
