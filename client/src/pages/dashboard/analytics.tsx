@@ -184,24 +184,29 @@ export default function Analytics() {
   return (
     <div className="min-h-screen bg-background">
       <Sidebar />
-      <main className="pl-64 p-8">
-        <div className="max-w-7xl mx-auto">
+      <main className="pl-72 px-8 pt-8 pb-8">
+        <div className="max-w-5xl mx-auto">
           {/* Header */}
           <header className="mb-8">
             <Link href="/dashboard/chatbots">
-              <Button variant="ghost" size="sm" className="mb-4">
+              <Button variant="ghost" size="sm" className="mb-4 text-muted-foreground hover:text-foreground">
                 <ArrowLeft className="h-4 w-4 mr-2" />
                 Back to Chatbots
               </Button>
             </Link>
             <div className="flex justify-between items-center">
-              <div>
-                <h1 className="text-3xl font-bold mb-2">
-                  {currentChatbot?.name || 'Chatbot'} Analytics
-                </h1>
-                <p className="text-muted-foreground">
-                  Detailed analytics and performance metrics
-                </p>
+              <div className="flex items-center gap-3">
+                <div className="h-10 w-10 rounded-lg bg-purple-500/10 flex items-center justify-center text-purple-400">
+                  <BarChart3 className="h-5 w-5" />
+                </div>
+                <div>
+                  <h1 className="text-3xl font-bold mb-2">
+                    {currentChatbot?.name || 'Chatbot'} Analytics
+                  </h1>
+                  <p className="text-muted-foreground">
+                    Detailed analytics and performance metrics
+                  </p>
+                </div>
               </div>
               <div className="flex gap-4 items-center">
                 <Select 
@@ -405,9 +410,14 @@ export default function Analytics() {
               <div className="grid lg:grid-cols-2 gap-8 mb-8">
                 {/* Response Time Trends */}
                 <GlassCard className="p-6">
-                  <div className="flex items-center gap-2 mb-6">
-                    <Clock className="h-5 w-5 text-primary" />
-                    <h3 className="text-lg font-semibold">Response Time Trends</h3>
+                  <div className="flex items-center gap-3 mb-6">
+                    <div className="h-10 w-10 rounded-lg bg-green-500/10 flex items-center justify-center text-green-400">
+                      <Clock className="h-5 w-5" />
+                    </div>
+                    <div>
+                      <h3 className="font-semibold">Response Time Trends</h3>
+                      <p className="text-sm text-muted-foreground">Average response time over time</p>
+                    </div>
                   </div>
                   <div className="h-[300px]">
                     {responseTimeData.length > 0 && responseTimeData.some(d => d.responseTime > 0) ? (
@@ -473,9 +483,14 @@ export default function Analytics() {
 
                 {/* Widget Activity */}
                 <GlassCard className="p-6">
-                  <div className="flex items-center gap-2 mb-6">
-                    <BarChart3 className="h-5 w-5 text-primary" />
-                    <h3 className="text-lg font-semibold">Widget Activity</h3>
+                  <div className="flex items-center gap-3 mb-6">
+                    <div className="h-10 w-10 rounded-lg bg-blue-500/10 flex items-center justify-center text-blue-400">
+                      <BarChart3 className="h-5 w-5" />
+                    </div>
+                    <div>
+                      <h3 className="font-semibold">Widget Activity</h3>
+                      <p className="text-sm text-muted-foreground">Widget views, opens, and messages</p>
+                    </div>
                   </div>
                   <div className="h-[300px]">
                     {widgetData.length > 0 && widgetData.some(d => d.views > 0 || d.opens > 0 || d.messages > 0) ? (
@@ -521,7 +536,15 @@ export default function Analytics() {
               {/* Widget Summary */}
               {widgetAnalytics && (
                 <GlassCard className="p-6">
-                  <h3 className="text-lg font-semibold mb-4">Widget Summary</h3>
+                  <div className="flex items-center gap-3 mb-6">
+                    <div className="h-10 w-10 rounded-lg bg-amber-500/10 flex items-center justify-center text-amber-400">
+                      <Eye className="h-5 w-5" />
+                    </div>
+                    <div>
+                      <h3 className="font-semibold">Widget Summary</h3>
+                      <p className="text-sm text-muted-foreground">Total widget statistics</p>
+                    </div>
+                  </div>
                   <div className="grid grid-cols-3 gap-8">
                     <div className="text-center p-4 rounded-lg bg-blue-500/5 border border-blue-500/20">
                       <div className="text-4xl font-bold text-blue-500 mb-2">

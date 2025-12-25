@@ -239,27 +239,29 @@ export default function KnowledgeBase() {
   return (
     <div className="min-h-screen bg-background">
       <Sidebar />
-      <main className="pl-64 p-8">
-        <div className="max-w-7xl mx-auto">
+      <main className="pl-72 px-8 pt-8 pb-8">
+        <div className="max-w-5xl mx-auto">
           {/* Header */}
           <header className="mb-8">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="mb-4 text-muted-foreground hover:text-foreground"
+              onClick={() => setLocation(`/dashboard/chatbots`)}
+            >
+              <ArrowLeft className="h-4 w-4 mr-2" /> Back to Chatbots
+            </Button>
             <div className="flex items-center gap-3 mb-2">
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => setLocation(`/dashboard/chatbots`)}
-                className="hover:bg-white/5"
-              >
-                <ArrowLeft className="h-5 w-5" />
-              </Button>
-              <h1 className="text-3xl font-bold flex items-center gap-2">
-                <BookOpen className="h-8 w-8 text-primary" />
-                Knowledge Base
-              </h1>
+              <div className="h-10 w-10 rounded-lg bg-blue-500/10 flex items-center justify-center text-blue-400">
+                <BookOpen className="h-5 w-5" />
+              </div>
+              <div>
+                <h1 className="text-3xl font-bold">Knowledge Base</h1>
+                <p className="text-muted-foreground">
+                  {currentChatbot?.name ? `Manage Q&A entries for ${currentChatbot.name}` : "Loading..."}
+                </p>
+              </div>
             </div>
-            <p className="text-muted-foreground ml-14">
-              {currentChatbot?.name ? `Manage Q&A entries for ${currentChatbot.name}` : "Loading..."}
-            </p>
           </header>
 
           {/* Filters and Add Button */}
