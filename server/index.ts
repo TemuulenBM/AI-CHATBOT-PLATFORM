@@ -125,6 +125,17 @@ app.use((req, res, next) => {
   const port = parseInt(process.env.PORT || "5000", 10);
   const host = process.env.NODE_ENV === "production" ? "0.0.0.0" : "localhost";
   
+  // Handle socket-level errors to prevent ECONNRESET from flooding logs
+  httpServer.on("connection", (socket) => {
+    socket.on("error", (err: NodeJS.ErrnoException) => {
+      if (err.code === "ECONNRESET" || err.code === "EPIPE" || err.code === "ETIMEDOUT") {
+        // Silently ignore common connection issues from health checks/load balancers
+        return;
+      }
+      logger.error("Socket error", { code: err.code, message: err.message });
+    });
+  });
+
   httpServer.listen(
     port,
     host,

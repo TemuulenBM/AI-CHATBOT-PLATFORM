@@ -19,14 +19,28 @@ const redisUrl = (() => {
 export const redis = new Redis(redisUrl, {
   maxRetriesPerRequest: 3,
   lazyConnect: true,
+  retryStrategy(times) {
+    const delay = Math.min(times * 50, 2000);
+    return delay;
+  },
+  reconnectOnError(err) {
+    // Only reconnect on connection-related errors
+    const targetErrors = ["READONLY", "ECONNRESET", "ETIMEDOUT"];
+    return targetErrors.some(e => err.message.includes(e));
+  },
 });
 
 redis.on("connect", () => {
   logger.info("Redis connected");
 });
 
-redis.on("error", (error) => {
-  logger.error("Redis error", { error: error.message });
+redis.on("error", (error: NodeJS.ErrnoException) => {
+  // Silently ignore common connection reset errors
+  if (error.code === "ECONNRESET" || error.code === "EPIPE" || error.code === "ETIMEDOUT") {
+    return;
+  }
+  
+  logger.error("Redis error", { error: error.message, code: error.code });
   if (process.env.NODE_ENV === "production") {
     logger.error("Redis connection failed in production - this may cause service degradation");
   }
