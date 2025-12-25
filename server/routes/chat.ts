@@ -29,17 +29,20 @@ router.post(
   chatController.streamMessage
 );
 
-// GET /api/chat/:chatbotId/:sessionId - Get conversation history
-router.get(
-  "/:chatbotId/:sessionId",
-  chatController.getConversation
-);
-
+// IMPORTANT: More specific routes must come BEFORE generic parameterized routes
+// Express.js matches routes in order from top to bottom, so /widget/:id must
+// be defined before /:chatbotId/:sessionId to prevent incorrect route matching
 // GET /api/chat/widget/:id - Get chatbot info for widget (public)
 router.get(
   "/widget/:id",
   validate({ params: schemas.uuidParam }),
   getChatbotPublic
+);
+
+// GET /api/chat/:chatbotId/:sessionId - Get conversation history
+router.get(
+  "/:chatbotId/:sessionId",
+  chatController.getConversation
 );
 
 export default router;
