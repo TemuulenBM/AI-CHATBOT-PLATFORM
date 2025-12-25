@@ -4,7 +4,7 @@ import { GlassCard } from "@/components/ui/glass-card";
 import { useChatbotStore } from "@/store/chatbot-store";
 import { useAuth } from "@clerk/clerk-react";
 import { Button } from "@/components/ui/button";
-import { MessageSquare, Loader2, AlertCircle, Bot, ChevronLeft, ChevronRight, Filter } from "lucide-react";
+import { MessageSquare, Loader2, AlertCircle, Bot, ChevronLeft, ChevronRight, Filter, Clock } from "lucide-react";
 import { useLocation } from "wouter";
 import {
   Select,
@@ -81,7 +81,7 @@ export default function Conversations() {
     <div className="min-h-screen bg-background">
       <Sidebar />
       <main className="pl-64 p-8">
-        <div className="max-w-7xl mx-auto">
+        <div className="max-w-5xl mx-auto">
           <header className="mb-8 flex justify-between items-center">
             <div>
               <h1 className="text-3xl font-bold mb-2">Conversations</h1>
@@ -140,34 +140,36 @@ export default function Conversations() {
               <div className="space-y-4">
                 {allConversations.map((conv) => (
                   <GlassCard key={conv.id} className="p-6 hover:bg-card/50 transition-colors cursor-pointer">
-                    <div className="flex items-start justify-between">
+                    <div className="flex items-start gap-4">
+                      <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center text-primary shrink-0">
+                        <Bot className="h-5 w-5" />
+                      </div>
                       <div className="flex-1">
-                        <div className="flex items-center gap-3 mb-2">
-                          <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center text-primary">
-                            <Bot className="h-5 w-5" />
-                          </div>
+                        <div className="flex items-center justify-between mb-2">
                           <div>
-                            <div className="flex items-center gap-2">
-                              <h3 className="font-semibold">
-                                {conv.chatbotName || "Unknown Chatbot"}
-                              </h3>
-                              {conv.chatbotId && (
-                                <span className="text-xs text-muted-foreground">
-                                  ({conv.chatbotId.slice(0, 8)}...)
-                                </span>
-                              )}
-                            </div>
-                            <div className="flex items-center gap-4 text-xs text-muted-foreground mt-1">
-                              <span>{conv.messageCount} messages</span>
-                              <span>•</span>
-                              <span>{getTimeAgo(conv.updatedAt)}</span>
-                            </div>
+                            <h3 className="font-semibold">
+                              {conv.chatbotName || "Unknown Chatbot"}
+                            </h3>
+                            {conv.chatbotId && (
+                              <span className="text-xs text-muted-foreground">
+                                {conv.chatbotId.slice(0, 8)}...
+                              </span>
+                            )}
                           </div>
                         </div>
-                        <p className="text-sm text-muted-foreground mt-3 line-clamp-2">
+                        <div className="flex items-center gap-4 text-xs text-muted-foreground mb-3">
+                          <span className="flex items-center gap-1">
+                            <MessageSquare className="h-3 w-3" />
+                            {conv.messageCount} messages
+                          </span>
+                          <span>•</span>
+                          <span>{getTimeAgo(conv.updatedAt)}</span>
+                        </div>
+                        <p className="text-sm text-muted-foreground mb-3 line-clamp-2">
                           {conv.preview}
                         </p>
-                        <div className="text-xs text-muted-foreground mt-3">
+                        <div className="text-xs text-muted-foreground flex items-center gap-1">
+                          <Clock className="h-3 w-3" />
                           Started: {formatDate(conv.createdAt)}
                         </div>
                       </div>

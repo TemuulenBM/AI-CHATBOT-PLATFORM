@@ -123,7 +123,7 @@ export default function ChatbotsList() {
     <div className="min-h-screen bg-background">
       <Sidebar />
       <main className="pl-64 p-8">
-        <div className="max-w-7xl mx-auto">
+        <div className="max-w-5xl mx-auto">
           <header className="mb-8 flex justify-between items-center">
             <div>
               <h1 className="text-3xl font-bold mb-2">My Chatbots</h1>
@@ -166,9 +166,15 @@ export default function ChatbotsList() {
                 const statusColor = getStatusColor(bot.status);
                 return (
                   <GlassCard key={bot.id} className="p-6">
-                    <div className="flex justify-between items-start mb-4">
-                      <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center text-primary">
-                        <BotIcon />
+                    <div className="flex items-center justify-between mb-6">
+                      <div className="flex items-center gap-3">
+                        <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center text-primary">
+                          <BotIcon />
+                        </div>
+                        <div>
+                          <h3 className="font-semibold">{bot.name}</h3>
+                          <p className="text-sm text-muted-foreground">Chatbot details and status</p>
+                        </div>
                       </div>
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
@@ -207,16 +213,17 @@ export default function ChatbotsList() {
                       </DropdownMenu>
                     </div>
 
-                    <h3 className="text-xl font-bold mb-1">{bot.name}</h3>
-                    <a
-                      href={bot.website_url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-sm text-muted-foreground flex items-center gap-1 hover:text-primary mb-6"
-                    >
-                      <Globe className="h-3 w-3" />
-                      {bot.website_url} <ExternalLink className="h-3 w-3" />
-                    </a>
+                    <div className="mb-4">
+                      <a
+                        href={bot.website_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-sm text-muted-foreground flex items-center gap-1 hover:text-primary"
+                      >
+                        <Globe className="h-3 w-3" />
+                        {bot.website_url} <ExternalLink className="h-3 w-3" />
+                      </a>
+                    </div>
 
                     <div className="grid grid-cols-2 gap-4 border-t border-white/5 pt-4">
                       <div>

@@ -120,7 +120,7 @@ export default function Dashboard() {
     <div className="min-h-screen bg-background">
       <Sidebar />
       <main className="pl-64 p-8">
-        <div className="max-w-7xl mx-auto">
+        <div className="max-w-5xl mx-auto">
           <header className="mb-8 flex justify-between items-center">
             <div>
               <h1 className="text-3xl font-bold mb-2">Dashboard</h1>
@@ -134,8 +134,16 @@ export default function Dashboard() {
 
           <div className="grid lg:grid-cols-3 gap-8">
             <GlassCard className="col-span-2 p-6 min-h-[400px]">
-              <div className="flex justify-between items-center mb-6">
-                <h3 className="text-lg font-semibold">Message Volume</h3>
+              <div className="flex items-center justify-between mb-6">
+                <div className="flex items-center gap-3">
+                  <div className="h-10 w-10 rounded-lg bg-purple-500/10 flex items-center justify-center text-purple-400">
+                    <BarChart3 className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <h3 className="font-semibold">Message Volume</h3>
+                    <p className="text-sm text-muted-foreground">Conversation activity over time</p>
+                  </div>
+                </div>
                 <div className="flex gap-2">
                   {[7, 14, 30].map((days) => (
                     <Button
@@ -205,7 +213,15 @@ export default function Dashboard() {
             </GlassCard>
 
             <GlassCard className="p-6">
-              <h3 className="text-lg font-semibold mb-6">Recent Activity</h3>
+              <div className="flex items-center gap-3 mb-6">
+                <div className="h-10 w-10 rounded-lg bg-blue-500/10 flex items-center justify-center text-blue-400">
+                  <Clock className="h-5 w-5" />
+                </div>
+                <div>
+                  <h3 className="font-semibold">Recent Activity</h3>
+                  <p className="text-sm text-muted-foreground">Latest updates from your chatbots</p>
+                </div>
+              </div>
               {isLoading ? (
                 <div className="flex items-center justify-center h-48">
                   <Loader2 className="h-6 w-6 animate-spin text-primary" />
@@ -244,11 +260,14 @@ export default function Dashboard() {
         {/* Chatbot Comparison Table */}
         {chatbotComparison.length > 0 && (
           <GlassCard className="p-6 mt-8">
-            <div className="flex items-center justify-between mb-6">
-              <h3 className="text-lg font-semibold flex items-center gap-2">
-                <BarChart3 className="h-5 w-5 text-primary" />
-                Chatbot Performance Comparison
-              </h3>
+            <div className="flex items-center gap-3 mb-6">
+              <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center text-primary">
+                <BarChart3 className="h-5 w-5" />
+              </div>
+              <div>
+                <h3 className="font-semibold">Chatbot Performance Comparison</h3>
+                <p className="text-sm text-muted-foreground">Compare performance metrics across your chatbots</p>
+              </div>
             </div>
             {isLoading ? (
               <div className="flex items-center justify-center h-32">
@@ -328,10 +347,15 @@ export default function Dashboard() {
 
         <div className="grid lg:grid-cols-2 gap-8 mt-8">
           <GlassCard className="p-6">
-            <h3 className="text-lg font-semibold mb-6 flex items-center gap-2">
-              <Smile className="h-5 w-5 text-blue-400" />
-              Sentiment Analysis
-            </h3>
+            <div className="flex items-center gap-3 mb-6">
+              <div className="h-10 w-10 rounded-lg bg-blue-500/10 flex items-center justify-center text-blue-400">
+                <Smile className="h-5 w-5" />
+              </div>
+              <div>
+                <h3 className="font-semibold">Sentiment Analysis</h3>
+                <p className="text-sm text-muted-foreground">Message sentiment breakdown</p>
+              </div>
+            </div>
             {isLoading ? (
               <div className="flex items-center justify-center h-48">
                 <Loader2 className="h-6 w-6 animate-spin text-primary" />
@@ -400,10 +424,15 @@ export default function Dashboard() {
           </GlassCard>
 
           <GlassCard className="p-6">
-            <h3 className="text-lg font-semibold mb-6 flex items-center gap-2">
-              <ThumbsUp className="h-5 w-5 text-purple-400" />
-              Customer Satisfaction (CSAT)
-            </h3>
+            <div className="flex items-center gap-3 mb-6">
+              <div className="h-10 w-10 rounded-lg bg-purple-500/10 flex items-center justify-center text-purple-400">
+                <ThumbsUp className="h-5 w-5" />
+              </div>
+              <div>
+                <h3 className="font-semibold">Customer Satisfaction (CSAT)</h3>
+                <p className="text-sm text-muted-foreground">User feedback and satisfaction metrics</p>
+              </div>
+            </div>
             {isLoading ? (
               <div className="flex items-center justify-center h-48">
                 <Loader2 className="h-6 w-6 animate-spin text-primary" />
