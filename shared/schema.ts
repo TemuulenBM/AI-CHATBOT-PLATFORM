@@ -1,5 +1,6 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, timestamp, boolean } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, timestamp, boolean, integer } from "drizzle-orm/pg-core";
+import { vector } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -28,10 +29,34 @@ export const chatbots = pgTable("chatbots", {
   auto_scrape_enabled: boolean("auto_scrape_enabled").default(false),
 });
 
+export const knowledgeBase = pgTable("knowledge_base", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  chatbot_id: varchar("chatbot_id").notNull().references(() => chatbots.id, { onDelete: "cascade" }),
+  question: text("question").notNull(),
+  answer: text("answer").notNull(),
+  category: text("category"),
+  priority: integer("priority").default(0),
+  enabled: boolean("enabled").default(true),
+  embedding: vector("embedding", { dimensions: 1536 }),
+  created_at: timestamp("created_at", { withTimezone: true }).defaultNow(),
+  updated_at: timestamp("updated_at", { withTimezone: true }).defaultNow(),
+});
+
 export const insertUserSchema = createInsertSchema(users).pick({
   email: true,
   password_hash: true,
 });
 
+export const insertKnowledgeBaseSchema = createInsertSchema(knowledgeBase).pick({
+  chatbot_id: true,
+  question: true,
+  answer: true,
+  category: true,
+  priority: true,
+  enabled: true,
+});
+
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof users.$inferSelect;
+export type InsertKnowledgeBase = z.infer<typeof insertKnowledgeBaseSchema>;
+export type KnowledgeBase = typeof knowledgeBase.$inferSelect;

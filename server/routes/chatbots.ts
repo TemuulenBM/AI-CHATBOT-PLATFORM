@@ -1,5 +1,6 @@
 import { Router } from "express";
 import * as chatbotsController from "../controllers/chatbots";
+import * as knowledgeBaseController from "../controllers/knowledge-base";
 import { validate, schemas } from "../middleware/validation";
 import { authMiddleware, loadSubscription } from "../middleware/auth";
 import { embeddingRateLimit } from "../middleware/rateLimit";
@@ -115,6 +116,57 @@ router.get(
   "/:id/scrape-history",
   validate({ params: schemas.uuidParam }),
   chatbotsController.getScrapeHistory
+);
+
+// ===== Knowledge Base Routes =====
+
+// GET /api/chatbots/:id/knowledge/stats - Get knowledge base statistics
+router.get(
+  "/:id/knowledge/stats",
+  validate({ params: schemas.uuidParam }),
+  knowledgeBaseController.getKnowledgeStats
+);
+
+// POST /api/chatbots/:id/knowledge/bulk - Bulk import knowledge entries
+router.post(
+  "/:id/knowledge/bulk",
+  validate({ params: schemas.uuidParam }),
+  knowledgeBaseController.bulkImportKnowledge
+);
+
+// POST /api/chatbots/:id/knowledge - Add knowledge entry
+router.post(
+  "/:id/knowledge",
+  validate({ params: schemas.uuidParam }),
+  knowledgeBaseController.addKnowledgeEntry
+);
+
+// GET /api/chatbots/:id/knowledge - List knowledge entries
+router.get(
+  "/:id/knowledge",
+  validate({ params: schemas.uuidParam }),
+  knowledgeBaseController.listKnowledgeEntries
+);
+
+// GET /api/chatbots/:id/knowledge/:entryId - Get single knowledge entry
+router.get(
+  "/:id/knowledge/:entryId",
+  validate({ params: schemas.uuidParam }),
+  knowledgeBaseController.getKnowledgeEntry
+);
+
+// PATCH /api/chatbots/:id/knowledge/:entryId - Update knowledge entry
+router.patch(
+  "/:id/knowledge/:entryId",
+  validate({ params: schemas.uuidParam }),
+  knowledgeBaseController.updateKnowledgeEntry
+);
+
+// DELETE /api/chatbots/:id/knowledge/:entryId - Delete knowledge entry
+router.delete(
+  "/:id/knowledge/:entryId",
+  validate({ params: schemas.uuidParam }),
+  knowledgeBaseController.deleteKnowledgeEntry
 );
 
 export default router;

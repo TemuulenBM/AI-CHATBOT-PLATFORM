@@ -2,6 +2,7 @@ import OpenAI from "openai";
 import Anthropic from "@anthropic-ai/sdk";
 import { ChatbotSettings, ConversationMessage } from "../utils/supabase";
 import { embeddingService } from "./embedding";
+import { knowledgeBaseService } from "./knowledge-base";
 import logger from "../utils/logger";
 import { ExternalServiceError } from "../utils/errors";
 
@@ -18,6 +19,7 @@ type AIProvider = "openai" | "anthropic";
 interface ChatContext {
   relevantContent: string;
   sources: string[];
+  isManualKnowledge?: boolean; // Flag to indicate if content is from manual Q&A
 }
 
 interface ChatOptions {
@@ -44,14 +46,42 @@ export function requiresMaxCompletionTokens(model: string): boolean {
 
 export class AIService {
   /**
-   * Build context from similar embeddings
-   * Returns empty context if chatbot is still training (no embeddings yet)
+   * Build context from knowledge base and embeddings
+   * Priority:
+   * 1. Manual Q&A knowledge base (highest priority - exact semantic match)
+   * 2. Scraped embeddings (fallback if no manual match)
+   * 3. Empty context (if nothing matches - training mode)
    */
   async buildContext(
     chatbotId: string,
     message: string
   ): Promise<ChatContext> {
     try {
+      // Step 1: Check manual knowledge base first
+      const kbMatches = await knowledgeBaseService.searchKnowledgeBase(
+        chatbotId,
+        message,
+        3,
+        0.8 // Higher threshold for manual Q&A
+      );
+
+      if (kbMatches.length > 0 && kbMatches[0].similarity > 0.8) {
+        // Use manual knowledge base answer directly
+        const topMatch = kbMatches[0];
+        logger.info("Using manual knowledge base answer", {
+          chatbotId,
+          entryId: topMatch.id,
+          similarity: topMatch.similarity,
+        });
+
+        return {
+          relevantContent: `# Manual Knowledge Base\n\nQuestion: ${topMatch.question}\nAnswer: ${topMatch.answer}`,
+          sources: ["Manual Knowledge Base"],
+          isManualKnowledge: true,
+        };
+      }
+
+      // Step 2: Fall back to scraped content embeddings
       const similar = await embeddingService.findSimilar(chatbotId, message, 5, 0.6);
 
       if (similar.length === 0) {
@@ -64,7 +94,7 @@ export class AIService {
 
       const sources = Array.from(new Set(similar.map((s) => s.pageUrl)));
 
-      return { relevantContent, sources };
+      return { relevantContent, sources, isManualKnowledge: false };
     } catch (error) {
       // If embeddings don't exist yet, return empty context (training mode)
       logger.warn("Failed to build context, using fallback mode", { chatbotId, error });
