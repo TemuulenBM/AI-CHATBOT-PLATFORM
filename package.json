@@ -10,8 +10,7 @@
     "build": "npx tsx script/build.ts && npx tsx widget/build.ts",
     "build:widget": "tsx widget/build.ts",
     "start": "NODE_ENV=production node dist/index.cjs",
-    "check": "tsc",
-    "db:push": "drizzle-kit push"
+    "check": "tsc"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.39.0",
@@ -48,7 +47,10 @@
     "@sentry/node": "^10.32.1",
     "@sentry/react": "^10.32.1",
     "@supabase/supabase-js": "^2.47.0",
+    "@tailwindcss/vite": "^4.1.14",
     "@tanstack/react-query": "^5.60.5",
+    "@vitejs/plugin-react": "^5.0.4",
+    "autoprefixer": "^10.4.21",
     "axios": "^1.7.9",
     "bcrypt": "^5.1.1",
     "bullmq": "^5.30.1",
@@ -60,9 +62,8 @@
     "cors": "^2.8.5",
     "date-fns": "^3.6.0",
     "dotenv": "^17.2.3",
-    "drizzle-orm": "^0.39.3",
-    "drizzle-zod": "^0.7.0",
     "embla-carousel-react": "^8.6.0",
+    "esbuild": "^0.25.0",
     "express": "^4.21.2",
     "express-mongo-sanitize": "^2.2.0",
     "express-session": "^1.18.1",
@@ -79,6 +80,7 @@
     "passport": "^0.7.0",
     "passport-local": "^1.0.0",
     "pg": "^8.16.3",
+    "postcss": "^8.5.6",
     "react": "^19.2.0",
     "react-day-picker": "^9.11.1",
     "react-dom": "^19.2.0",
@@ -89,9 +91,13 @@
     "sonner": "^2.0.7",
     "stripe": "^17.5.0",
     "tailwind-merge": "^3.3.1",
+    "tailwindcss": "^4.1.14",
     "tailwindcss-animate": "^1.0.7",
+    "tsx": "^4.20.5",
     "tw-animate-css": "^1.4.0",
+    "typescript": "5.6.3",
     "vaul": "^1.1.2",
+    "vite": "^7.1.9",
     "winston": "^3.17.0",
     "winston-daily-rotate-file": "^5.0.0",
     "wouter": "^3.3.5",
@@ -99,16 +105,7 @@
     "xml2js": "^0.6.2",
     "zod": "^3.25.76",
     "zod-validation-error": "^3.4.0",
-    "zustand": "^5.0.9",
-    "esbuild": "^0.25.0",
-    "tsx": "^4.20.5",
-    "@tailwindcss/vite": "^4.1.14",
-    "@vitejs/plugin-react": "^5.0.4",
-    "autoprefixer": "^10.4.21",
-    "postcss": "^8.5.6",
-    "tailwindcss": "^4.1.14",
-    "typescript": "5.6.3",
-    "vite": "^7.1.9"
+    "zustand": "^5.0.9"
   },
   "devDependencies": {
     "@types/bcrypt": "^5.0.2",
@@ -124,8 +121,7 @@
     "@types/react": "^19.2.0",
     "@types/react-dom": "^19.2.0",
     "@types/ws": "^8.5.13",
-    "@types/xml2js": "^0.4.14",
-    "drizzle-kit": "^0.31.4"
+    "@types/xml2js": "^0.4.14"
   },
   "optionalDependencies": {
     "bufferutil": "^4.0.8"
