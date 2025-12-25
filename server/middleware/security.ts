@@ -3,7 +3,24 @@ import cors from "cors";
 import hpp from "hpp";
 import mongoSanitize from "express-mongo-sanitize";
 import { Request, Response, NextFunction, Express } from "express";
+import crypto from "crypto";
 import logger from "../utils/logger";
+
+// Extend Express Request type to include nonce
+declare module "express-serve-static-core" {
+  interface Request {
+    cspNonce?: string;
+  }
+}
+
+/**
+ * CSP Nonce middleware - generates a unique nonce for each request
+ */
+export function cspNonceMiddleware(req: Request, res: Response, next: NextFunction): void {
+  // Generate a cryptographically secure random nonce
+  req.cspNonce = crypto.randomBytes(16).toString("base64");
+  next();
+}
 
 /**
  * Get allowed origins from environment
@@ -48,8 +65,9 @@ function corsOriginValidator(origin: string | undefined, callback: (err: Error |
  */
 export function configureHelmet(app: Express): void {
   const isDevelopment = process.env.NODE_ENV !== "production";
+  const productionBackendUrl = process.env.APP_URL || "https://ai-chatbot-platform-iiuf.onrender.com";
 
-  app.use(
+  app.use((req, res, next) => {
     helmet({
       // Content Security Policy
       contentSecurityPolicy: {
@@ -57,17 +75,28 @@ export function configureHelmet(app: Express): void {
           defaultSrc: ["'self'"],
           scriptSrc: [
             "'self'",
-            "'unsafe-inline'", // Needed for Vite dev, widget demo, React
-            ...(isDevelopment ? ["'unsafe-eval'"] : []), // Vite HMR in development
+            // In production, use nonce-based CSP instead of 'unsafe-inline'
+            ...(isDevelopment
+              ? ["'unsafe-inline'", "'unsafe-eval'"]
+              : [`'nonce-${req.cspNonce}'`]
+            ),
+            // Allow production backend domain for widget loading
+            productionBackendUrl,
+            "https://ai-chatbot-platform-iiuf.onrender.com",
+            "https://*.onrender.com",
+            // Third-party services
             "https://js.stripe.com", // Stripe checkout (legacy)
             "https://cdn.paddle.com", // Paddle checkout
             "https://*.clerk.accounts.dev", // Clerk authentication
             "https://challenges.cloudflare.com", // Cloudflare turnstile
-            "https://*.onrender.com",
           ],
           styleSrc: [
             "'self'",
-            "'unsafe-inline'", // Needed for dynamic styles, Tailwind
+            // In production, use nonce-based CSP for inline styles (NO 'unsafe-inline')
+            ...(isDevelopment
+              ? ["'unsafe-inline'"]
+              : [`'nonce-${req.cspNonce}'`]
+            ),
             "https://fonts.googleapis.com", // Google Fonts
           ],
           imgSrc: [
@@ -151,10 +180,10 @@ export function configureHelmet(app: Express): void {
       permittedCrossDomainPolicies: {
         permittedPolicies: "none",
       },
-    })
-  );
+    })(req, res, next);
+  });
 
-  logger.info("Helmet security headers configured");
+  logger.info("Helmet security headers configured with CSP nonce support");
 }
 
 /**
@@ -247,10 +276,14 @@ export function applySecurity(app: Express): void {
   logger.info("Applying security middleware...");
 
   configureTrustProxy(app);
+
+  // Apply CSP nonce middleware BEFORE helmet
+  app.use(cspNonceMiddleware);
+
   configureHelmet(app);
   configureCORS(app);
   configureHPP(app);
   configureSanitization(app);
 
-  logger.info("All security middleware applied");
+  logger.info("All security middleware applied with CSP nonce support");
 }

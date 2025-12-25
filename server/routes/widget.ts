@@ -238,10 +238,11 @@ router.get("/widget/demo", (req: Request, res: Response) => {
   const chatbotId = req.query.id || "demo-chatbot-id";
   const useLoader = req.query.loader === "true";
   const baseUrl = `${req.protocol}://${req.get("host")}`;
+  const nonce = req.cspNonce || "";
 
   const scriptTag = useLoader
-    ? `<script async src="${baseUrl}/widget/loader.js" data-chatbot-id="${chatbotId}"></script>`
-    : `<script async src="${baseUrl}/widget.js" data-chatbot-id="${chatbotId}"></script>`;
+    ? `<script async nonce="${nonce}" src="${baseUrl}/widget/loader.js" data-chatbot-id="${chatbotId}" data-csp-nonce="${nonce}"></script>`
+    : `<script async nonce="${nonce}" src="${baseUrl}/widget.js" data-chatbot-id="${chatbotId}" data-csp-nonce="${nonce}"></script>`;
 
   res.setHeader("Content-Type", "text/html");
   res.send(`
@@ -403,12 +404,14 @@ router.get("/widget/demo", (req: Request, res: Response) => {
 &lt;script <span class="highlight">async</span><br>
 &nbsp;&nbsp;src="<span class="highlight">${baseUrl}/widget.js</span>"<br>
 &nbsp;&nbsp;data-chatbot-id="<span class="highlight">${chatbotId}</span>"<br>
+&nbsp;&nbsp;data-csp-nonce="<span class="highlight">YOUR_NONCE_HERE</span>"<br>
 &gt;&lt;/script&gt;<br><br>
 
 &lt;!-- Lazy loading (smaller initial load) --&gt;<br>
 &lt;script <span class="highlight">async</span><br>
 &nbsp;&nbsp;src="<span class="highlight">${baseUrl}/widget/loader.js</span>"<br>
 &nbsp;&nbsp;data-chatbot-id="<span class="highlight">${chatbotId}</span>"<br>
+&nbsp;&nbsp;data-csp-nonce="<span class="highlight">YOUR_NONCE_HERE</span>"<br>
 &nbsp;&nbsp;data-lazy="true"<br>
 &gt;&lt;/script&gt;<br><br>
 
@@ -424,7 +427,7 @@ ConvoAI('on', 'message', (msg) =&gt; console.log(msg));
   <!-- The actual widget -->
   ${scriptTag}
 
-  <script>
+  <script nonce="${nonce}">
     // Demo: Listen to widget events
     setTimeout(() => {
       if (window.ConvoAI) {
