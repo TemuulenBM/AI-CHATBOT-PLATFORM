@@ -63,6 +63,7 @@ export function configureHelmet(app: Express): void {
             "https://cdn.paddle.com", // Paddle checkout
             "https://*.clerk.accounts.dev", // Clerk authentication
             "https://challenges.cloudflare.com", // Cloudflare turnstile
+            "https://*.onrender.com",
           ],
           styleSrc: [
             "'self'",
@@ -85,6 +86,7 @@ export function configureHelmet(app: Express): void {
             "https://*.sentry.io",
             "https://*.clerk.accounts.dev", // Clerk API
             "https://clerk.accounts.dev", // Clerk API
+            "https://*.onrender.com",
           ],
           frameSrc: [
             "'self'",

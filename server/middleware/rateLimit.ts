@@ -1,7 +1,7 @@
 import { Request, Response, NextFunction } from "express";
 import { checkRateLimit } from "../utils/redis";
 import { RateLimitError } from "../utils/errors";
-import { AuthenticatedRequest } from "./auth";
+import { AuthenticatedRequest } from "./clerkAuth";
 import { PLAN_LIMITS, PlanType } from "../utils/supabase";
 
 interface RateLimitOptions {
@@ -60,7 +60,15 @@ export const apiRateLimit = rateLimit({
 export const chatRateLimit = rateLimit({
   windowSeconds: 60, // 1 minute
   limit: (req: AuthenticatedRequest) => {
-    const plan = req.subscription?.plan || "free";
+    // Type guard function
+    const getPlanType = (plan: unknown): PlanType => {
+      if (typeof plan === "string" && plan in PLAN_LIMITS) {
+        return plan as PlanType;
+      }
+      return "free"; // Safe default
+    };
+    
+    const plan = getPlanType(req.subscription?.plan);
     // Different limits per plan (must match PLAN_LIMITS)
     const limits: Record<PlanType, number> = {
       free: 10,
