@@ -8,15 +8,15 @@
   "rewrites": [
     {
       "source": "/api/:path*",
-      "destination": "https://YOUR-RENDER-APP.onrender.com/api/:path*"
+      "destination": "https://ai-chatbot-platform-iiuf.onrender.com/api/:path*"
     },
     {
       "source": "/widget.js",
-      "destination": "https://YOUR-RENDER-APP.onrender.com/widget.js"
+      "destination": "https://ai-chatbot-platform-iiuf.onrender.com/widget.js"
     },
     {
       "source": "/widget/:path*",
-      "destination": "https://YOUR-RENDER-APP.onrender.com/widget/:path*"
+      "destination": "https://ai-chatbot-platform-iiuf.onrender.com/widget/:path*"
     },
     {
       "source": "/(.*)",
