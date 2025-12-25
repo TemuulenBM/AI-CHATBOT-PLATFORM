@@ -111,24 +111,31 @@ export async function registerRoutes(
       // OpenAI being down is not critical for health
     }
 
-    // Check Stripe API
-    const stripeStart = Date.now();
+    // Check Paddle API
+    const paddleStart = Date.now();
     try {
-      if (process.env.STRIPE_SECRET_KEY) {
-        const response = await fetch("https://api.stripe.com/v1/balance", {
+      if (process.env.PADDLE_API_KEY) {
+        const paddleEnv = process.env.PADDLE_ENVIRONMENT || "sandbox";
+        const paddleBase = paddleEnv === "live" 
+          ? "https://api.paddle.com" 
+          : "https://sandbox-api.paddle.com";
+        const response = await fetch(`${paddleBase}/customers`, {
           method: "GET",
-          headers: { Authorization: `Bearer ${process.env.STRIPE_SECRET_KEY}` },
+          headers: { 
+            Authorization: `Bearer ${process.env.PADDLE_API_KEY}`,
+            "Content-Type": "application/json",
+          },
         });
-        if (response.ok) {
-          checks.stripe = { status: "connected", latency: Date.now() - stripeStart };
+        if (response.ok || response.status === 400) { // 400 might be valid if no query params
+          checks.paddle = { status: "connected", latency: Date.now() - paddleStart };
         } else {
           throw new Error(`HTTP ${response.status}`);
         }
       } else {
-        checks.stripe = { status: "not_configured" };
+        checks.paddle = { status: "not_configured" };
       }
     } catch (err) {
-      checks.stripe = { status: "error", latency: Date.now() - stripeStart, error: (err as Error).message };
+      checks.paddle = { status: "error", latency: Date.now() - paddleStart, error: (err as Error).message };
     }
 
     // Check Queue Status

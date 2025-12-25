@@ -24,12 +24,13 @@ const ENV_VARS: EnvConfig[] = [
   // Anthropic (optional)
   { name: "ANTHROPIC_API_KEY", required: false, description: "Anthropic API key for Claude models" },
 
-  // Stripe (optional for development)
-  { name: "STRIPE_SECRET_KEY", required: false, description: "Stripe secret key for payments" },
-  { name: "STRIPE_WEBHOOK_SECRET", required: false, description: "Stripe webhook signing secret" },
-  { name: "STRIPE_STARTER_PRICE_ID", required: false, description: "Stripe price ID for Starter plan" },
-  { name: "STRIPE_GROWTH_PRICE_ID", required: false, description: "Stripe price ID for Growth plan" },
-  { name: "STRIPE_BUSINESS_PRICE_ID", required: false, description: "Stripe price ID for Business plan" },
+  // Paddle (optional for development)
+  { name: "PADDLE_API_KEY", required: false, description: "Paddle API key for payments" },
+  { name: "PADDLE_WEBHOOK_SECRET", required: false, description: "Paddle webhook signing secret" },
+  { name: "PADDLE_STARTER_PRICE_ID", required: false, description: "Paddle price ID for Starter plan" },
+  { name: "PADDLE_GROWTH_PRICE_ID", required: false, description: "Paddle price ID for Growth plan" },
+  { name: "PADDLE_BUSINESS_PRICE_ID", required: false, description: "Paddle price ID for Business plan" },
+  { name: "PADDLE_ENVIRONMENT", required: false, description: "Paddle environment (sandbox/live)" },
 
   // Application
   { name: "APP_URL", required: false, description: "Application URL for callbacks and widgets" },
@@ -120,14 +121,15 @@ export function initializeEnvironment(): void {
     logger.warn("JWT_SECRET is using a default value. Change this for production!");
   }
 
-  // Stripe validation
-  if (process.env.STRIPE_SECRET_KEY) {
-    const stripeKey = process.env.STRIPE_SECRET_KEY;
-    if (stripeKey.startsWith("sk_live_") && process.env.NODE_ENV !== "production") {
-      logger.warn("Using live Stripe key in non-production environment!");
+  // Paddle validation
+  if (process.env.PADDLE_API_KEY) {
+    const paddleKey = process.env.PADDLE_API_KEY;
+    const paddleEnv = process.env.PADDLE_ENVIRONMENT || "sandbox";
+    if (paddleEnv === "live" && process.env.NODE_ENV !== "production") {
+      logger.warn("Using live Paddle environment in non-production!");
     }
-    if (stripeKey.startsWith("sk_test_") && process.env.NODE_ENV === "production") {
-      logger.warn("Using test Stripe key in production environment!");
+    if (paddleEnv === "sandbox" && process.env.NODE_ENV === "production") {
+      logger.warn("Using sandbox Paddle environment in production!");
     }
   }
 }

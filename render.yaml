@@ -33,15 +33,17 @@ services:
           type: web
           name: convoai-backend
           property: host
-      - key: STRIPE_SECRET_KEY
+      - key: PADDLE_API_KEY
         sync: false
-      - key: STRIPE_WEBHOOK_SECRET
+      - key: PADDLE_WEBHOOK_SECRET
         sync: false
-      - key: STRIPE_STARTER_PRICE_ID
+      - key: PADDLE_STARTER_PRICE_ID
         sync: false
-      - key: STRIPE_GROWTH_PRICE_ID
+      - key: PADDLE_GROWTH_PRICE_ID
         sync: false
-      - key: STRIPE_BUSINESS_PRICE_ID
+      - key: PADDLE_BUSINESS_PRICE_ID
+        sync: false
+      - key: PADDLE_ENVIRONMENT
         sync: false
       - key: ANTHROPIC_API_KEY
         sync: false

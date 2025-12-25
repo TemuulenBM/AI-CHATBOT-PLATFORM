@@ -62,6 +62,7 @@ interface SubscriptionData {
   };
   current_period_end?: string;
   stripe_customer_id?: string | null;
+  paddle_customer_id?: string | null;
 }
 
 const planFeatures: Record<PlanType, string[]> = {
@@ -156,7 +157,7 @@ export default function Settings() {
   };
 
   const openBillingPortal = async () => {
-    if (!subscription?.stripe_customer_id) {
+    if (!subscription?.paddle_customer_id && !subscription?.stripe_customer_id) {
       toast({
         title: "No billing account",
         description: "You don't have an active subscription to manage.",
@@ -497,10 +498,10 @@ export default function Settings() {
               </div>
 
               <div className="space-y-4">
-                {subscription?.stripe_customer_id ? (
+                {(subscription?.paddle_customer_id || subscription?.stripe_customer_id) ? (
                   <>
                     <p className="text-sm text-muted-foreground">
-                      Access the Stripe customer portal to manage your payment methods, view invoices, and update billing information.
+                      Access the customer portal to manage your payment methods, view invoices, and update billing information.
                     </p>
                     <Button
                       onClick={openBillingPortal}
