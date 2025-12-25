@@ -2,7 +2,7 @@ import { Response, NextFunction, Request } from "express";
 import { AuthenticatedRequest } from "../middleware/auth";
 import { AuthorizationError } from "../utils/errors";
 import { CreateCheckoutInput } from "../middleware/validation";
-import { stripeService } from "../services/stripe";
+import { paddleService } from "../services/paddle";
 import { supabaseAdmin, PLAN_LIMITS } from "../utils/supabase";
 import logger from "../utils/logger";
 
@@ -18,7 +18,7 @@ export async function createCheckout(
 
     const { plan, successUrl, cancelUrl } = req.body as CreateCheckoutInput;
 
-    const checkoutUrl = await stripeService.createCheckoutSession(
+    const checkoutUrl = await paddleService.createCheckoutSession(
       req.user.userId,
       req.user.email,
       plan,
@@ -49,7 +49,7 @@ export async function createPortal(
       return;
     }
 
-    const portalUrl = await stripeService.createPortalSession(
+    const portalUrl = await paddleService.createPortalSession(
       req.user.userId,
       returnUrl
     );
@@ -66,14 +66,14 @@ export async function handleWebhook(
   next: NextFunction
 ): Promise<void> {
   try {
-    const signature = req.headers["stripe-signature"] as string;
+    const signature = req.headers["paddle-signature"] as string;
 
     if (!signature) {
       res.status(400).json({ message: "Missing signature" });
       return;
     }
 
-    const result = await stripeService.handleWebhook(
+    const result = await paddleService.handleWebhook(
       req.rawBody as Buffer,
       signature
     );

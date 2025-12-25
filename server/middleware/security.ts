@@ -59,7 +59,8 @@ export function configureHelmet(app: Express): void {
             "'self'",
             "'unsafe-inline'", // Needed for Vite dev, widget demo, React
             ...(isDevelopment ? ["'unsafe-eval'"] : []), // Vite HMR in development
-            "https://js.stripe.com", // Stripe checkout
+            "https://js.stripe.com", // Stripe checkout (legacy)
+            "https://cdn.paddle.com", // Paddle checkout
             "https://*.clerk.accounts.dev", // Clerk authentication
             "https://challenges.cloudflare.com", // Cloudflare turnstile
           ],
@@ -78,14 +79,18 @@ export function configureHelmet(app: Express): void {
             "'self'",
             ...(isDevelopment ? ["ws://localhost:5000", "ws://localhost:*"] : []), // Vite HMR WebSocket
             "https://api.openai.com",
-            "https://api.stripe.com",
+            "https://api.stripe.com", // Legacy
+            "https://api.paddle.com", // Paddle API
+            "https://sandbox-api.paddle.com", // Paddle sandbox API
             "https://*.sentry.io",
             "https://*.clerk.accounts.dev", // Clerk API
             "https://clerk.accounts.dev", // Clerk API
           ],
           frameSrc: [
             "'self'",
-            "https://js.stripe.com", // Stripe checkout iframe
+            "https://js.stripe.com", // Stripe checkout iframe (legacy)
+            "https://buy.paddle.com", // Paddle checkout
+            "https://sandbox-buy.paddle.com", // Paddle sandbox checkout
             "https://*.clerk.accounts.dev", // Clerk authentication iframe
             "https://challenges.cloudflare.com", // Cloudflare turnstile
           ],

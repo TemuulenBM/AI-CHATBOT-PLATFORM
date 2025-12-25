@@ -2,17 +2,17 @@ import { Router } from "express";
 import * as subscriptionsController from "../controllers/subscriptions";
 import { validate, schemas } from "../middleware/validation";
 import { authMiddleware } from "../middleware/auth";
-import { validateStripeWebhookOrigin } from "../middleware/stripeWebhookValidator";
+import { validatePaddleWebhookOrigin } from "../middleware/paddleWebhookValidator";
 
 const router = Router();
 
 // GET /api/subscriptions/plans - Get available plans (public)
 router.get("/plans", subscriptionsController.getPlans);
 
-// POST /api/subscriptions/webhook - Stripe webhook (must be before auth middleware)
+// POST /api/subscriptions/webhook - Paddle webhook (must be before auth middleware)
 router.post(
   "/webhook",
-  validateStripeWebhookOrigin,
+  validatePaddleWebhookOrigin,
   subscriptionsController.handleWebhook
 );
 

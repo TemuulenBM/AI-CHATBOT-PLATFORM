@@ -51,6 +51,8 @@ CREATE TABLE IF NOT EXISTS subscriptions (
   plan TEXT NOT NULL DEFAULT 'free' CHECK (plan IN ('free', 'starter', 'growth', 'business')),
   stripe_subscription_id TEXT,
   stripe_customer_id TEXT,
+  paddle_subscription_id TEXT,
+  paddle_customer_id TEXT,
   usage JSONB NOT NULL DEFAULT '{"messages_count": 0, "chatbots_count": 0}'::jsonb,
   current_period_start TIMESTAMPTZ DEFAULT NOW(),
   current_period_end TIMESTAMPTZ DEFAULT NOW() + INTERVAL '30 days',
@@ -64,6 +66,7 @@ CREATE INDEX IF NOT EXISTS idx_chatbots_status ON chatbots(status);
 CREATE INDEX IF NOT EXISTS idx_embeddings_chatbot_id ON embeddings(chatbot_id);
 CREATE INDEX IF NOT EXISTS idx_conversations_chatbot_session ON conversations(chatbot_id, session_id);
 CREATE INDEX IF NOT EXISTS idx_subscriptions_stripe_customer ON subscriptions(stripe_customer_id);
+CREATE INDEX IF NOT EXISTS idx_subscriptions_paddle_customer ON subscriptions(paddle_customer_id);
 
 -- Feedback table for CSAT (Customer Satisfaction)
 CREATE TABLE IF NOT EXISTS feedback (
