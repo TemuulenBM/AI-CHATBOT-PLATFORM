@@ -33,6 +33,8 @@ services:
           type: web
           name: convoai-backend
           property: host
+      - key: ALLOWED_ORIGINS
+        value: "https://ai-chatbot-platform-iiuf.onrender.com,https://convo-ai-eight.vercel.app"
       - key: PADDLE_API_KEY
         sync: false
       - key: PADDLE_WEBHOOK_SECRET
