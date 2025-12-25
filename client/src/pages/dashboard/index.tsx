@@ -28,7 +28,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 
 export default function Dashboard() {
-  const { isSignedIn, isLoaded } = useAuth();
+  const { isSignedIn, isLoaded, getToken } = useAuth();
   const { user } = useUser();
   const {
     stats,
@@ -39,6 +39,7 @@ export default function Dashboard() {
     fetchMessageVolume,
     fetchChatbotComparison,
     chatbotComparison,
+    setGetToken,
   } = useChatbotStore();
   const {
     shouldShowOnboarding,
@@ -52,6 +53,13 @@ export default function Dashboard() {
   const [sentimentData, setSentimentData] = useState<any>(null);
   const [satisfactionData, setSatisfactionData] = useState<any>(null);
   const [showOnboarding, setShowOnboarding] = useState(false);
+
+  // Initialize Clerk token in store
+  useEffect(() => {
+    if (getToken) {
+      setGetToken(getToken);
+    }
+  }, [getToken, setGetToken]);
 
   // Check if should show onboarding on first visit
   useEffect(() => {

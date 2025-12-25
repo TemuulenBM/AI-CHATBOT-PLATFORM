@@ -68,9 +68,16 @@ const PRIORITY_LABELS: Record<number, { label: string; color: string }> = {
 export default function KnowledgeBase() {
   const { id } = useParams<{ id: string }>();
   const [, setLocation] = useLocation();
-  const { isSignedIn, isLoaded } = useAuth();
+  const { isSignedIn, isLoaded, getToken } = useAuth();
   const { toast } = useToast();
-  const { currentChatbot, fetchChatbot } = useChatbotStore();
+  const { currentChatbot, fetchChatbot, setGetToken } = useChatbotStore();
+
+  // Initialize Clerk token in store
+  useEffect(() => {
+    if (getToken) {
+      setGetToken(getToken);
+    }
+  }, [getToken, setGetToken]);
 
   // State
   const [entries, setEntries] = useState<KnowledgeEntry[]>([]);

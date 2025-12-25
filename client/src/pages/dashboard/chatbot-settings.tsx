@@ -71,7 +71,7 @@ function getPersonalityDescription(value: number): string {
 export default function ChatbotSettings() {
   const { id } = useParams<{ id: string }>();
   const [, setLocation] = useLocation();
-  const { isSignedIn, isLoaded } = useAuth();
+  const { isSignedIn, isLoaded, getToken } = useAuth();
   const { toast } = useToast();
 
   const {
@@ -87,7 +87,15 @@ export default function ChatbotSettings() {
     triggerRescrape,
     updateScrapeSchedule,
     fetchScrapeHistory,
+    setGetToken,
   } = useChatbotStore();
+
+  // Initialize Clerk token in store
+  useEffect(() => {
+    if (getToken) {
+      setGetToken(getToken);
+    }
+  }, [getToken, setGetToken]);
 
   // Local form state
   const [name, setName] = useState("");

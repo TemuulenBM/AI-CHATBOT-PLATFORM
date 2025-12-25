@@ -26,8 +26,12 @@ services:
         sync: false
       - key: OPENAI_API_KEY
         sync: false
-      - key: JWT_SECRET
-        generateValue: true # Auto-generate secure value
+      - key: CLERK_SECRET_KEY
+        sync: false # Set manually in dashboard
+      - key: CLERK_PUBLISHABLE_KEY
+        sync: false
+      - key: CLERK_WEBHOOK_SECRET
+        sync: false
       - key: APP_URL
         fromService:
           type: web

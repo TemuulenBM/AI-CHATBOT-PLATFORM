@@ -24,6 +24,11 @@ const ENV_VARS: EnvConfig[] = [
   // Anthropic (optional)
   { name: "ANTHROPIC_API_KEY", required: false, description: "Anthropic API key for Claude models" },
 
+  // Clerk Authentication (required)
+  { name: "CLERK_SECRET_KEY", required: true, description: "Clerk backend API secret key" },
+  { name: "CLERK_PUBLISHABLE_KEY", required: false, description: "Clerk publishable key (for reference)" },
+  { name: "CLERK_WEBHOOK_SECRET", required: false, description: "Clerk webhook signing secret" },
+
   // Paddle (optional for development)
   { name: "PADDLE_API_KEY", required: false, description: "Paddle API key for payments" },
   { name: "PADDLE_WEBHOOK_SECRET", required: false, description: "Paddle webhook signing secret" },
@@ -35,7 +40,6 @@ const ENV_VARS: EnvConfig[] = [
   // Application
   { name: "APP_URL", required: false, description: "Application URL for callbacks and widgets" },
   { name: "WIDGET_POWERED_BY_URL", required: false, description: "Widget 'Powered by' link URL" },
-  { name: "JWT_SECRET", required: true, description: "JWT signing secret" },
 ];
 
 export interface ValidationResult {
@@ -102,23 +106,10 @@ export function initializeEnvironment(): void {
     logger.info("Environment validation passed");
   }
 
-  // Additional validation for JWT secret
-  const jwtSecret = process.env.JWT_SECRET;
-  if (jwtSecret && jwtSecret.length < 32) {
-    if (process.env.NODE_ENV === "production") {
-      console.error("\n❌ JWT_SECRET is too short. For production, use at least 32 characters.\n");
-      process.exit(1);
-    }
-    logger.warn("JWT_SECRET is too short. For production, use at least 32 characters.");
-  }
-
-  if (jwtSecret === "your-super-secret-jwt-key-change-in-production" || 
-      jwtSecret === "development-secret-change-in-production") {
-    if (process.env.NODE_ENV === "production") {
-      console.error("\n❌ JWT_SECRET is using a default value. Set a secure secret for production.\n");
-      process.exit(1);
-    }
-    logger.warn("JWT_SECRET is using a default value. Change this for production!");
+  // Clerk validation
+  const clerkSecretKey = process.env.CLERK_SECRET_KEY;
+  if (clerkSecretKey && !clerkSecretKey.startsWith("sk_")) {
+    logger.warn("CLERK_SECRET_KEY should start with 'sk_'. Please verify your key is correct.");
   }
 
   // Paddle validation

@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction } from "express";
 import { supabaseAdmin, ConversationMessage } from "../utils/supabase";
-import { AuthenticatedRequest, checkUsageLimit, incrementUsage } from "../middleware/auth";
+import { AuthenticatedRequest, checkUsageLimit, incrementUsage } from "../middleware/clerkAuth";
 import { NotFoundError, ValidationError } from "../utils/errors";
 import { ChatMessageInput } from "../middleware/validation";
 import { aiService, requiresMaxCompletionTokens } from "../services/ai";

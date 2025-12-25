@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction } from "express";
 import { supabaseAdmin, ChatbotSettings } from "../utils/supabase";
-import { AuthenticatedRequest, checkUsageLimit, incrementUsage } from "../middleware/auth";
+import { AuthenticatedRequest, checkUsageLimit, incrementUsage } from "../middleware/clerkAuth";
 import { NotFoundError, AuthorizationError } from "../utils/errors";
 import { CreateChatbotInput, UpdateChatbotInput, ScrapeScheduleInput } from "../middleware/validation";
 import { deleteCache, deleteCachePattern, getCache, setCache } from "../utils/redis";

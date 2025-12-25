@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useLocation } from "wouter";
 import { Sidebar } from "@/components/dashboard/sidebar";
 import { GlassCard } from "@/components/ui/glass-card";
@@ -7,7 +7,6 @@ import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 import { useAuth, useUser } from "@clerk/clerk-react";
 import { useToast } from "@/hooks/use-toast";
-import { getAuthHeader } from "@/store/authStore";
 import {
   User,
   CreditCard,
@@ -80,7 +79,7 @@ const planColors: Record<PlanType, string> = {
 };
 
 export default function Settings() {
-  const { isSignedIn, isLoaded } = useAuth();
+  const { isSignedIn, isLoaded, getToken } = useAuth();
   const { user } = useUser();
   const [, setLocation] = useLocation();
   const { toast } = useToast();
@@ -90,6 +89,17 @@ export default function Settings() {
   const [isPortalLoading, setIsPortalLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Helper to get auth headers from Clerk token
+  const getAuthHeaders = useCallback(async (): Promise<Record<string, string>> => {
+    if (!getToken) return {};
+    try {
+      const token = await getToken();
+      return token ? { Authorization: `Bearer ${token}` } : {};
+    } catch {
+      return {};
+    }
+  }, [getToken]);
+
   // Auth check
   useEffect(() => {
     if (isLoaded && !isSignedIn) {
@@ -98,19 +108,13 @@ export default function Settings() {
   }, [isLoaded, isSignedIn, setLocation]);
 
   // Fetch subscription data
-  useEffect(() => {
-    if (isSignedIn) {
-      fetchSubscription();
-    }
-  }, [isSignedIn]);
-
-  const fetchSubscription = async () => {
+  const fetchSubscription = useCallback(async () => {
     setIsLoading(true);
     setError(null);
 
     try {
-      const authHeaders = getAuthHeader();
-      
+      const authHeaders = await getAuthHeaders();
+
       // If no auth token available, use default free plan
       if (!authHeaders.Authorization) {
         setSubscription({
@@ -154,7 +158,13 @@ export default function Settings() {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [getAuthHeaders]);
+
+  useEffect(() => {
+    if (isSignedIn) {
+      fetchSubscription();
+    }
+  }, [isSignedIn, fetchSubscription]);
 
   const openBillingPortal = async () => {
     if (!subscription?.paddle_customer_id && !subscription?.stripe_customer_id) {
@@ -169,11 +179,12 @@ export default function Settings() {
     setIsPortalLoading(true);
 
     try {
+      const authHeaders = await getAuthHeaders();
       const response = await fetch("/api/subscriptions/portal", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          ...getAuthHeader(),
+          ...authHeaders,
         },
         body: JSON.stringify({
           returnUrl: window.location.href,
@@ -202,11 +213,12 @@ export default function Settings() {
     if (plan === "free" || plan === subscription?.plan) return;
 
     try {
+      const authHeaders = await getAuthHeaders();
       const response = await fetch("/api/subscriptions/checkout", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          ...getAuthHeader(),
+          ...authHeaders,
         },
         body: JSON.stringify({
           plan,
