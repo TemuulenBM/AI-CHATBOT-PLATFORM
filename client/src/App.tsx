@@ -4,6 +4,7 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { SignIn, SignUp } from "@clerk/clerk-react";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { ErrorBoundary } from "@/components/error-boundary";
 import NotFound from "@/pages/not-found";
 import Landing from "@/pages/landing";
 import Dashboard from "@/pages/dashboard/index";
@@ -37,14 +38,46 @@ function Router() {
           />
         </div>
       </Route>
-      <Route path="/dashboard" component={Dashboard} />
-      <Route path="/dashboard/chatbots" component={ChatbotsList} />
-      <Route path="/dashboard/conversations" component={Conversations} />
-      <Route path="/dashboard/create" component={CreateChatbot} />
-      <Route path="/dashboard/chatbots/:id/settings" component={ChatbotSettings} />
-      <Route path="/dashboard/chatbots/:id/knowledge" component={KnowledgeBase} />
-      <Route path="/dashboard/chatbots/:id/analytics" component={Analytics} />
-      <Route path="/dashboard/settings" component={Settings} />
+      <Route path="/dashboard">
+        <ErrorBoundary>
+          <Dashboard />
+        </ErrorBoundary>
+      </Route>
+      <Route path="/dashboard/chatbots">
+        <ErrorBoundary>
+          <ChatbotsList />
+        </ErrorBoundary>
+      </Route>
+      <Route path="/dashboard/conversations">
+        <ErrorBoundary>
+          <Conversations />
+        </ErrorBoundary>
+      </Route>
+      <Route path="/dashboard/create">
+        <ErrorBoundary>
+          <CreateChatbot />
+        </ErrorBoundary>
+      </Route>
+      <Route path="/dashboard/chatbots/:id/settings">
+        <ErrorBoundary>
+          <ChatbotSettings />
+        </ErrorBoundary>
+      </Route>
+      <Route path="/dashboard/chatbots/:id/knowledge">
+        <ErrorBoundary>
+          <KnowledgeBase />
+        </ErrorBoundary>
+      </Route>
+      <Route path="/dashboard/chatbots/:id/analytics">
+        <ErrorBoundary>
+          <Analytics />
+        </ErrorBoundary>
+      </Route>
+      <Route path="/dashboard/settings">
+        <ErrorBoundary>
+          <Settings />
+        </ErrorBoundary>
+      </Route>
       <Route component={NotFound} />
     </Switch>
   );
@@ -55,7 +88,9 @@ function App() {
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
         <Toaster />
-        <Router />
+        <ErrorBoundary>
+          <Router />
+        </ErrorBoundary>
       </TooltipProvider>
     </QueryClientProvider>
   );

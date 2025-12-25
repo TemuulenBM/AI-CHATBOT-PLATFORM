@@ -4,7 +4,7 @@ import { GlassCard } from "@/components/ui/glass-card";
 import { useChatbotStore, Chatbot } from "@/store/chatbot-store";
 import { useAuth } from "@clerk/clerk-react";
 import { Button } from "@/components/ui/button";
-import { Plus, MoreHorizontal, Globe, Trash2, ExternalLink, Loader2, Copy, AlertCircle, Settings, BookOpen, BarChart3 } from "lucide-react";
+import { Plus, MoreHorizontal, Globe, Trash2, ExternalLink, Copy, AlertCircle, Settings, BookOpen, BarChart3, Sparkles, PlayCircle } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import {
   DropdownMenu,
@@ -13,6 +13,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useToast } from "@/hooks/use-toast";
+import { SkeletonCard } from "@/components/ui/skeleton";
 
 function getStatusColor(status: Chatbot['status']) {
   switch (status) {
@@ -122,12 +123,12 @@ export default function ChatbotsList() {
   return (
     <div className="min-h-screen bg-background">
       <Sidebar />
-      <main className="pl-72 px-8 pt-8 pb-8">
+      <main className="md:pl-64 px-4 md:px-8 pt-4 md:pt-8 pb-8">
         <div className="max-w-5xl mx-auto">
-          <header className="mb-8 flex justify-between items-center">
+          <header className="mb-8 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
             <div>
-              <h1 className="text-3xl font-bold mb-2">My Chatbots</h1>
-              <p className="text-muted-foreground">Manage your AI assistants</p>
+              <h1 className="text-2xl md:text-3xl font-bold mb-2">My Chatbots</h1>
+              <p className="text-muted-foreground text-sm md:text-base">Manage your AI assistants</p>
             </div>
             <Link href="/dashboard/create">
               <Button className="btn-gradient gap-2">
@@ -138,27 +139,39 @@ export default function ChatbotsList() {
 
           {error && (
             <div className="mb-6 p-4 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 flex items-center gap-2">
-              <AlertCircle className="h-5 w-5" />
-              {error}
+              <AlertCircle className="h-5 w-5 shrink-0" />
+              <span className="text-sm">{error}</span>
             </div>
           )}
 
           {isLoading ? (
-            <div className="flex items-center justify-center h-64">
-              <Loader2 className="h-8 w-8 animate-spin text-primary" />
+            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {Array.from({ length: 6 }).map((_, i) => (
+                <SkeletonCard key={i} />
+              ))}
             </div>
           ) : chatbots.length === 0 ? (
-            <GlassCard className="p-12 text-center">
-              <div className="h-16 w-16 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-4 text-primary">
-                <BotIcon />
+            <GlassCard className="p-8 md:p-12 text-center">
+              <div className="h-20 w-20 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-6 text-primary">
+                <BotIcon className="h-10 w-10" />
               </div>
-              <h3 className="text-xl font-bold mb-2">No chatbots yet</h3>
-              <p className="text-muted-foreground mb-6">Create your first AI chatbot to get started</p>
-              <Link href="/dashboard/create">
-                <Button className="btn-gradient gap-2">
-                  <Plus className="h-4 w-4" /> Create Chatbot
+              <h3 className="text-xl font-bold mb-3">No Chatbots Yet</h3>
+              <p className="text-muted-foreground mb-6 max-w-md mx-auto">
+                Create your first AI chatbot to start engaging with your visitors 24/7.
+                It takes less than 2 minutes!
+              </p>
+              <div className="flex flex-col sm:flex-row gap-3 justify-center">
+                <Link href="/dashboard/create">
+                  <Button className="btn-gradient gap-2">
+                    <Sparkles className="h-4 w-4" /> Create First Chatbot
+                  </Button>
+                </Link>
+                <Button variant="outline" asChild>
+                  <a href="https://www.youtube.com/watch?v=demo" target="_blank" rel="noopener noreferrer" className="gap-2">
+                    <PlayCircle className="h-4 w-4" /> Watch Tutorial
+                  </a>
                 </Button>
-              </Link>
+              </div>
             </GlassCard>
           ) : (
             <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -251,9 +264,9 @@ export default function ChatbotsList() {
   );
 }
 
-function BotIcon() {
+function BotIcon({ className }: { className?: string }) {
   return (
-    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <svg className={className} width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <path d="M12 8V4H8" />
       <rect width="16" height="12" x="4" y="8" rx="2" />
       <path d="M2 14h2" />
