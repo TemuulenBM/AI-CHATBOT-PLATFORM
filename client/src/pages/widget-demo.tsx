@@ -66,14 +66,46 @@ function getCodeExamples(chatbotId: string) {
 <script async
   src="${PRODUCTION_URL}/widget.js"
   data-chatbot-id="${chatbotId}"
-></script>`,
-    advanced: `<!-- Advanced configuration -->
+></script>
+
+<!-- Optional: Add CSP nonce for enhanced security -->
+<!-- Generate a unique nonce server-side and add it to your CSP header -->
+<!--
+<script async
+  nonce="YOUR_CSP_NONCE"
+  src="${PRODUCTION_URL}/widget.js"
+  data-chatbot-id="${chatbotId}"
+  data-csp-nonce="YOUR_CSP_NONCE"
+></script>
+-->`,
+    advanced: `<!-- Advanced configuration with CSP nonce (recommended for production) -->
 <script async
   src="${PRODUCTION_URL}/widget.js"
   data-chatbot-id="${chatbotId}"
   data-position="bottom-right"
   data-locale="en"
 ></script>
+
+<!-- For maximum security, add CSP nonce: -->
+<!--
+  1. Generate a cryptographically secure nonce on your server:
+     const nonce = crypto.randomBytes(16).toString('base64');
+
+  2. Add to your Content-Security-Policy header:
+     script-src 'self' 'nonce-YOUR_NONCE' ${PRODUCTION_URL};
+
+  3. Add nonce attributes to the script:
+-->
+<!--
+<script async
+  nonce="YOUR_CSP_NONCE"
+  src="${PRODUCTION_URL}/widget.js"
+  data-chatbot-id="${chatbotId}"
+  data-csp-nonce="YOUR_CSP_NONCE"
+  data-position="bottom-right"
+  data-locale="en"
+></script>
+-->
 
 <!-- JavaScript API -->
 <script>
@@ -104,15 +136,56 @@ function App() {
     script.src = '${PRODUCTION_URL}/widget.js';
     script.async = true;
     script.setAttribute('data-chatbot-id', '${chatbotId}');
+
+    // Optional: Add CSP nonce for enhanced security
+    // Generate nonce server-side and pass it to your component
+    // const nonce = yourNonceFromServer;
+    // script.nonce = nonce;
+    // script.setAttribute('data-csp-nonce', nonce);
+
     document.body.appendChild(script);
 
     return () => {
+      // Cleanup on unmount
+      if (window.ConvoAI) {
+        window.ConvoAI('destroy');
+      }
       document.body.removeChild(script);
     };
   }, []);
 
   return <div>Your App</div>;
-}`,
+}
+
+// Next.js example with CSP nonce:
+/*
+import crypto from 'crypto';
+
+export default function Layout({ children }) {
+  const nonce = crypto.randomBytes(16).toString('base64');
+
+  return (
+    <html>
+      <head>
+        <meta
+          httpEquiv="Content-Security-Policy"
+          content={\`script-src 'self' 'nonce-\${nonce}' ${PRODUCTION_URL};\`}
+        />
+      </head>
+      <body>
+        {children}
+        <script
+          async
+          nonce={nonce}
+          src="${PRODUCTION_URL}/widget.js"
+          data-chatbot-id="${chatbotId}"
+          data-csp-nonce={nonce}
+        />
+      </body>
+    </html>
+  );
+}
+*/`,
   };
 }
 
