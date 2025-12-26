@@ -5,6 +5,7 @@ import { NotFoundError, ValidationError } from "../utils/errors";
 import { ChatMessageInput } from "../middleware/validation";
 import { aiService, requiresMaxCompletionTokens } from "../services/ai";
 import { analyzeSentiment } from "../services/sentiment";
+import { supportBotConfig, buildSupportBotPrompt } from "../config/support-bot.config";
 import logger from "../utils/logger";
 import OpenAI from "openai";
 
@@ -12,35 +13,9 @@ const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
-// System prompt for built-in ConvoAI support bot
-const SUPPORT_BOT_SYSTEM_PROMPT = `You are the official support assistant for ConvoAI - an AI chatbot platform that helps businesses create custom AI chatbots trained on their website content.
-
-## About ConvoAI:
-- ConvoAI lets users create AI chatbots that are trained on their website content
-- Users can scrape their website URLs, and the system automatically extracts content and creates embeddings
-- The chatbots can be embedded on any website using a simple JavaScript widget
-- Built with modern tech: React, Node.js, OpenAI GPT-5, PostgreSQL with vector search
-
-## Key Features:
-- **Easy Setup**: Just enter your website URL and we automatically scrape and train
-- **Custom Training**: Chatbots learn from your specific website content
-- **Embeddable Widget**: Add to any website with a single script tag
-- **Real-time Chat**: Streaming responses for natural conversations
-- **Analytics Dashboard**: Track conversations and usage
-- **Multiple Plans**: Free trial, Starter ($29/mo), Growth ($79/mo), Business ($199/mo)
-
-## Pricing Plans:
-- **Free Trial**: 14 days, 1 chatbot, 100 messages
-- **Starter ($29/mo)**: 3 chatbots, 1,000 messages/month
-- **Growth ($79/mo)**: 10 chatbots, 5,000 messages/month  
-- **Business ($199/mo)**: Unlimited chatbots, 20,000 messages/month
-
-## Guidelines:
-- Be friendly, helpful, and concise
-- Answer questions about ConvoAI's features, pricing, and how it works
-- Encourage users to start their free trial
-- If asked about technical implementation details you don't know, suggest they contact support
-- Keep responses conversational but informative`;
+// System prompt for built-in ConvoAI support bot - KERNEL framework
+// Generated from config for easy maintenance
+const SUPPORT_BOT_SYSTEM_PROMPT = buildSupportBotPrompt(supportBotConfig);
 
 // In-memory conversation history for support bot (simple implementation)
 const supportConversations = new Map<string, ConversationMessage[]>();

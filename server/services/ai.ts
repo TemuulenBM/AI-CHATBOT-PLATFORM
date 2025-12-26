@@ -75,8 +75,8 @@ export class AIService {
         });
 
         return {
-          relevantContent: `# Manual Knowledge Base\n\nQuestion: ${topMatch.question}\nAnswer: ${topMatch.answer}`,
-          sources: ["Manual Knowledge Base"],
+          relevantContent: topMatch.answer,
+          sources: [`Knowledge Base: ${topMatch.question}`],
           isManualKnowledge: true,
         };
       }
@@ -103,7 +103,7 @@ export class AIService {
   }
 
   /**
-   * Build system prompt for chatbot
+   * Build system prompt for chatbot using KERNEL framework
    * Handles both training mode (no context) and trained mode (with context)
    */
   buildSystemPrompt(
@@ -118,28 +118,40 @@ export class AIService {
           ? "friendly and casual"
           : "balanced and helpful";
 
-    let prompt = settings.systemPrompt || `You are a helpful AI assistant for ${websiteName}.`;
-
-    prompt += `\n\nPersonality: Be ${personalityDesc}.`;
+    // KERNEL: Keep it simple - single clear role
+    let prompt = settings.systemPrompt ||
+      `You are a ${personalityDesc} AI assistant for ${websiteName}.`;
 
     if (relevantContent) {
-      // Trained mode - has website context
-      prompt += `\n\n## Relevant Context from the website:\n${relevantContent}`;
-      prompt += `\n\n## Guidelines:
-- Answer questions based on the context provided above when available
-- Be helpful, accurate, and concise
-- If you don't have enough information to answer accurately, say "I don't have specific information about that, but I'd be happy to help with other questions about ${websiteName}."
-- Don't make up information that isn't in the context
-- Keep responses conversational but informative`;
+      // Trained mode - KERNEL applied
+      prompt += `\n\n## INPUT
+${relevantContent}
+
+## TASK
+Answer user questions using the knowledge base above.
+
+## CONSTRAINTS
+- Use only information from the knowledge base
+- If information is not in the knowledge base, respond: "I don't have that information. I can help with questions about ${websiteName}."
+- Keep responses under 200 words
+- Cite sources when using specific facts
+- Maintain conversation context
+
+## OUTPUT FORMAT
+Direct, conversational answers with source citations when relevant.`;
     } else {
-      // Training mode - no context yet (chatbot is being trained)
-      prompt += `\n\n## Training Mode - Important Instructions:
-- I'm currently learning about ${websiteName}'s website content
-- Training is happening in the background and will be complete shortly
-- For now, provide helpful, general responses and let users know you're still being trained
-- Be polite and offer to help with general questions
-- Suggest users check back in a few minutes for more specific, detailed answers about ${websiteName}
-- Keep a friendly, apologetic tone about the training process`;
+      // Training mode - KERNEL applied
+      prompt += `\n\n## TASK
+Assist users with general questions about ${websiteName}.
+
+## CONSTRAINTS
+- Provide general helpful responses only
+- Do not fabricate specific details about ${websiteName}
+- Keep responses under 150 words
+- Be honest if you lack specific ${websiteName} information
+
+## OUTPUT FORMAT
+Helpful, concise responses acknowledging knowledge limitations when appropriate.`;
     }
 
     return prompt;
