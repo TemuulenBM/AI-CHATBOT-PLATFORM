@@ -298,6 +298,7 @@ export function requirePlan(...allowedPlans: PlanType[]) {
 
 /**
  * Check if user has reached usage limit for an action
+ * DEPRECATED: Use checkAndIncrementUsage instead for atomic operation
  */
 export async function checkUsageLimit(
   userId: string,
@@ -342,6 +343,7 @@ export async function checkUsageLimit(
 
 /**
  * Increment usage counter for an action
+ * DEPRECATED: Use checkAndIncrementUsage instead for atomic operation
  */
 export async function incrementUsage(
   userId: string,
@@ -356,6 +358,87 @@ export async function incrementUsage(
 
   if (error) {
     logger.error("Failed to increment usage", { error, userId, action });
+  }
+
+  // Invalidate cache
+  await setCache(`subscription:${userId}`, null, 1);
+}
+
+/**
+ * Atomically check usage limit and increment counter
+ * This prevents race conditions where multiple concurrent requests could bypass limits
+ */
+export async function checkAndIncrementUsage(
+  userId: string,
+  action: "message" | "chatbot"
+): Promise<void> {
+  // Get current plan from cache or database
+  const cacheKey = `subscription:${userId}`;
+  let subscription = await getCache<{
+    plan: PlanType;
+    usage: { messages_count: number; chatbots_count: number };
+  }>(cacheKey);
+
+  if (!subscription) {
+    const { data } = await supabaseAdmin
+      .from("subscriptions")
+      .select("plan, usage")
+      .eq("user_id", userId)
+      .single();
+
+    subscription = data || {
+      plan: "free" as PlanType,
+      usage: { messages_count: 0, chatbots_count: 0 },
+    };
+  }
+
+  const plan = subscription?.plan || "free";
+  const field = action === "message" ? "messages_count" : "chatbots_count";
+
+  // Call atomic function that checks and increments in single transaction
+  const { data, error } = await supabaseAdmin.rpc("check_and_increment_usage", {
+    p_user_id: userId,
+    p_field: field,
+    p_plan: plan,
+  });
+
+  if (error) {
+    logger.error("Failed to check and increment usage", { error, userId, action });
+    throw new Error("Failed to process usage tracking");
+  }
+
+  const result = data as { allowed: boolean; current_usage: number; limit: number; plan: string };
+
+  if (!result.allowed) {
+    const limits = PLAN_LIMITS[plan];
+    const limitValue = action === "message" ? limits.messages : limits.chatbots;
+    throw new AuthorizationError(
+      `${action === "message" ? "Message" : "Chatbot"} limit reached (${limitValue}). Please upgrade your plan.`
+    );
+  }
+
+  // Invalidate cache after successful increment
+  await setCache(cacheKey, null, 1);
+
+  logger.debug("Usage incremented", { userId, action, currentUsage: result.current_usage, limit: result.limit });
+}
+
+/**
+ * Decrement usage counter (e.g., when deleting a chatbot)
+ */
+export async function decrementUsage(
+  userId: string,
+  action: "message" | "chatbot"
+): Promise<void> {
+  const field = action === "message" ? "messages_count" : "chatbots_count";
+
+  const { error } = await supabaseAdmin.rpc("decrement_usage", {
+    p_user_id: userId,
+    p_field: field,
+  });
+
+  if (error) {
+    logger.error("Failed to decrement usage", { error, userId, action });
   }
 
   // Invalidate cache

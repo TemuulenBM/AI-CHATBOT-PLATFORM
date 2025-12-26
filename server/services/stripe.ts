@@ -161,6 +161,31 @@ export class StripeService {
       throw new ValidationError("Invalid webhook signature");
     }
 
+    // CRITICAL FIX: Check for duplicate webhook events (idempotency)
+    // Stripe may retry webhooks, so we need to prevent processing the same event twice
+    const { data: existingEvent } = await supabaseAdmin
+      .from("webhook_events")
+      .select("id")
+      .eq("id", event.id)
+      .eq("processor", "stripe")
+      .single();
+
+    if (existingEvent) {
+      logger.info("Webhook event already processed (idempotent)", {
+        type: event.type,
+        eventId: event.id
+      });
+      return { received: true };
+    }
+
+    // Record the webhook event for idempotency
+    await supabaseAdmin.from("webhook_events").insert({
+      id: event.id,
+      event_type: event.type,
+      processor: "stripe",
+      payload: event.data.object,
+    });
+
     logger.info("Webhook received", { type: event.type });
 
     switch (event.type) {
