@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { useParams, useLocation } from "wouter";
 import { Sidebar } from "@/components/dashboard/sidebar";
 import { GlassCard } from "@/components/ui/glass-card";
@@ -24,7 +24,6 @@ import {
   Edit2,
   Trash2,
   Loader2,
-  AlertCircle,
   ChevronLeft,
   ChevronRight,
 } from "lucide-react";
@@ -84,6 +83,7 @@ export default function KnowledgeBase() {
   const [total, setTotal] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState("");
   const [categoryFilter, setCategoryFilter] = useState<string>("all");
   const [page, setPage] = useState(1);
   const [limit] = useState(10);
@@ -96,8 +96,14 @@ export default function KnowledgeBase() {
   // Form state
   const [formQuestion, setFormQuestion] = useState("");
   const [formAnswer, setFormAnswer] = useState("");
-  const [formCategory, setFormCategory] = useState("");
+  const [formCategory, setFormCategory] = useState<string | null>(null);
   const [formPriority, setFormPriority] = useState(0);
+
+  // Delete state
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  // AbortController ref for canceling pending requests
+  const abortControllerRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
     if (isLoaded && !isSignedIn) {
@@ -105,14 +111,35 @@ export default function KnowledgeBase() {
     }
   }, [isSignedIn, isLoaded, setLocation]);
 
+  // Fetch chatbot data when ID changes
   useEffect(() => {
     if (id) {
       fetchChatbot(id);
-      fetchEntries();
     }
-  }, [id, page, categoryFilter, searchQuery]);
+  }, [id, fetchChatbot]);
 
-  const fetchEntries = async () => {
+  // Debounce search query
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearchQuery(searchQuery);
+    }, 300);
+
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
+
+  // Memoized fetch function with AbortController support
+  const fetchEntries = useCallback(async () => {
+    if (!id) return;
+
+    // Cancel previous request if it exists
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+
+    // Create new AbortController for this request
+    const abortController = new AbortController();
+    abortControllerRef.current = abortController;
+
     setIsLoading(true);
     try {
       const params = new URLSearchParams({
@@ -124,49 +151,85 @@ export default function KnowledgeBase() {
         params.append("category", categoryFilter);
       }
 
-      if (searchQuery) {
-        params.append("search", searchQuery);
+      if (debouncedSearchQuery.trim()) {
+        params.append("search", debouncedSearchQuery.trim());
       }
 
       const token = await getToken();
+
+      if (!token) {
+        toast({
+          title: "Authentication Error",
+          description: "Please sign in again",
+          variant: "destructive",
+        });
+        setLocation("/login");
+        return;
+      }
+
       const response = await fetch(`/api/chatbots/${id}/knowledge?${params}`, {
-        headers: token ? { Authorization: `Bearer ${token}` } : {}
+        headers: { Authorization: `Bearer ${token}` },
+        signal: abortController.signal,
       });
-      if (!response.ok) throw new Error("Failed to fetch knowledge entries");
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || "Failed to fetch knowledge entries");
+      }
 
       const data = await response.json();
-      setEntries(data.entries);
-      setTotal(data.total);
-    } catch (error) {
+      setEntries(data.entries || []);
+      setTotal(data.total || 0);
+    } catch (error: any) {
+      // Don't show error for aborted requests
+      if (error.name === "AbortError") {
+        return;
+      }
+
+      console.error("Failed to fetch knowledge entries:", error);
       toast({
         title: "Error",
-        description: "Failed to load knowledge base entries",
+        description: error.message || "Failed to load knowledge base entries",
         variant: "destructive",
       });
+      setEntries([]);
+      setTotal(0);
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [id, page, limit, categoryFilter, debouncedSearchQuery, getToken, toast, setLocation]);
 
-  const handleAddEntry = () => {
+  // Fetch entries when dependencies change
+  useEffect(() => {
+    fetchEntries();
+
+    // Cleanup on unmount
+    return () => {
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+    };
+  }, [fetchEntries]);
+
+  const handleAddEntry = useCallback(() => {
     setEditingEntry(null);
     setFormQuestion("");
     setFormAnswer("");
-    setFormCategory("");
+    setFormCategory(null);
     setFormPriority(0);
     setIsDialogOpen(true);
-  };
+  }, []);
 
-  const handleEditEntry = (entry: KnowledgeEntry) => {
+  const handleEditEntry = useCallback((entry: KnowledgeEntry) => {
     setEditingEntry(entry);
     setFormQuestion(entry.question);
     setFormAnswer(entry.answer);
-    setFormCategory(entry.category || "");
+    setFormCategory(entry.category);
     setFormPriority(entry.priority);
     setIsDialogOpen(true);
-  };
+  }, []);
 
-  const handleSaveEntry = async () => {
+  const handleSaveEntry = useCallback(async () => {
     if (!formQuestion.trim() || !formAnswer.trim()) {
       toast({
         title: "Validation Error",
@@ -179,9 +242,9 @@ export default function KnowledgeBase() {
     setIsSaving(true);
     try {
       const payload = {
-        question: formQuestion,
-        answer: formAnswer,
-        category: formCategory || null,
+        question: formQuestion.trim(),
+        answer: formAnswer.trim(),
+        category: formCategory,
         priority: formPriority,
       };
 
@@ -190,16 +253,30 @@ export default function KnowledgeBase() {
         : `/api/chatbots/${id}/knowledge`;
 
       const token = await getToken();
+
+      if (!token) {
+        toast({
+          title: "Authentication Error",
+          description: "Please sign in again",
+          variant: "destructive",
+        });
+        setLocation("/login");
+        return;
+      }
+
       const response = await fetch(url, {
         method: editingEntry ? "PATCH" : "POST",
         headers: {
           "Content-Type": "application/json",
-          ...(token ? { Authorization: `Bearer ${token}` } : {})
+          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify(payload),
       });
 
-      if (!response.ok) throw new Error("Failed to save entry");
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || "Failed to save entry");
+      }
 
       toast({
         title: "Success",
@@ -208,43 +285,68 @@ export default function KnowledgeBase() {
 
       setIsDialogOpen(false);
       fetchEntries();
-    } catch (error) {
+    } catch (error: any) {
+      console.error("Failed to save entry:", error);
       toast({
         title: "Error",
-        description: `Failed to ${editingEntry ? "update" : "add"} entry`,
+        description: error.message || `Failed to ${editingEntry ? "update" : "add"} entry`,
         variant: "destructive",
       });
     } finally {
       setIsSaving(false);
     }
-  };
+  }, [formQuestion, formAnswer, formCategory, formPriority, editingEntry, id, getToken, toast, setLocation, fetchEntries]);
 
-  const handleDeleteEntry = async (entryId: string) => {
+  const handleDeleteEntry = useCallback(async (entryId: string) => {
     if (!confirm("Are you sure you want to delete this entry?")) return;
 
+    setDeletingId(entryId);
     try {
       const token = await getToken();
+
+      if (!token) {
+        toast({
+          title: "Authentication Error",
+          description: "Please sign in again",
+          variant: "destructive",
+        });
+        setLocation("/login");
+        return;
+      }
+
       const response = await fetch(`/api/chatbots/${id}/knowledge/${entryId}`, {
         method: "DELETE",
-        headers: token ? { Authorization: `Bearer ${token}` } : {}
+        headers: { Authorization: `Bearer ${token}` },
       });
 
-      if (!response.ok) throw new Error("Failed to delete entry");
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || "Failed to delete entry");
+      }
 
       toast({
         title: "Success",
         description: "Knowledge entry deleted successfully",
       });
 
-      fetchEntries();
-    } catch (error) {
+      // If we're deleting the last item on a page that's not the first page,
+      // go back to the previous page
+      if (entries.length === 1 && page > 1) {
+        setPage((p) => p - 1);
+      } else {
+        fetchEntries();
+      }
+    } catch (error: any) {
+      console.error("Failed to delete entry:", error);
       toast({
         title: "Error",
-        description: "Failed to delete entry",
+        description: error.message || "Failed to delete entry",
         variant: "destructive",
       });
+    } finally {
+      setDeletingId(null);
     }
-  };
+  }, [id, getToken, toast, setLocation, entries.length, page, fetchEntries]);
 
   const totalPages = Math.ceil(total / limit);
 
@@ -379,9 +481,14 @@ export default function KnowledgeBase() {
                           variant="ghost"
                           size="icon"
                           onClick={() => handleDeleteEntry(entry.id)}
+                          disabled={deletingId === entry.id}
                           className="hover:bg-red-500/10 text-red-400 hover:text-red-300"
                         >
-                          <Trash2 className="h-4 w-4" />
+                          {deletingId === entry.id ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <Trash2 className="h-4 w-4" />
+                          )}
                         </Button>
                       </div>
                     </div>
@@ -447,7 +554,13 @@ export default function KnowledgeBase() {
             </DialogDescription>
           </DialogHeader>
 
-          <div className="space-y-4 py-4">
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              handleSaveEntry();
+            }}
+            className="space-y-4 py-4"
+          >
             <div className="space-y-2">
               <Label htmlFor="question">
                 Question *
@@ -457,6 +570,8 @@ export default function KnowledgeBase() {
                 placeholder="What are your pricing plans?"
                 value={formQuestion}
                 onChange={(e) => setFormQuestion(e.target.value)}
+                maxLength={500}
+                autoFocus
               />
             </div>
 
@@ -470,6 +585,7 @@ export default function KnowledgeBase() {
                 value={formAnswer}
                 onChange={(e) => setFormAnswer(e.target.value)}
                 rows={5}
+                maxLength={2000}
               />
             </div>
 
@@ -478,11 +594,15 @@ export default function KnowledgeBase() {
                 <Label htmlFor="category">
                   Category
                 </Label>
-                <Select value={formCategory || undefined} onValueChange={(value) => setFormCategory(value || "")}>
+                <Select
+                  value={formCategory || "none"}
+                  onValueChange={(value) => setFormCategory(value === "none" ? null : value)}
+                >
                   <SelectTrigger>
                     <SelectValue placeholder="Select category (optional)" />
                   </SelectTrigger>
                   <SelectContent>
+                    <SelectItem value="none">No Category</SelectItem>
                     {CATEGORIES.map((cat) => (
                       <SelectItem key={cat} value={cat}>
                         {cat}
@@ -511,16 +631,19 @@ export default function KnowledgeBase() {
                 </Select>
               </div>
             </div>
-          </div>
+          </form>
 
           <DialogFooter>
             <Button
+              type="button"
               variant="outline"
               onClick={() => setIsDialogOpen(false)}
+              disabled={isSaving}
             >
               Cancel
             </Button>
             <Button
+              type="button"
               onClick={handleSaveEntry}
               disabled={isSaving}
               className="btn-gradient"
