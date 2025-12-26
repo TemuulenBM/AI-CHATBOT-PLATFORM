@@ -87,29 +87,74 @@ export class PaddleService {
     try {
       const { apiKey } = getPaddleAuth();
 
-      const response = await axios.post(
-        `${PADDLE_API_BASE}/customers`,
-        {
-          email,
-          custom_data: { userId },
-        },
-        {
-          headers: {
-            Authorization: `Bearer ${apiKey}`,
-            "Content-Type": "application/json",
+      let customerId: string;
+
+      try {
+        // Try to create new customer
+        const response = await axios.post(
+          `${PADDLE_API_BASE}/customers`,
+          {
+            email,
+            custom_data: { userId },
           },
+          {
+            headers: {
+              Authorization: `Bearer ${apiKey}`,
+              "Content-Type": "application/json",
+            },
+          }
+        );
+        customerId = response.data.data.id;
+      } catch (createError: any) {
+        // If customer already exists (409 Conflict or email already registered error),
+        // try to find them by email
+        if (createError.response?.status === 409 ||
+            createError.response?.data?.error?.code === "customer_email_domain_not_allowed" ||
+            createError.response?.data?.error?.detail?.includes("already")) {
+
+          logger.info("Customer may already exist, searching by email", { email });
+
+          const searchResponse = await axios.get(
+            `${PADDLE_API_BASE}/customers`,
+            {
+              params: { email },
+              headers: {
+                Authorization: `Bearer ${apiKey}`,
+                "Content-Type": "application/json",
+              },
+            }
+          );
+
+          const existingCustomers = searchResponse.data.data;
+          if (existingCustomers && existingCustomers.length > 0) {
+            customerId = existingCustomers[0].id;
+            logger.info("Found existing Paddle customer", { customerId, email });
+          } else {
+            throw createError; // Re-throw if we couldn't find the customer
+          }
+        } else {
+          throw createError;
         }
-      );
+      }
 
-      const customerId = response.data.data.id;
-
-      // Update subscription with customer ID
-      await supabaseAdmin
+      // Try to update existing subscription first
+      const { data: updateResult } = await supabaseAdmin
         .from("subscriptions")
         .update({ paddle_customer_id: customerId })
-        .eq("user_id", userId);
+        .eq("user_id", userId)
+        .select("user_id");
 
-      logger.info("Paddle customer created", { userId, customerId });
+      // If no subscription exists, create one with the customer ID
+      if (!updateResult || updateResult.length === 0) {
+        await supabaseAdmin.from("subscriptions").insert({
+          user_id: userId,
+          paddle_customer_id: customerId,
+          plan: "free",
+          usage: { messages_count: 0, chatbots_count: 0 },
+        });
+      }
+
+      logger.info("Paddle customer linked", { userId, customerId });
       return customerId;
     } catch (error: any) {
       logger.error("Failed to create Paddle customer", {
@@ -122,6 +167,7 @@ export class PaddleService {
 
   /**
    * Create checkout session for subscription
+   * Returns data for client-side Paddle.js checkout (no server-side transaction needed)
    */
   async createCheckoutSession(
     userId: string,
@@ -137,64 +183,27 @@ export class PaddleService {
       throw new ValidationError("Invalid plan or price not configured");
     }
 
-    try {
-      const { apiKey } = getPaddleAuth();
+    // For Paddle Billing, we use client-side checkout with Paddle.js
+    // This approach doesn't require creating a transaction on the server
+    // and avoids the "default checkout URL not set" error
 
-      // Create transaction with subscription
-      // Note: Paddle requires either a default checkout URL in dashboard OR we provide checkout details
-      const response = await axios.post(
-        `${PADDLE_API_BASE}/transactions`,
-        {
-          items: [
-            {
-              price_id: priceId,
-              quantity: 1,
-            },
-          ],
-          customer_id: customerId,
-          custom_data: {
-            userId,
-            plan,
-          },
-          checkout: {
-            url: successUrl,
-          },
-        },
-        {
-          headers: {
-            Authorization: `Bearer ${apiKey}`,
-            "Content-Type": "application/json",
-          },
-        }
-      );
-
-      const transaction = response.data.data;
-
-      // Paddle returns checkout URL in the response
-      // If not provided, construct it from the transaction ID
-      let checkoutUrl: string;
-      if (transaction.checkout?.url) {
-        checkoutUrl = transaction.checkout.url;
-      } else if (transaction.id) {
-        // Construct checkout URL using Paddle's checkout format
-        const baseUrl = PADDLE_ENVIRONMENT === "live"
-          ? "https://buy.paddle.com"
-          : "https://sandbox-buy.paddle.com";
-        checkoutUrl = `${baseUrl}/checkout/${transaction.id}`;
-      } else {
-        throw new Error("No checkout URL or transaction ID returned from Paddle");
-      }
-
-      logger.info("Checkout session created", { userId, plan, transactionId: transaction.id });
-      return checkoutUrl;
-    } catch (error: any) {
-      logger.error("Failed to create checkout session", {
-        error: error.response?.data || error.message,
+    // Return checkout data as a special format for the frontend
+    // Frontend will use Paddle.Checkout.open() with items array
+    const checkoutData = {
+      type: "paddle_checkout",
+      priceId,
+      customerId,
+      customData: {
         userId,
-        plan
-      });
-      throw new ExternalServiceError("Paddle", "Failed to create checkout session");
-    }
+        plan,
+      },
+      successUrl,
+    };
+
+    logger.info("Checkout data prepared", { userId, plan, priceId, customerId });
+
+    // Encode as base64 JSON for safe transport
+    return `paddle_checkout:${Buffer.from(JSON.stringify(checkoutData)).toString("base64")}`;
   }
 
   /**

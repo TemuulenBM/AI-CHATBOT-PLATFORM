@@ -84,6 +84,7 @@ export function configureHelmet(app: Express): void {
             // Third-party services
             "https://js.stripe.com", // Stripe checkout (legacy)
             "https://cdn.paddle.com", // Paddle checkout
+            "https://sandbox-cdn.paddle.com", // Paddle sandbox checkout
             "https://*.clerk.accounts.dev", // Clerk authentication
             "https://challenges.cloudflare.com", // Cloudflare turnstile
           ],
@@ -97,6 +98,8 @@ export function configureHelmet(app: Express): void {
               : [`'nonce-${req.cspNonce}'`]
             ),
             "https://fonts.googleapis.com", // Google Fonts
+            "https://cdn.paddle.com", // Paddle checkout styles
+            "https://sandbox-cdn.paddle.com", // Paddle sandbox checkout styles
           ],
           imgSrc: [
             "'self'",
@@ -111,6 +114,9 @@ export function configureHelmet(app: Express): void {
             "https://api.stripe.com", // Legacy
             "https://api.paddle.com", // Paddle API
             "https://sandbox-api.paddle.com", // Paddle sandbox API
+            "https://cdn.paddle.com", // Paddle CDN
+            "https://sandbox-cdn.paddle.com", // Paddle sandbox CDN
+            "https://*.paddle.com", // All Paddle services (checkout, etc.)
             "https://*.sentry.io",
             "https://*.clerk.accounts.dev", // Clerk API
             "https://clerk.accounts.dev", // Clerk API
