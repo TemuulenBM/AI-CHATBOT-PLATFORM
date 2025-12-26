@@ -183,6 +183,16 @@ export function configureHelmet(app: Express): void {
       permittedCrossDomainPolicies: {
         permittedPolicies: "none",
       },
+
+      // Cross Origin Opener Policy
+      crossOriginOpenerPolicy: {
+        policy: "same-origin",
+      },
+
+      // Cross Origin Resource Policy - allow cross-origin for widget embedding
+      crossOriginResourcePolicy: {
+        policy: "cross-origin",
+      },
     })(req, res, next);
   });
 
@@ -280,11 +290,13 @@ export function applySecurity(app: Express): void {
 
   configureTrustProxy(app);
 
+  // Apply CORS FIRST, before any other middleware
+  configureCORS(app);
+
   // Apply CSP nonce middleware BEFORE helmet
   app.use(cspNonceMiddleware);
 
   configureHelmet(app);
-  configureCORS(app);
   configureHPP(app);
   configureSanitization(app);
 
