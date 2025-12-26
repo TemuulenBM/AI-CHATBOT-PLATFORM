@@ -212,7 +212,7 @@ export class PaddleService {
   async createPortalSession(userId: string, returnUrl: string): Promise<string> {
     const { data: subscription } = await supabaseAdmin
       .from("subscriptions")
-      .select("paddle_customer_id")
+      .select("paddle_customer_id, paddle_subscription_id")
       .eq("user_id", userId)
       .single();
 
@@ -223,10 +223,25 @@ export class PaddleService {
     try {
       const { apiKey } = getPaddleAuth();
 
-      // Paddle uses a different approach for customer portal
-      // We'll use the customer update endpoint or redirect to Paddle's customer portal
-      // Note: Paddle's customer portal URL structure
-      const portalUrl = `https://${PADDLE_ENVIRONMENT === "live" ? "vendors" : "sandbox-vendors"}.paddle.com/customers/${subscription.paddle_customer_id}`;
+      // Create a customer authentication token for secure portal access
+      // This generates a one-time use token that grants access to the customer portal
+      // Note: Paddle's auth token endpoint doesn't accept a request body
+      const response = await axios.post(
+        `${PADDLE_API_BASE}/customers/${subscription.paddle_customer_id}/auth-token`,
+        {},
+        {
+          headers: {
+            Authorization: `Bearer ${apiKey}`,
+            "Content-Type": "application/json",
+          },
+        }
+      );
+
+      const token = response.data.data.customer_auth_token;
+
+      // Construct the authenticated portal URL
+      // The token parameter authenticates the user and grants access to the portal
+      const portalUrl = `https://${PADDLE_ENVIRONMENT === "live" ? "customer-portal" : "sandbox-customer-portal"}.paddle.com/overview?token=${token}`;
 
       logger.info("Portal session created", { userId, customerId: subscription.paddle_customer_id });
       return portalUrl;
