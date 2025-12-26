@@ -122,6 +122,11 @@ export async function getSubscription(
       throw new AuthorizationError();
     }
 
+    // Sync chatbot count with actual database count to ensure accuracy
+    await supabaseAdmin.rpc("sync_chatbot_count", {
+      p_user_id: req.user.userId,
+    });
+
     const { data: subscription, error } = await supabaseAdmin
       .from("subscriptions")
       .select("*")
