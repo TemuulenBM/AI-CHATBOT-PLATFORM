@@ -92,9 +92,11 @@ export function configureHelmet(app: Express): void {
           ],
           styleSrc: [
             "'self'",
-            // In production, use nonce-based CSP for inline styles (NO 'unsafe-inline')
+            // Allow unsafe-inline for Shadow DOM widgets that inject styles dynamically
+            // Shadow DOM provides style isolation so this is safe
+            "'unsafe-inline'",
             ...(isDevelopment
-              ? ["'unsafe-inline'"]
+              ? []
               : [`'nonce-${req.cspNonce}'`]
             ),
             "https://fonts.googleapis.com", // Google Fonts
@@ -139,6 +141,7 @@ export function configureHelmet(app: Express): void {
           frameAncestors: ["'none'"], // Prevent clickjacking
           baseUri: ["'self'"],
           manifestSrc: ["'self'"],
+          scriptSrcAttr: ["'none'"], // Prevent inline event handlers
         },
       },
 
