@@ -259,7 +259,9 @@ export default function Settings() {
       });
 
       if (!response.ok) {
-        throw new Error("Failed to open billing portal");
+        const errorData = await response.json().catch(() => ({}));
+        const errorMessage = errorData.message || errorData.error || "Failed to open billing portal";
+        throw new Error(errorMessage);
       }
 
       const { url } = await response.json();
