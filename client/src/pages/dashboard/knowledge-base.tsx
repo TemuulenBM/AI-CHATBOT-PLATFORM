@@ -128,7 +128,10 @@ export default function KnowledgeBase() {
         params.append("search", searchQuery);
       }
 
-      const response = await fetch(`/api/chatbots/${id}/knowledge?${params}`);
+      const token = await getToken();
+      const response = await fetch(`/api/chatbots/${id}/knowledge?${params}`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {}
+      });
       if (!response.ok) throw new Error("Failed to fetch knowledge entries");
 
       const data = await response.json();
@@ -186,9 +189,13 @@ export default function KnowledgeBase() {
         ? `/api/chatbots/${id}/knowledge/${editingEntry.id}`
         : `/api/chatbots/${id}/knowledge`;
 
+      const token = await getToken();
       const response = await fetch(url, {
         method: editingEntry ? "PATCH" : "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {})
+        },
         body: JSON.stringify(payload),
       });
 
@@ -216,8 +223,10 @@ export default function KnowledgeBase() {
     if (!confirm("Are you sure you want to delete this entry?")) return;
 
     try {
+      const token = await getToken();
       const response = await fetch(`/api/chatbots/${id}/knowledge/${entryId}`, {
         method: "DELETE",
+        headers: token ? { Authorization: `Bearer ${token}` } : {}
       });
 
       if (!response.ok) throw new Error("Failed to delete entry");
