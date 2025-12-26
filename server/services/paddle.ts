@@ -212,45 +212,63 @@ export class PaddleService {
   async createPortalSession(userId: string, returnUrl: string): Promise<string> {
     const { data: subscription } = await supabaseAdmin
       .from("subscriptions")
-      .select("paddle_customer_id, paddle_subscription_id")
+      .select("paddle_customer_id, paddle_subscription_id, plan")
       .eq("user_id", userId)
       .single();
 
     if (!subscription?.paddle_customer_id) {
-      throw new ValidationError("No subscription found");
+      logger.warn("No paddle_customer_id found for user", { userId, plan: subscription?.plan });
+      throw new ValidationError("No active subscription found. Please upgrade to a paid plan first.");
     }
 
     try {
       const { apiKey } = getPaddleAuth();
 
-      // Create a customer authentication token for secure portal access
-      // This generates a one-time use token that grants access to the customer portal
-      // Note: Paddle's auth token endpoint doesn't accept a request body
-      const response = await axios.post(
-        `${PADDLE_API_BASE}/customers/${subscription.paddle_customer_id}/auth-token`,
-        {},
-        {
-          headers: {
-            Authorization: `Bearer ${apiKey}`,
-            "Content-Type": "application/json",
-          },
-        }
-      );
+      logger.info("Attempting to create portal session", {
+        userId,
+        customerId: subscription.paddle_customer_id,
+        hasSubscriptionId: !!subscription.paddle_subscription_id
+      });
 
-      const token = response.data.data.customer_auth_token;
+      // Create a customer portal session for secure portal access
+      // This generates a temporary authenticated link to the customer portal
+      // See: https://developer.paddle.com/api-reference/customer-portals/create-customer-portal-session
+      const response = await axios({
+        method: 'POST',
+        url: `${PADDLE_API_BASE}/customers/${subscription.paddle_customer_id}/portal-sessions`,
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          "Content-Type": "application/json",
+        },
+      });
 
-      // Construct the authenticated portal URL
-      // The token parameter authenticates the user and grants access to the portal
-      const portalUrl = `https://${PADDLE_ENVIRONMENT === "live" ? "customer-portal" : "sandbox-customer-portal"}.paddle.com/overview?token=${token}`;
+      // Extract the portal URL from the response
+      // The response contains urls.general.overview which is the authenticated customer portal link
+      const portalUrl = response.data.data.urls.general.overview;
 
-      logger.info("Portal session created", { userId, customerId: subscription.paddle_customer_id });
+      logger.info("Portal session created successfully", { userId, customerId: subscription.paddle_customer_id });
       return portalUrl;
     } catch (error: any) {
-      logger.error("Failed to create portal session", {
-        error: error.response?.data || error.message,
-        userId
-      });
-      throw new ExternalServiceError("Paddle", "Failed to create portal session");
+      // Enhanced error logging to help debug Paddle API issues
+      const errorDetails = {
+        userId,
+        customerId: subscription.paddle_customer_id,
+        statusCode: error.response?.status,
+        errorCode: error.response?.data?.error?.code,
+        errorMessage: error.response?.data?.error?.detail || error.response?.data?.error?.message,
+        fullError: error.response?.data || error.message,
+      };
+
+      logger.error("Failed to create portal session", errorDetails);
+
+      // Provide more specific error messages based on the error type
+      if (error.response?.status === 404) {
+        throw new ValidationError("Customer not found in billing system. Please contact support.");
+      } else if (error.response?.status === 401 || error.response?.status === 403) {
+        throw new ExternalServiceError("Paddle", "Authentication failed. Please contact support.");
+      } else {
+        throw new ExternalServiceError("Paddle", "Failed to create portal session. Please try again later.");
+      }
     }
   }
 
