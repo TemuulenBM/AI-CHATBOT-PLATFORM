@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction } from "express";
 import { supabaseAdmin, ConversationMessage } from "../utils/supabase";
-import { AuthenticatedRequest, checkUsageLimit, incrementUsage, checkAndIncrementUsage } from "../middleware/clerkAuth";
+import { AuthenticatedRequest, checkAndIncrementUsage } from "../middleware/clerkAuth";
 import { NotFoundError, ValidationError } from "../utils/errors";
 import { ChatMessageInput } from "../middleware/validation";
 import { aiService, requiresMaxCompletionTokens } from "../services/ai";
@@ -163,8 +163,8 @@ export async function streamMessage(
       throw new NotFoundError("Chatbot");
     }
 
-    // Check usage limit for chatbot owner
-    await checkUsageLimit(chatbot.user_id, "message");
+    // ATOMIC: Check usage limit and increment in single transaction (prevents race conditions)
+    await checkAndIncrementUsage(chatbot.user_id, "message");
 
     // Get conversation history
     const { data: conversation } = await supabaseAdmin
@@ -241,9 +241,6 @@ export async function streamMessage(
         messages: newMessages,
       });
     }
-
-    // Increment usage
-    await incrementUsage(chatbot.user_id, "message");
 
     logger.info("Streaming chat completed", {
       chatbotId,

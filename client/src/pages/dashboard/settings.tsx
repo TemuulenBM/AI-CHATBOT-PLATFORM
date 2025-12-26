@@ -175,8 +175,10 @@ export default function Settings() {
   }, []);
 
   // Fetch subscription data
-  const fetchSubscription = useCallback(async () => {
-    setIsLoading(true);
+  const fetchSubscription = useCallback(async (showLoading = true) => {
+    if (showLoading) {
+      setIsLoading(true);
+    }
     setError(null);
 
     try {
@@ -189,7 +191,9 @@ export default function Settings() {
           usage: { messages_count: 0, chatbots_count: 0 },
           limits: PLAN_LIMITS.free,
         });
-        setIsLoading(false);
+        if (showLoading) {
+          setIsLoading(false);
+        }
         return;
       }
 
@@ -205,7 +209,9 @@ export default function Settings() {
             usage: { messages_count: 0, chatbots_count: 0 },
             limits: PLAN_LIMITS.free,
           });
-          setIsLoading(false);
+          if (showLoading) {
+            setIsLoading(false);
+          }
           return;
         }
         throw new Error("Failed to fetch subscription data");
@@ -223,7 +229,9 @@ export default function Settings() {
         limits: PLAN_LIMITS.free,
       });
     } finally {
-      setIsLoading(false);
+      if (showLoading) {
+        setIsLoading(false);
+      }
     }
   }, [getAuthHeaders]);
 
@@ -231,6 +239,29 @@ export default function Settings() {
     if (isSignedIn) {
       fetchSubscription();
     }
+  }, [isSignedIn, fetchSubscription]);
+
+  // Poll subscription data every 60 seconds for real-time updates
+  useEffect(() => {
+    if (!isSignedIn) return;
+
+    const pollInterval = setInterval(() => {
+      fetchSubscription(false); // Don't show loading spinner on background updates
+    }, 60000); // 60 seconds
+
+    return () => clearInterval(pollInterval);
+  }, [isSignedIn, fetchSubscription]);
+
+  // Refetch subscription data when window regains focus
+  useEffect(() => {
+    if (!isSignedIn) return;
+
+    const handleFocus = () => {
+      fetchSubscription(false); // Don't show loading spinner on focus refetch
+    };
+
+    window.addEventListener('focus', handleFocus);
+    return () => window.removeEventListener('focus', handleFocus);
   }, [isSignedIn, fetchSubscription]);
 
   const openBillingPortal = async () => {
