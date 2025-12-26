@@ -5,13 +5,6 @@
   "outputDirectory": "dist/public",
   "installCommand": "npm install",
   "framework": "vite",
-  "redirects": [
-    {
-      "source": "/widget/demo",
-      "destination": "https://ai-chatbot-platform-iiuf.onrender.com/widget/demo",
-      "permanent": false
-    }
-  ],
   "rewrites": [
     {
       "source": "/api/:path*",
@@ -22,8 +15,12 @@
       "destination": "https://ai-chatbot-platform-iiuf.onrender.com/widget.js"
     },
     {
-      "source": "/widget/:path*",
-      "destination": "https://ai-chatbot-platform-iiuf.onrender.com/widget/:path*"
+      "source": "/widget/loader.js",
+      "destination": "https://ai-chatbot-platform-iiuf.onrender.com/widget/loader.js"
+    },
+    {
+      "source": "/widget/manifest.json",
+      "destination": "https://ai-chatbot-platform-iiuf.onrender.com/widget/manifest.json"
     },
     {
       "source": "/(.*)",

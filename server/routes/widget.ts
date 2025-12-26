@@ -1,4 +1,4 @@
-import { Router, Request, Response } from "express";
+import { Router, Request, Response, NextFunction } from "express";
 import * as fs from "fs";
 import * as path from "path";
 import * as crypto from "crypto";
@@ -233,217 +233,21 @@ router.get("/widget/manifest.json", async (req: Request, res: Response) => {
   }
 });
 
-// GET /widget/demo - Demo page to test the widget
-router.get("/widget/demo", (req: Request, res: Response) => {
+// GET /widget/preview - Redirect to new demo page
+router.get("/widget/preview", (req: Request, res: Response) => {
   const chatbotId = req.query.id || "demo-chatbot-id";
-  const useLoader = req.query.loader === "true";
-  const baseUrl = `${req.protocol}://${req.get("host")}`;
-  const nonce = req.cspNonce || "";
-
-  const scriptTag = useLoader
-    ? `<script async nonce="${nonce}" src="${baseUrl}/widget/loader.js" data-chatbot-id="${chatbotId}" data-csp-nonce="${nonce}"></script>`
-    : `<script async nonce="${nonce}" src="${baseUrl}/widget.js" data-chatbot-id="${chatbotId}" data-csp-nonce="${nonce}"></script>`;
-
-  res.setHeader("Content-Type", "text/html");
-  res.send(`
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>ConvoAI Widget Demo</title>
-  <style nonce="${nonce}">
-    * {
-      margin: 0;
-      padding: 0;
-      box-sizing: border-box;
-    }
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      min-height: 100vh;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      padding: 20px;
-      color: white;
-    }
-    .container {
-      text-align: center;
-      max-width: 700px;
-    }
-    h1 {
-      font-size: 2.5rem;
-      margin-bottom: 1rem;
-    }
-    p {
-      font-size: 1.2rem;
-      opacity: 0.9;
-      margin-bottom: 2rem;
-    }
-    .features {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-      gap: 16px;
-      margin: 2rem 0;
-      text-align: left;
-    }
-    .feature {
-      background: rgba(255,255,255,0.1);
-      padding: 16px;
-      border-radius: 8px;
-    }
-    .feature h3 {
-      font-size: 1rem;
-      margin-bottom: 4px;
-    }
-    .feature p {
-      font-size: 0.85rem;
-      margin: 0;
-      opacity: 0.8;
-    }
-    .code-block {
-      background: rgba(0,0,0,0.3);
-      padding: 20px;
-      border-radius: 12px;
-      text-align: left;
-      font-family: 'SF Mono', Monaco, monospace;
-      font-size: 13px;
-      overflow-x: auto;
-      margin-top: 2rem;
-    }
-    .code-block code {
-      color: #a5f3fc;
-    }
-    .highlight {
-      color: #fcd34d;
-    }
-    .api-demo {
-      margin-top: 2rem;
-      display: flex;
-      gap: 12px;
-      justify-content: center;
-      flex-wrap: wrap;
-    }
-    .api-demo button {
-      padding: 10px 20px;
-      border-radius: 8px;
-      border: none;
-      background: rgba(255,255,255,0.2);
-      color: white;
-      cursor: pointer;
-      font-size: 14px;
-      transition: background 0.2s;
-    }
-    .api-demo button:hover {
-      background: rgba(255,255,255,0.3);
-    }
-    .tabs {
-      display: flex;
-      gap: 8px;
-      margin-bottom: 1rem;
-    }
-    .tab {
-      padding: 8px 16px;
-      border-radius: 6px;
-      background: rgba(255,255,255,0.1);
-      color: white;
-      border: none;
-      cursor: pointer;
-      font-size: 14px;
-    }
-    .tab.active {
-      background: rgba(255,255,255,0.3);
-    }
-  </style>
-</head>
-<body>
-  <div class="container">
-    <h1>ConvoAI Widget v2.0</h1>
-    <p>Industry-standard embeddable chat widget with Shadow DOM, accessibility, and full JavaScript API.</p>
-
-    <div class="features">
-      <div class="feature">
-        <h3>Shadow DOM</h3>
-        <p>Complete style isolation</p>
-      </div>
-      <div class="feature">
-        <h3>Accessible</h3>
-        <p>WCAG 2.1 AA compliant</p>
-      </div>
-      <div class="feature">
-        <h3>Async Loading</h3>
-        <p>Non-blocking script</p>
-      </div>
-      <div class="feature">
-        <h3>JavaScript API</h3>
-        <p>Full programmatic control</p>
-      </div>
-      <div class="feature">
-        <h3>Markdown</h3>
-        <p>Rich message formatting</p>
-      </div>
-      <div class="feature">
-        <h3>i18n Ready</h3>
-        <p>Multi-language support</p>
-      </div>
-    </div>
-
-    <div class="api-demo">
-      <button onclick="ConvoAI('open')">Open Widget</button>
-      <button onclick="ConvoAI('close')">Close Widget</button>
-      <button onclick="ConvoAI('toggle')">Toggle Widget</button>
-      <button onclick="ConvoAI('sendMessage', 'Hello from the API!')">Send Message</button>
-      <button onclick="ConvoAI('identify', {name: 'Demo User', email: 'demo@example.com'})">Identify User</button>
-    </div>
-
-    <div class="code-block">
-      <code>
-&lt;!-- Standard embed (recommended) --&gt;<br>
-&lt;script <span class="highlight">async</span><br>
-&nbsp;&nbsp;src="<span class="highlight">${baseUrl}/widget.js</span>"<br>
-&nbsp;&nbsp;data-chatbot-id="<span class="highlight">${chatbotId}</span>"<br>
-&nbsp;&nbsp;data-csp-nonce="<span class="highlight">YOUR_NONCE_HERE</span>"<br>
-&gt;&lt;/script&gt;<br><br>
-
-&lt;!-- Lazy loading (smaller initial load) --&gt;<br>
-&lt;script <span class="highlight">async</span><br>
-&nbsp;&nbsp;src="<span class="highlight">${baseUrl}/widget/loader.js</span>"<br>
-&nbsp;&nbsp;data-chatbot-id="<span class="highlight">${chatbotId}</span>"<br>
-&nbsp;&nbsp;data-csp-nonce="<span class="highlight">YOUR_NONCE_HERE</span>"<br>
-&nbsp;&nbsp;data-lazy="true"<br>
-&gt;&lt;/script&gt;<br><br>
-
-&lt;!-- JavaScript API --&gt;<br>
-ConvoAI('open');<br>
-ConvoAI('sendMessage', 'Hello!');<br>
-ConvoAI('identify', { name: 'John', email: 'john@example.com' });<br>
-ConvoAI('on', 'message', (msg) =&gt; console.log(msg));
-      </code>
-    </div>
-  </div>
-
-  <!-- The actual widget -->
-  ${scriptTag}
-
-  <script nonce="${nonce}">
-    // Demo: Listen to widget events
-    setTimeout(() => {
-      if (window.ConvoAI) {
-        ConvoAI('on', 'open', () => console.log('Widget opened'));
-        ConvoAI('on', 'close', () => console.log('Widget closed'));
-        ConvoAI('on', 'message', (data) => console.log('Message:', data));
-      }
-    }, 1000);
-  </script>
-</body>
-</html>
-  `);
+  res.redirect(`/widget/demo?id=${chatbotId}`);
 });
 
 // GET /widget/:id - Get chatbot config for widget
-router.get("/widget/:id", getChatbotPublic);
+// Exclude "demo" - that's handled by the frontend React app
+router.get("/widget/:id", (req: Request, res: Response, next: NextFunction) => {
+  if (req.params.id === "demo") {
+    // Let this fall through to Vite/static file server for React app
+    return next();
+  }
+  return getChatbotPublic(req, res, next);
+});
 
 // POST /widget/analytics - Receive widget analytics events
 router.post("/widget/analytics", (req: Request, res: Response) => {

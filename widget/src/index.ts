@@ -62,6 +62,18 @@ const ConvoAI: WidgetAPI = function (command: string, ...args: unknown[]): void 
 
 // Auto-initialize from script tag
 (function () {
+  // Prevent double initialization
+  if (widgetInstance) {
+    console.warn("ConvoAI: Widget already initialized");
+    return;
+  }
+
+  // Check if widget host already exists (another instance running)
+  if (document.getElementById("convoai-widget-host")) {
+    console.warn("ConvoAI: Widget already exists in DOM");
+    return;
+  }
+
   const script = document.currentScript as HTMLScriptElement;
   if (!script) return;
 
@@ -81,6 +93,11 @@ const ConvoAI: WidgetAPI = function (command: string, ...args: unknown[]): void 
   };
 
   function init() {
+    // Double-check we haven't initialized while waiting for DOM
+    if (widgetInstance || document.getElementById("convoai-widget-host")) {
+      return;
+    }
+
     // Check if we already have a queued instance from the loader
     if ((window as any).ConvoAI?.q) {
       const queue = (window as any).ConvoAI.q;

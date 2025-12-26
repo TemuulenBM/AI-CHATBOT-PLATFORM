@@ -52,6 +52,8 @@ export class ConvoAIWidget {
   private isDestroyed: boolean = false;
   private scrollObserver: IntersectionObserver | null = null;
   private exitIntentHandler: ((e: MouseEvent) => void) | null = null;
+  private outsideClickEnabled: boolean = true;
+  private outsideClickTimeout: number | null = null;
 
   constructor(config: Partial<WidgetConfig>) {
     // Initialize config with defaults
@@ -354,8 +356,14 @@ export class ConvoAIWidget {
       }
     });
 
-    // Close on outside click
-    document.addEventListener("click", (e) => {
+    // Close on outside click - use mousedown to detect clicks before they propagate
+    // This ensures we can properly distinguish between clicks that open vs close the widget
+    document.addEventListener("mousedown", (e) => {
+      // Skip if outside click detection is temporarily disabled
+      if (!this.outsideClickEnabled) {
+        return;
+      }
+
       const host = document.getElementById("convoai-widget-host");
       if (this.isOpen && host && !host.contains(e.target as Node)) {
         this.close();
@@ -860,6 +868,22 @@ export class ConvoAIWidget {
   public open(): void {
     if (this.isDestroyed) return;
 
+    // Temporarily disable outside click detection to prevent the same click
+    // that opened the widget from immediately closing it.
+    // Using requestAnimationFrame ensures we wait until after the current
+    // event loop completes, which handles both mousedown and click events.
+    this.outsideClickEnabled = false;
+    if (this.outsideClickTimeout) {
+      clearTimeout(this.outsideClickTimeout);
+    }
+    // Use requestAnimationFrame + setTimeout to ensure we skip the current event cycle
+    requestAnimationFrame(() => {
+      this.outsideClickTimeout = window.setTimeout(() => {
+        this.outsideClickEnabled = true;
+        this.outsideClickTimeout = null;
+      }, 50);
+    });
+
     this.isOpen = true;
     const chatWindow = this.container?.querySelector(".convoai-window") as HTMLElement;
     const button = this.container?.querySelector(".convoai-button") as HTMLButtonElement;
@@ -1000,6 +1024,10 @@ export class ConvoAIWidget {
     // Clear timers
     this.proactiveTimers.forEach((id) => clearTimeout(id));
     this.proactiveTimers = [];
+    if (this.outsideClickTimeout) {
+      clearTimeout(this.outsideClickTimeout);
+      this.outsideClickTimeout = null;
+    }
 
     // Remove event handlers
     if (this.exitIntentHandler) {

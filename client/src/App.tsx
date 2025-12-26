@@ -7,6 +7,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { ErrorBoundary } from "@/components/error-boundary";
 import NotFound from "@/pages/not-found";
 import Landing from "@/pages/landing";
+import WidgetDemo from "@/pages/widget-demo";
 import Dashboard from "@/pages/dashboard/index";
 import ChatbotsList from "@/pages/dashboard/chatbots";
 import CreateChatbot from "@/pages/dashboard/create-chatbot";
@@ -20,6 +21,7 @@ function Router() {
   return (
     <Switch>
       <Route path="/" component={Landing} />
+      <Route path="/widget/demo" component={WidgetDemo} />
       <Route path="/login">
         <div className="min-h-screen flex items-center justify-center bg-background">
           <SignIn
