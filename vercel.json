@@ -5,6 +5,13 @@
   "outputDirectory": "dist/public",
   "installCommand": "npm install",
   "framework": "vite",
+  "redirects": [
+    {
+      "source": "/widget/demo",
+      "destination": "https://ai-chatbot-platform-iiuf.onrender.com/widget/demo",
+      "permanent": false
+    }
+  ],
   "rewrites": [
     {
       "source": "/api/:path*",
