@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction } from "express";
 import { supabaseAdmin, ChatbotSettings } from "../utils/supabase";
-import { AuthenticatedRequest, checkUsageLimit, incrementUsage } from "../middleware/clerkAuth";
+import { AuthenticatedRequest, checkUsageLimit, incrementUsage, checkAndIncrementUsage, decrementUsage } from "../middleware/clerkAuth";
 import { NotFoundError, AuthorizationError } from "../utils/errors";
 import { CreateChatbotInput, UpdateChatbotInput, ScrapeScheduleInput } from "../middleware/validation";
 import { deleteCache, deleteCachePattern, getCache, setCache } from "../utils/redis";
@@ -21,8 +21,8 @@ export async function createChatbot(
 
     const { name, websiteUrl, settings } = req.body as CreateChatbotInput;
 
-    // Check usage limit
-    await checkUsageLimit(req.user.userId, "chatbot");
+    // ATOMIC: Check usage limit and increment in single transaction (prevents race conditions)
+    await checkAndIncrementUsage(req.user.userId, "chatbot");
 
     // Create chatbot with "ready" status for instant deployment
     // Training will happen in background, chatbot uses fallback mode until "trained"
@@ -40,11 +40,10 @@ export async function createChatbot(
 
     if (error || !chatbot) {
       logger.error("Failed to create chatbot", { error, userId: req.user.userId });
+      // Rollback usage increment if chatbot creation failed
+      await decrementUsage(req.user.userId, "chatbot");
       throw new Error("Failed to create chatbot");
     }
-
-    // Increment usage
-    await incrementUsage(req.user.userId, "chatbot");
 
     // Queue scraping job
     await scrapeQueue.add(
@@ -284,11 +283,15 @@ export async function deleteChatbot(
       throw new Error("Failed to delete chatbot");
     }
 
+    // CRITICAL FIX: Decrement chatbot usage counter
+    // This ensures users can create new chatbots after deleting old ones
+    await decrementUsage(req.user.userId, "chatbot");
+
     // Invalidate caches
     await deleteCache(`chatbot:${id}`);
     await deleteCachePattern(`chatbots:${req.user.userId}:*`);
 
-    logger.info("Chatbot deleted", { chatbotId: id, userId: req.user.userId });
+    logger.info("Chatbot deleted and usage decremented", { chatbotId: id, userId: req.user.userId });
 
     res.json({ message: "Chatbot deleted successfully" });
   } catch (error) {

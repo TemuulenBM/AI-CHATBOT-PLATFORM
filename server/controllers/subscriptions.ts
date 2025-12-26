@@ -18,6 +18,34 @@ export async function createCheckout(
 
     const { plan, successUrl, cancelUrl } = req.body as CreateCheckoutInput;
 
+    // CRITICAL FIX: Validate plan downgrade to prevent users from downgrading
+    // to a plan that doesn't support their current usage
+    const { data: validationResult, error: validationError } = await supabaseAdmin
+      .rpc("validate_plan_change", {
+        p_user_id: req.user.userId,
+        p_new_plan: plan,
+      });
+
+    if (validationError) {
+      logger.error("Failed to validate plan change", { error: validationError, userId: req.user.userId });
+      throw new Error("Failed to validate plan change");
+    }
+
+    const validation = validationResult as { valid: boolean; reason?: string; message?: string };
+
+    if (!validation.valid) {
+      logger.warn("Plan downgrade blocked due to usage constraints", {
+        userId: req.user.userId,
+        targetPlan: plan,
+        reason: validation.reason
+      });
+      res.status(400).json({
+        error: validation.message || "Cannot downgrade to this plan due to current usage",
+        reason: validation.reason
+      });
+      return;
+    }
+
     const checkoutUrl = await paddleService.createCheckoutSession(
       req.user.userId,
       req.user.email,

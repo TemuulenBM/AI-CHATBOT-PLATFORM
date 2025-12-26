@@ -304,6 +304,31 @@ export class PaddleService {
       throw new ValidationError("Invalid webhook body");
     }
 
+    // CRITICAL FIX: Check for duplicate webhook events (idempotency)
+    // Paddle may retry webhooks, so we need to prevent processing the same event twice
+    const { data: existingEvent } = await supabaseAdmin
+      .from("webhook_events")
+      .select("id")
+      .eq("id", event.event_id)
+      .eq("processor", "paddle")
+      .single();
+
+    if (existingEvent) {
+      logger.info("Webhook event already processed (idempotent)", {
+        type: event.event_type,
+        eventId: event.event_id
+      });
+      return { received: true };
+    }
+
+    // Record the webhook event for idempotency
+    await supabaseAdmin.from("webhook_events").insert({
+      id: event.event_id,
+      event_type: event.event_type,
+      processor: "paddle",
+      payload: event.data,
+    });
+
     logger.info("Webhook received", { type: event.event_type, eventId: event.event_id });
 
     switch (event.event_type) {
@@ -387,8 +412,18 @@ export class PaddleService {
       }
     }
 
+    // CRITICAL FIX: Reset usage counters for new billing period
+    // This ensures users get their full quota when payment succeeds
+    await supabaseAdmin
+      .from("subscriptions")
+      .update({
+        usage: { messages_count: 0, chatbots_count: 0 },
+        updated_at: new Date().toISOString(),
+      })
+      .eq("user_id", userId);
+
     await deleteCache(`subscription:${userId}`);
-    logger.info("Subscription activated", { userId, plan, transactionId: transaction.id });
+    logger.info("Subscription activated and usage reset", { userId, plan, transactionId: transaction.id });
   }
 
   private async handleSubscriptionCreated(subscription: PaddleSubscription): Promise<void> {
@@ -416,31 +451,46 @@ export class PaddleService {
   }
 
   private async handleSubscriptionUpdated(subscription: PaddleSubscription): Promise<void> {
-    const { data } = await supabaseAdmin
+    const { data: currentSub } = await supabaseAdmin
       .from("subscriptions")
-      .select("user_id")
+      .select("user_id, current_period_start, usage")
       .eq("paddle_subscription_id", subscription.id)
       .single();
 
-    if (!data) {
+    if (!currentSub) {
       logger.warn("User not found for subscription update", { subscriptionId: subscription.id });
       return;
     }
 
     const plan = subscription.custom_data?.plan as PlanType || "free";
+    const newPeriodStart = subscription.current_billing_period?.starts_at || new Date().toISOString();
+
+    // Check if billing period has renewed (period_start changed)
+    const isPeriodRenewal = currentSub.current_period_start !== newPeriodStart;
+
+    const updateData: any = {
+      plan,
+      current_period_start: newPeriodStart,
+      current_period_end: subscription.current_billing_period?.ends_at || new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+
+    // CRITICAL FIX: Reset usage if billing period renewed
+    if (isPeriodRenewal) {
+      updateData.usage = { messages_count: 0, chatbots_count: 0 };
+      logger.info("Billing period renewed, resetting usage", {
+        userId: currentSub.user_id,
+        subscriptionId: subscription.id
+      });
+    }
 
     await supabaseAdmin
       .from("subscriptions")
-      .update({
-        plan,
-        current_period_start: subscription.current_billing_period?.starts_at || new Date().toISOString(),
-        current_period_end: subscription.current_billing_period?.ends_at || new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      })
+      .update(updateData)
       .eq("paddle_subscription_id", subscription.id);
 
-    await deleteCache(`subscription:${data.user_id}`);
-    logger.info("Subscription updated", { subscriptionId: subscription.id, userId: data.user_id });
+    await deleteCache(`subscription:${currentSub.user_id}`);
+    logger.info("Subscription updated", { subscriptionId: subscription.id, userId: currentSub.user_id, isPeriodRenewal });
   }
 
   private async handleSubscriptionCanceled(subscription: PaddleSubscription): Promise<void> {
