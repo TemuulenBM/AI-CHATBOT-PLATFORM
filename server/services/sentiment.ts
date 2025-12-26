@@ -8,16 +8,22 @@ const openai = new OpenAI({
 
 export type Sentiment = "positive" | "neutral" | "negative";
 
-const SENTIMENT_PROMPT = `You are a sentiment classifier. Analyze the following user message and classify its sentiment.
+const SENTIMENT_PROMPT = `## INPUT
+User message below.
 
-Respond with ONLY one word: "positive", "neutral", or "negative".
+## TASK
+Classify sentiment as: positive, neutral, or negative.
 
-Guidelines:
-- positive: Happy, satisfied, grateful, excited, complimentary messages
-- neutral: Questions, factual statements, neither positive nor negative
-- negative: Frustrated, angry, disappointed, complaints, problems
+## CONSTRAINTS
+- Respond with ONLY one word
+- positive = happy, satisfied, grateful, excited, complimentary
+- neutral = questions, factual statements, informational
+- negative = frustrated, angry, disappointed, complaints, issues
 
-User message: `;
+## OUTPUT FORMAT
+Single word: positive, neutral, or negative
+
+Message: `;
 
 /**
  * Analyze the sentiment of a user message using GPT-5-nano
