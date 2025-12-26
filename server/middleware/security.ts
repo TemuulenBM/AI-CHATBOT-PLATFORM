@@ -51,11 +51,8 @@ function corsOriginValidator(origin: string | undefined, callback: (err: Error |
     return callback(null, true);
   }
 
-  // Allow widget embedding from any origin (widget routes handle their own CORS)
-  if (origin.includes("widget")) {
-    return callback(null, true);
-  }
-
+  // Note: Widget routes use their own permissive CORS policy (configured separately)
+  // This validator is only for API routes, which require strict origin validation
   logger.warn("CORS blocked origin", { origin, allowedOrigins });
   callback(new Error("Not allowed by CORS"));
 }
@@ -189,10 +186,9 @@ export function configureHelmet(app: Express): void {
         policy: "same-origin",
       },
 
-      // Cross Origin Resource Policy - allow cross-origin for widget embedding
-      crossOriginResourcePolicy: {
-        policy: "cross-origin",
-      },
+      // Cross Origin Resource Policy
+      // Disabled here - will be set per-route via middleware after Helmet
+      crossOriginResourcePolicy: false,
     })(req, res, next);
   });
 
@@ -200,7 +196,7 @@ export function configureHelmet(app: Express): void {
 }
 
 /**
- * CORS configuration
+ * CORS and CORP configuration
  */
 export function configureCORS(app: Express): void {
   // API routes CORS (strict)
@@ -224,10 +220,23 @@ export function configureCORS(app: Express): void {
       methods: ["GET", "POST", "OPTIONS"],
       allowedHeaders: ["Content-Type"],
       maxAge: 86400, // 24 hours
-    })
+    }),
+    // Set CORP to cross-origin for widget files (allows embedding on external sites)
+    (req: Request, res: Response, next: NextFunction) => {
+      res.setHeader("Cross-Origin-Resource-Policy", "cross-origin");
+      next();
+    }
   );
 
-  logger.info("CORS policies configured");
+  // Set CORP to same-origin for all other routes (secure default)
+  app.use((req: Request, res: Response, next: NextFunction) => {
+    if (!res.getHeader("Cross-Origin-Resource-Policy")) {
+      res.setHeader("Cross-Origin-Resource-Policy", "same-origin");
+    }
+    next();
+  });
+
+  logger.info("CORS and CORP policies configured");
 }
 
 /**
