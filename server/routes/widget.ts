@@ -252,7 +252,7 @@ router.get("/widget/demo", (req: Request, res: Response) => {
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>ConvoAI Widget Demo</title>
-  <style>
+  <style nonce="${nonce}">
     * {
       margin: 0;
       padding: 0;
