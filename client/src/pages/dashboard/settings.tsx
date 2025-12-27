@@ -438,7 +438,7 @@ export default function Settings() {
               <Button
                 variant="ghost"
                 size="sm"
-                onClick={fetchSubscription}
+                onClick={() => fetchSubscription()}
                 className="ml-auto"
               >
                 Retry
