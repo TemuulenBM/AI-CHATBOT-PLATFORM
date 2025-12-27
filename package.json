@@ -10,7 +10,16 @@
     "build": "npx tsx script/build.ts && npx tsx widget/build.ts",
     "build:widget": "tsx widget/build.ts",
     "start": "NODE_ENV=production node dist/index.cjs",
-    "check": "tsc"
+    "check": "tsc",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "test:unit": "vitest run tests/unit",
+    "test:integration": "vitest run tests/integration",
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui",
+    "test:e2e:headed": "playwright test --headed",
+    "test:all": "npm run test && npm run test:e2e"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.39.0",
@@ -111,6 +120,7 @@
     "zustand": "^5.0.9"
   },
   "devDependencies": {
+    "@playwright/test": "^1.40.0",
     "@types/bcrypt": "^5.0.2",
     "@types/connect-pg-simple": "^7.0.3",
     "@types/cors": "^2.8.19",
@@ -123,8 +133,12 @@
     "@types/passport-local": "^1.0.38",
     "@types/react": "^19.2.0",
     "@types/react-dom": "^19.2.0",
+    "@types/supertest": "^6.0.2",
     "@types/ws": "^8.5.13",
-    "@types/xml2js": "^0.4.14"
+    "@types/xml2js": "^0.4.14",
+    "@vitest/coverage-v8": "^1.2.0",
+    "supertest": "^6.3.4",
+    "vitest": "^1.2.0"
   },
   "optionalDependencies": {
     "bufferutil": "^4.0.8"
