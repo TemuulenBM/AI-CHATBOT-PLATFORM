@@ -1,0 +1,93 @@
+name: Database Backup
+
+on:
+  # Долоо хоног бүр Ням гарагт 02:00 UTC-д ажиллана
+  schedule:
+    - cron: '0 2 * * 0'
+
+  # Гараар ч ажиллуулж болно (GitHub Actions tab дээр "Run workflow" дарах)
+  workflow_dispatch:
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Install PostgreSQL client
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client
+
+          # Version шалгах
+          psql --version
+
+      - name: Create database backup
+        env:
+          PGPASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+          SUPABASE_HOST: ${{ secrets.SUPABASE_HOST }}
+          SUPABASE_USER: ${{ secrets.SUPABASE_USER }}
+          SUPABASE_DB: ${{ secrets.SUPABASE_DB }}
+        run: |
+          echo "🔄 Database backup эхэлж байна..."
+          echo "📅 Огноо: $(date)"
+          echo ""
+
+          # Backup үүсгэх
+          pg_dump -h "$SUPABASE_HOST" \
+                  -U "$SUPABASE_USER" \
+                  -d "$SUPABASE_DB" \
+                  -F c \
+                  --no-owner \
+                  --no-acl \
+                  -f backup-$(date +%Y%m%d-%H%M%S).dump
+
+          echo ""
+          echo "📦 Backup файлын мэдээлэл:"
+          ls -lh backup-*.dump
+
+          echo ""
+          echo "🔍 Backup агуулга шалгаж байна..."
+          pg_restore --list backup-*.dump | head -30
+
+          echo ""
+          echo "✅ Backup амжилттай үүслээ!"
+
+      - name: Upload backup artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: database-backup-${{ github.run_number }}
+          path: backup-*.dump
+          retention-days: 30
+
+      - name: Backup summary
+        if: success()
+        run: |
+          echo "========================================" >> $GITHUB_STEP_SUMMARY
+          echo "✅ Database Backup Амжилттай" >> $GITHUB_STEP_SUMMARY
+          echo "========================================" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "📦 **Backup файл:** \`database-backup-${{ github.run_number }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "📅 **Огноо:** $(date)" >> $GITHUB_STEP_SUMMARY
+          echo "💾 **Хэмжээ:** $(du -h backup-*.dump | cut -f1)" >> $GITHUB_STEP_SUMMARY
+          echo "⏰ **Retention:** 30 хоног" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Хэрхэн татаж авах вэ?" >> $GITHUB_STEP_SUMMARY
+          echo "1. Actions tab дээр очих" >> $GITHUB_STEP_SUMMARY
+          echo "2. Энэ workflow-г сонгох" >> $GITHUB_STEP_SUMMARY
+          echo "3. Доош scroll хийж 'Artifacts' хэсэг олох" >> $GITHUB_STEP_SUMMARY
+          echo "4. \`database-backup-${{ github.run_number }}\` татаж авах" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Restore хийх:" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`bash" >> $GITHUB_STEP_SUMMARY
+          echo "./scripts/restore-database.sh backup-YYYYMMDD-HHMMSS.dump" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+
+      - name: Backup failure notification
+        if: failure()
+        run: |
+          echo "❌ Database backup АЛДАА гарлаа!"
+          echo "Logs-г шалгаж, алдааг засна уу."
+          exit 1

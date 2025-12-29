@@ -15,6 +15,18 @@ import logger from "./utils/logger";
 import { redis } from "./utils/redis";
 import { supabaseAdmin } from "./utils/supabase";
 import { scrapeQueue, embeddingQueue } from "./jobs/queues";
+import {
+  recordRequestMetrics,
+  getMetricsSnapshot,
+  getActiveAlerts,
+  getAlertHistory,
+  acknowledgeAlert,
+  getUptimeStatus,
+  getSlowQueryReport,
+  initializeMonitoring,
+  registerUptimeCheck,
+  reportCriticalError,
+} from "./utils/monitoring";
 
 // Extend Request to include requestId
 declare global {
@@ -29,6 +41,37 @@ export async function registerRoutes(
   httpServer: Server,
   app: Express
 ): Promise<Server> {
+  // Initialize production monitoring
+  initializeMonitoring();
+
+  // Register uptime checks for critical services
+  registerUptimeCheck("database", async () => {
+    const { error } = await supabaseAdmin.from("users").select("id").limit(1);
+    return !error;
+  }, 60000); // Check every 60 seconds
+
+  registerUptimeCheck("redis", async () => {
+    try {
+      await redis.ping();
+      return true;
+    } catch {
+      return false;
+    }
+  }, 30000); // Check every 30 seconds
+
+  registerUptimeCheck("openai", async () => {
+    if (!process.env.OPENAI_API_KEY) return true; // Skip if not configured
+    try {
+      const response = await fetch("https://api.openai.com/v1/models", {
+        method: "GET",
+        headers: { Authorization: `Bearer ${process.env.OPENAI_API_KEY}` },
+      });
+      return response.ok;
+    } catch {
+      return false;
+    }
+  }, 120000); // Check every 2 minutes
+
   // Request ID middleware - adds unique ID to each request for tracing
   app.use((req: Request, res: Response, next: NextFunction) => {
     req.requestId = req.headers["x-request-id"] as string || randomUUID();
@@ -38,6 +81,13 @@ export async function registerRoutes(
     if (process.env.SENTRY_DSN) {
       Sentry.setTag("request_id", req.requestId);
     }
+
+    // Record request metrics on response finish
+    const startTime = Date.now();
+    res.on("finish", () => {
+      const duration = Date.now() - startTime;
+      recordRequestMetrics(req.method, req.path, res.statusCode, duration);
+    });
 
     next();
   });
@@ -178,6 +228,96 @@ export async function registerRoutes(
       environment: process.env.NODE_ENV || "development",
       services: checks,
     });
+  });
+
+  // ============================================
+  // Monitoring & Observability Endpoints
+  // ============================================
+
+  // Metrics endpoint - returns collected metrics
+  app.get("/api/monitoring/metrics", authMiddleware, async (_req: Request, res: Response) => {
+    try {
+      const metrics = getMetricsSnapshot();
+      res.json({
+        timestamp: new Date().toISOString(),
+        ...metrics,
+      });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to retrieve metrics" });
+    }
+  });
+
+  // Uptime status endpoint
+  app.get("/api/monitoring/uptime", async (_req: Request, res: Response) => {
+    try {
+      const uptime = getUptimeStatus();
+      res.json({
+        timestamp: new Date().toISOString(),
+        checks: uptime,
+      });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to retrieve uptime status" });
+    }
+  });
+
+  // Active alerts endpoint
+  app.get("/api/monitoring/alerts", authMiddleware, async (_req: Request, res: Response) => {
+    try {
+      const active = getActiveAlerts();
+      res.json({
+        timestamp: new Date().toISOString(),
+        count: active.length,
+        alerts: active,
+      });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to retrieve alerts" });
+    }
+  });
+
+  // Alert history endpoint
+  app.get("/api/monitoring/alerts/history", authMiddleware, async (req: Request, res: Response) => {
+    try {
+      const limit = parseInt(req.query.limit as string) || 100;
+      const history = getAlertHistory(limit);
+      res.json({
+        timestamp: new Date().toISOString(),
+        count: history.length,
+        alerts: history,
+      });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to retrieve alert history" });
+    }
+  });
+
+  // Acknowledge alert endpoint
+  app.post("/api/monitoring/alerts/:alertId/acknowledge", authMiddleware, async (req: Request, res: Response) => {
+    try {
+      const { alertId } = req.params;
+      const acknowledged = acknowledgeAlert(alertId);
+      if (acknowledged) {
+        res.json({ success: true, alertId });
+      } else {
+        res.status(404).json({ error: "Alert not found" });
+      }
+    } catch (error) {
+      res.status(500).json({ error: "Failed to acknowledge alert" });
+    }
+  });
+
+  // Slow queries report endpoint
+  app.get("/api/monitoring/slow-queries", authMiddleware, async (req: Request, res: Response) => {
+    try {
+      const threshold = parseInt(req.query.threshold as string) || 500;
+      const slowQueries = getSlowQueryReport(threshold);
+      res.json({
+        timestamp: new Date().toISOString(),
+        thresholdMs: threshold,
+        count: slowQueries.length,
+        queries: slowQueries,
+      });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to retrieve slow queries" });
+    }
   });
 
   // Clerk Webhook (must be before JSON body parser for raw body)

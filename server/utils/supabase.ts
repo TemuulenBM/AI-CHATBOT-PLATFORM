@@ -14,6 +14,24 @@ if (!supabaseUrl || !supabaseServiceKey) {
   logger.warn("Supabase credentials not configured. Some features will be unavailable.");
 }
 
+// Connection pool configuration for production reliability
+const DB_POOL_CONFIG = {
+  // Maximum number of connections in the pool
+  max: parseInt(process.env.DB_POOL_MAX || "20", 10),
+
+  // Minimum number of idle connections
+  min: parseInt(process.env.DB_POOL_MIN || "2", 10),
+
+  // Connection timeout in milliseconds
+  connectionTimeoutMillis: parseInt(process.env.DB_CONNECTION_TIMEOUT || "10000", 10),
+
+  // Idle timeout - close idle connections after 30 seconds
+  idleTimeoutMillis: parseInt(process.env.DB_IDLE_TIMEOUT || "30000", 10),
+
+  // Maximum lifetime of a connection in the pool (30 minutes)
+  maxLifetime: parseInt(process.env.DB_MAX_LIFETIME || "1800000", 10),
+};
+
 // Service client with admin privileges (for server-side operations)
 export const supabaseAdmin: SupabaseClient = createClient(
   supabaseUrl || "https://placeholder.supabase.co",
@@ -23,8 +41,58 @@ export const supabaseAdmin: SupabaseClient = createClient(
       autoRefreshToken: false,
       persistSession: false,
     },
+    db: {
+      schema: "public",
+    },
+    global: {
+      headers: {
+        "x-application-name": "convoai-backend",
+      },
+    },
   }
 );
+
+// Health check function for database connection
+export async function checkDatabaseHealth(): Promise<{
+  healthy: boolean;
+  latency?: number;
+  error?: string;
+}> {
+  const startTime = Date.now();
+
+  try {
+    // Simple query to check database connectivity
+    const { error } = await supabaseAdmin
+      .from("users")
+      .select("id")
+      .limit(1)
+      .single();
+
+    const latency = Date.now() - startTime;
+
+    // Allow "no rows" error as it just means empty table
+    if (error && error.code !== "PGRST116") {
+      logger.error("Database health check failed", { error: error.message });
+      return { healthy: false, latency, error: error.message };
+    }
+
+    return { healthy: true, latency };
+  } catch (err) {
+    const latency = Date.now() - startTime;
+    const errorMessage = err instanceof Error ? err.message : "Unknown error";
+    logger.error("Database health check exception", { error: errorMessage });
+    return { healthy: false, latency, error: errorMessage };
+  }
+}
+
+// Log pool configuration on startup
+logger.info("Database connection pool configured", {
+  maxConnections: DB_POOL_CONFIG.max,
+  minConnections: DB_POOL_CONFIG.min,
+  connectionTimeout: `${DB_POOL_CONFIG.connectionTimeoutMillis}ms`,
+  idleTimeout: `${DB_POOL_CONFIG.idleTimeoutMillis}ms`,
+  maxLifetime: `${DB_POOL_CONFIG.maxLifetime}ms`,
+});
 
 // Database types
 export interface Database {

@@ -15,6 +15,13 @@ const ENV_VARS: EnvConfig[] = [
   { name: "SUPABASE_URL", required: true, description: "Supabase project URL" },
   { name: "SUPABASE_SERVICE_KEY", required: true, description: "Supabase service role key" },
 
+  // Database Connection Pool
+  { name: "DB_POOL_MAX", required: false, description: "Maximum database connections (default: 20)" },
+  { name: "DB_POOL_MIN", required: false, description: "Minimum idle connections (default: 2)" },
+  { name: "DB_CONNECTION_TIMEOUT", required: false, description: "Connection timeout in ms (default: 10000)" },
+  { name: "DB_IDLE_TIMEOUT", required: false, description: "Idle connection timeout in ms (default: 30000)" },
+  { name: "DB_MAX_LIFETIME", required: false, description: "Max connection lifetime in ms (default: 1800000)" },
+
   // Redis
   { name: "REDIS_URL", required: true, description: "Redis connection URL" },
 
@@ -40,6 +47,13 @@ const ENV_VARS: EnvConfig[] = [
   // Application
   { name: "APP_URL", required: false, description: "Application URL for callbacks and widgets" },
   { name: "WIDGET_POWERED_BY_URL", required: false, description: "Widget 'Powered by' link URL" },
+
+  // Monitoring & Observability
+  { name: "SENTRY_DSN", required: false, description: "Sentry DSN for error tracking and APM" },
+  { name: "SENTRY_TRACES_SAMPLE_RATE", required: false, description: "Sentry traces sample rate (0.0-1.0, default: 0.1)" },
+  { name: "SENTRY_PROFILES_SAMPLE_RATE", required: false, description: "Sentry profiles sample rate (0.0-1.0, default: 0.1)" },
+  { name: "LOG_LEVEL", required: false, description: "Winston log level (debug, info, warn, error)" },
+  { name: "LOG_DIR", required: false, description: "Directory for log files in production (default: logs)" },
 ];
 
 export interface ValidationResult {
@@ -95,9 +109,9 @@ export function initializeEnvironment(): void {
     });
 
     if (process.env.NODE_ENV === "production") {
-      console.error("\n❌ Missing required environment variables:\n");
-      result.missing.forEach((v) => console.error(`   - ${v}`));
-      console.error("\nPlease set these variables and restart the server.\n");
+      logger.error("Missing required environment variables - server cannot start", {
+        missing: result.missing,
+      });
       process.exit(1);
     } else {
       logger.warn("Running in development mode with missing variables. Some features may not work.");
