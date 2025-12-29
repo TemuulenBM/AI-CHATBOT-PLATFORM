@@ -12,18 +12,38 @@ import { applySecurity } from "./middleware/security";
 // Validate environment variables at startup
 initializeEnvironment();
 
-// Initialize Sentry for error tracking
+// Initialize Sentry for error tracking and APM
 if (process.env.SENTRY_DSN) {
+  // Get sample rates from environment or use defaults
+  const tracesSampleRate = parseFloat(process.env.SENTRY_TRACES_SAMPLE_RATE || "0.1");
+  const profilesSampleRate = parseFloat(process.env.SENTRY_PROFILES_SAMPLE_RATE || "0.1");
+
   Sentry.init({
     dsn: process.env.SENTRY_DSN,
     environment: process.env.NODE_ENV || "development",
     release: process.env.npm_package_version,
-    tracesSampleRate: process.env.NODE_ENV === "production" ? 0.1 : 1.0,
-    profilesSampleRate: 0.1,
+
+    // APM Configuration
+    tracesSampleRate: process.env.NODE_ENV === "production" ? tracesSampleRate : 1.0,
+    profilesSampleRate: profilesSampleRate,
+
+    // Enable automatic instrumentation
     integrations: [
       Sentry.httpIntegration(),
       Sentry.expressIntegration(),
+      // Enable database query tracing if available
+      Sentry.postgresIntegration(),
     ],
+
+    // Configure what gets traced
+    tracePropagationTargets: [
+      "localhost",
+      /^https:\/\/[^/]*\.supabase\.co/,
+      /^https:\/\/api\.openai\.com/,
+      /^https:\/\/.*paddle\.com/,
+    ],
+
+    // Enhanced error filtering
     beforeSend(event, hint) {
       // Filter out non-critical errors in production
       if (process.env.NODE_ENV === "production") {
@@ -33,12 +53,30 @@ if (process.env.SENTRY_DSN) {
           if (error.message.includes("not found") || error.name === "ZodError") {
             return null;
           }
+          // Filter connection reset errors (common from load balancers)
+          if ((error as NodeJS.ErrnoException).code === "ECONNRESET") {
+            return null;
+          }
         }
       }
       return event;
     },
+
+    // Filter transactions for performance
+    beforeSendTransaction(event) {
+      // Don't send health check transactions to reduce noise
+      if (event.transaction?.includes("/api/health")) {
+        return null;
+      }
+      return event;
+    },
   });
-  logger.info("Sentry initialized", { environment: process.env.NODE_ENV });
+
+  logger.info("Sentry APM initialized", {
+    environment: process.env.NODE_ENV,
+    tracesSampleRate: process.env.NODE_ENV === "production" ? tracesSampleRate : 1.0,
+    profilesSampleRate,
+  });
 }
 
 const app = express();
@@ -69,14 +107,7 @@ app.use(express.urlencoded({
 }));
 
 export function log(message: string, source = "express") {
-  const formattedTime = new Date().toLocaleTimeString("en-US", {
-    hour: "numeric",
-    minute: "2-digit",
-    second: "2-digit",
-    hour12: true,
-  });
-
-  console.log(`${formattedTime} [${source}] ${message}`);
+  logger.debug(message, { source });
 }
 
 app.use((req, res, next) => {

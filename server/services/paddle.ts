@@ -4,6 +4,7 @@ import { supabaseAdmin, PLAN_LIMITS, PlanType } from "../utils/supabase";
 import { deleteCache } from "../utils/redis";
 import logger from "../utils/logger";
 import { ExternalServiceError, ValidationError } from "../utils/errors";
+import { alertCritical, alertWarning, incrementCounter } from "../utils/monitoring";
 
 const PADDLE_API_KEY = process.env.PADDLE_API_KEY;
 const PADDLE_ENVIRONMENT = process.env.PADDLE_ENVIRONMENT || "sandbox";
@@ -553,16 +554,45 @@ export class PaddleService {
   }
 
   private async handleSubscriptionPastDue(subscription: PaddleSubscription): Promise<void> {
-    logger.warn("Subscription past due", { subscriptionId: subscription.id });
-    // Could add email notification here
+    // Get user info for alerting
+    const { data: subData } = await supabaseAdmin
+      .from("subscriptions")
+      .select("user_id")
+      .eq("paddle_subscription_id", subscription.id)
+      .single();
+
+    alertWarning("subscription_past_due", "Subscription payment is past due", {
+      subscriptionId: subscription.id,
+      userId: subData?.user_id,
+      status: subscription.status,
+    });
+
+    incrementCounter("billing.past_due", 1);
+    logger.warn("Subscription past due", { subscriptionId: subscription.id, userId: subData?.user_id });
   }
 
   private async handlePaymentFailed(transaction: any): Promise<void> {
-    logger.warn("Payment failed", {
+    // Get user info for alerting
+    const { data: subData } = await supabaseAdmin
+      .from("subscriptions")
+      .select("user_id")
+      .eq("paddle_customer_id", transaction.customer_id)
+      .single();
+
+    alertCritical("billing_failure", "Payment failed for subscription", {
       transactionId: transaction.id,
       customerId: transaction.customer_id,
+      userId: subData?.user_id,
+      errorCode: transaction.error_code,
+      errorDetail: transaction.error_detail,
     });
-    // Could add email notification here
+
+    incrementCounter("billing.payment_failed", 1);
+    logger.error("Payment failed", {
+      transactionId: transaction.id,
+      customerId: transaction.customer_id,
+      userId: subData?.user_id,
+    });
   }
 }
 

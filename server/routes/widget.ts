@@ -4,6 +4,7 @@ import * as path from "path";
 import * as crypto from "crypto";
 import * as esbuild from "esbuild";
 import { getChatbotPublic } from "../controllers/chatbots";
+import logger from "../utils/logger";
 
 const router = Router();
 
@@ -162,7 +163,7 @@ router.get("/widget.js", async (req: Request, res: Response) => {
 
     res.send(content);
   } catch (error) {
-    console.error("Failed to serve widget:", error);
+    logger.error("Failed to serve widget", { error, path: "/widget.js" });
     res.status(500).send("// Widget failed to load");
   }
 });
@@ -179,7 +180,7 @@ router.get("/widget/loader.js", async (req: Request, res: Response) => {
 
     res.send(content);
   } catch (error) {
-    console.error("Failed to serve loader:", error);
+    logger.error("Failed to serve loader", { error, path: "/widget/loader.js" });
     res.status(500).send("// Loader failed to load");
   }
 });
@@ -196,7 +197,7 @@ router.get("/widget/widget.js", async (req: Request, res: Response) => {
 
     res.send(content);
   } catch (error) {
-    console.error("Failed to serve widget:", error);
+    logger.error("Failed to serve widget", { error, path: "/widget/widget.js" });
     res.status(500).send("// Widget failed to load");
   }
 });
@@ -228,7 +229,7 @@ router.get("/widget/manifest.json", async (req: Request, res: Response) => {
       });
     }
   } catch (error) {
-    console.error("Failed to serve manifest:", error);
+    logger.error("Failed to serve manifest", { error, path: "/widget/manifest.json" });
     res.status(500).json({ error: "Failed to load manifest" });
   }
 });
@@ -255,16 +256,14 @@ router.post("/widget/analytics", (req: Request, res: Response) => {
     const { chatbotId, sessionId, events } = req.body;
 
     // Log analytics (in production, you'd store these)
-    if (process.env.NODE_ENV !== "production") {
-      console.log("Widget analytics:", { chatbotId, sessionId, eventCount: events?.length });
-    }
+    logger.debug("Widget analytics received", { chatbotId, sessionId, eventCount: events?.length });
 
     // TODO: Store analytics in database
     // await analyticsService.trackWidgetEvents(chatbotId, sessionId, events);
 
     res.status(204).send();
   } catch (error) {
-    console.error("Failed to process analytics:", error);
+    logger.error("Failed to process analytics", { error, chatbotId: req.body?.chatbotId });
     res.status(500).json({ error: "Failed to process analytics" });
   }
 });
@@ -272,16 +271,17 @@ router.post("/widget/analytics", (req: Request, res: Response) => {
 // POST /widget/errors - Receive widget error reports
 router.post("/widget/errors", (req: Request, res: Response) => {
   try {
-    const { chatbotId, sessionId, error } = req.body;
+    const { chatbotId, sessionId, error: widgetError } = req.body;
 
-    // Log errors
-    console.error("Widget error:", {
+    // Log widget errors with structured data
+    logger.error("Widget error reported", {
+      category: "widget_error",
       chatbotId,
       sessionId,
-      message: error?.message,
-      stack: error?.stack,
-      widgetVersion: error?.widgetVersion,
-      userAgent: error?.userAgent,
+      message: widgetError?.message,
+      stack: widgetError?.stack,
+      widgetVersion: widgetError?.widgetVersion,
+      userAgent: widgetError?.userAgent,
     });
 
     // TODO: Store errors in database or send to error tracking service
@@ -289,7 +289,7 @@ router.post("/widget/errors", (req: Request, res: Response) => {
 
     res.status(204).send();
   } catch (error) {
-    console.error("Failed to process error report:", error);
+    logger.error("Failed to process error report", { error, chatbotId: req.body?.chatbotId });
     res.status(500).json({ error: "Failed to process error" });
   }
 });
