@@ -29,15 +29,15 @@ export const listExportRequests = async (req: Request, res: Response) => {
 
     const { data: exports } = await supabaseAdmin
       .from('data_export_requests')
-      .select('id, status, export_format, created_at, completed_at, expires_at, file_size_bytes')
+      .select('id, status, export_format, request_date, completed_at, expires_at, file_size_bytes')
       .eq('user_id', userId)
-      .order('created_at', { ascending: false });
+      .order('request_date', { ascending: false });
 
     const formattedExports = exports?.map((exp) => ({
       requestId: exp.id,
       status: exp.status,
       format: exp.export_format,
-      requestDate: exp.created_at,
+      requestDate: exp.request_date,
       completedAt: exp.completed_at,
       expiresAt: exp.expires_at,
       fileSizeMB: exp.file_size_bytes
@@ -73,7 +73,7 @@ export const requestDataExport = async (req: Request, res: Response) => {
       .from('data_export_requests')
       .select('id')
       .eq('user_id', userId)
-      .gte('created_at', twentyFourHoursAgo.toISOString())
+      .gte('request_date', twentyFourHoursAgo.toISOString())
       .limit(1);
 
     if (recent && recent.length > 0) {
@@ -130,7 +130,7 @@ export const getExportStatus = async (req: Request, res: Response) => {
 
     const { data: request } = await supabaseAdmin
       .from('data_export_requests')
-      .select('id, status, export_format, created_at, completed_at, expires_at, file_size_bytes, error_message')
+      .select('id, status, export_format, request_date, completed_at, expires_at, file_size_bytes, error_message')
       .eq('id', requestId)
       .eq('user_id', userId)
       .single();
@@ -143,7 +143,7 @@ export const getExportStatus = async (req: Request, res: Response) => {
       requestId: request.id,
       status: request.status,
       format: request.export_format,
-      requestDate: request.created_at,
+      requestDate: request.request_date,
       completedAt: request.completed_at,
       expiresAt: request.expires_at,
       fileSizeMB: request.file_size_bytes

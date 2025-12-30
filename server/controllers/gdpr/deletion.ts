@@ -28,15 +28,15 @@ export const listDeletionRequests = async (req: Request, res: Response) => {
 
     const { data: requests } = await supabaseAdmin
       .from('deletion_requests')
-      .select('id, status, reason, requested_at, scheduled_deletion_date, completed_at')
+      .select('id, status, reason, request_date, scheduled_deletion_date, completed_at')
       .eq('user_id', userId)
-      .order('requested_at', { ascending: false });
+      .order('request_date', { ascending: false });
 
     const formattedRequests = requests?.map((req) => ({
       id: req.id,
       status: req.status,
       reason: req.reason,
-      requestedAt: req.requested_at,
+      requestedAt: req.request_date,
       scheduledDeletionDate: req.scheduled_deletion_date,
       completedAt: req.completed_at,
       canCancel: req.status === 'pending' && new Date(req.scheduled_deletion_date) > new Date(),
@@ -63,10 +63,10 @@ export const getDeletionStatus = async (req: Request, res: Response) => {
     // Get most recent pending deletion request
     const { data: request } = await supabaseAdmin
       .from('deletion_requests')
-      .select('id, status, reason, requested_at, scheduled_deletion_date, completed_at')
+      .select('id, status, reason, request_date, scheduled_deletion_date, completed_at')
       .eq('user_id', userId)
       .eq('status', 'pending')
-      .order('requested_at', { ascending: false })
+      .order('request_date', { ascending: false })
       .limit(1)
       .single();
 
@@ -79,7 +79,7 @@ export const getDeletionStatus = async (req: Request, res: Response) => {
         id: request.id,
         status: request.status,
         reason: request.reason,
-        requestedAt: request.requested_at,
+        requestedAt: request.request_date,
         scheduledDeletionDate: request.scheduled_deletion_date,
         completedAt: request.completed_at,
         canCancel: request.status === 'pending' && new Date(request.scheduled_deletion_date) > new Date(),
@@ -146,7 +146,7 @@ export const requestAccountDeletion = async (req: Request, res: Response) => {
         user_id: userId,
         reason: reason || null,
         status: 'pending',
-        requested_at: new Date().toISOString(),
+        request_date: new Date().toISOString(),
         scheduled_deletion_date: scheduledDate.toISOString(),
       })
       .select()

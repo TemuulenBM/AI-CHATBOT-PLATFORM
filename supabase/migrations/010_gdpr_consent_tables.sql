@@ -6,7 +6,7 @@
 -- Stores user consent records for different data processing categories
 CREATE TABLE IF NOT EXISTS user_consents (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+  user_id TEXT REFERENCES users(id) ON DELETE CASCADE,
   anonymous_id VARCHAR(255), -- For non-logged-in users
   consent_type VARCHAR(50) NOT NULL, -- 'essential', 'analytics', 'marketing'
   granted BOOLEAN NOT NULL,
