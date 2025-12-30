@@ -19,7 +19,9 @@ jobs:
       - name: Install PostgreSQL client
         run: |
           sudo apt-get update
-          sudo apt-get install -y postgresql-client
+          # Install PostgreSQL 17 client instead of the default (16)
+          # This matches Supabase server version 17.6
+          sudo apt-get install -y postgresql-client-17
 
           # Version шалгах
           psql --version
