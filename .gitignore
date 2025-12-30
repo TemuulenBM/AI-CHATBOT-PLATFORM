@@ -23,3 +23,7 @@ logs/
 .vscode/
 *.swp
 *.swo
+.claude/
+
+# Coverage reports
+coverage/

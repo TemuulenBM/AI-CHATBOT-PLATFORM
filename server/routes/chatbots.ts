@@ -49,6 +49,13 @@ router.get(
   chatbotsController.getChatbotAnalytics
 );
 
+// GET /api/chatbots/:id/analytics/widget - Get widget-specific analytics (for UI compatibility)
+router.get(
+  "/:id/analytics/widget",
+  validate({ params: schemas.uuidParam }),
+  chatbotsController.getWidgetAnalytics
+);
+
 // GET /api/chatbots/:id/sentiment - Get sentiment breakdown
 router.get(
   "/:id/sentiment",

@@ -1167,3 +1167,4 @@ export async function trackWidgetEvent(
     next(error);
   }
 }
+

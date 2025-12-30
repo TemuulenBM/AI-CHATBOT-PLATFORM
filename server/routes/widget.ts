@@ -251,15 +251,23 @@ router.get("/widget/:id", (req: Request, res: Response, next: NextFunction) => {
 });
 
 // POST /widget/analytics - Receive widget analytics events
-router.post("/widget/analytics", (req: Request, res: Response) => {
+router.post("/widget/analytics", async (req: Request, res: Response) => {
   try {
     const { chatbotId, sessionId, events } = req.body;
 
-    // Log analytics (in production, you'd store these)
-    logger.debug("Widget analytics received", { chatbotId, sessionId, eventCount: events?.length });
+    // Validate required fields
+    if (!chatbotId || !sessionId || !Array.isArray(events)) {
+      res.status(400).json({ error: "Missing required fields: chatbotId, sessionId, events" });
+      return;
+    }
 
-    // TODO: Store analytics in database
-    // await analyticsService.trackWidgetEvents(chatbotId, sessionId, events);
+    logger.debug("Widget analytics received", { chatbotId, sessionId, eventCount: events.length });
+
+    // Import analytics service dynamically to avoid circular dependencies
+    const widgetAnalytics = await import("../services/widget-analytics");
+
+    // Track all events in batch
+    await widgetAnalytics.trackEvents(chatbotId, sessionId, events);
 
     res.status(204).send();
   } catch (error) {
@@ -269,7 +277,7 @@ router.post("/widget/analytics", (req: Request, res: Response) => {
 });
 
 // POST /widget/errors - Receive widget error reports
-router.post("/widget/errors", (req: Request, res: Response) => {
+router.post("/widget/errors", async (req: Request, res: Response) => {
   try {
     const { chatbotId, sessionId, error: widgetError } = req.body;
 
@@ -284,8 +292,18 @@ router.post("/widget/errors", (req: Request, res: Response) => {
       userAgent: widgetError?.userAgent,
     });
 
-    // TODO: Store errors in database or send to error tracking service
-    // await errorService.trackWidgetError(chatbotId, sessionId, error);
+    // Track error as analytics event
+    const widgetAnalytics = await import("../services/widget-analytics");
+    await widgetAnalytics.trackEvent(chatbotId, sessionId, {
+      event_name: "widget_error",
+      event_category: "error",
+      properties: {
+        error_message: widgetError?.message,
+        error_stack: widgetError?.stack?.substring(0, 500), // Limit stack trace size
+        widget_version: widgetError?.widgetVersion,
+        user_agent: widgetError?.userAgent,
+      },
+    });
 
     res.status(204).send();
   } catch (error) {
