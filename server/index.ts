@@ -186,6 +186,12 @@ app.use((req, res, next) => {
       } catch (error) {
         logger.warn("Failed to initialize scheduled re-scrape (Redis may be unavailable)", { error });
       }
+
+      // Initialize analytics cleanup job
+      // Note: Cleanup job temporarily disabled - will be re-enabled after BullMQ configuration fix
+      // The cleanup can be run manually via: curl -X POST http://localhost:5000/api/admin/cleanup-analytics
+      logger.info("Analytics cleanup job will be enabled in next deployment");
+
     },
   );
 
