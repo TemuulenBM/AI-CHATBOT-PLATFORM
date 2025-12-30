@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { getCsrfHeaders } from '../hooks/use-csrf';
 
 export interface ChatbotSettings {
   primaryColor?: string;
@@ -198,15 +199,27 @@ interface ChatbotStore {
   exportAnalytics: (chatbotId: string, options?: AnalyticsExportOptions) => Promise<boolean>;
 }
 
-// Helper function to get auth headers from Clerk token
+// Helper function to get auth headers from Clerk token and CSRF token
 async function getAuthHeaders(getToken: GetTokenFunction | null): Promise<Record<string, string>> {
-  if (!getToken) return {};
-  try {
-    const token = await getToken();
-    return token ? { Authorization: `Bearer ${token}` } : {};
-  } catch {
-    return {};
+  const headers: Record<string, string> = {};
+
+  // Add Clerk auth token
+  if (getToken) {
+    try {
+      const token = await getToken();
+      if (token) {
+        headers.Authorization = `Bearer ${token}`;
+      }
+    } catch {
+      // Continue without auth
+    }
   }
+
+  // Add CSRF token for state-changing requests
+  const csrfHeaders = getCsrfHeaders();
+  Object.assign(headers, csrfHeaders);
+
+  return headers;
 }
 
 export const useChatbotStore = create<ChatbotStore>((set, get) => ({

@@ -1,6 +1,7 @@
 import "dotenv/config";
 import * as Sentry from "@sentry/node";
 import express from "express";
+import cookieParser from "cookie-parser";
 import { registerRoutes } from "./routes";
 import { serveStatic } from "./static";
 import { createServer } from "http";
@@ -8,6 +9,7 @@ import { closeQueues, initScheduledRescrape } from "./jobs/queues";
 import logger from "./utils/logger";
 import { initializeEnvironment } from "./utils/env";
 import { applySecurity } from "./middleware/security";
+import { setCsrfToken } from "./middleware/csrf";
 
 // Validate environment variables at startup
 initializeEnvironment();
@@ -91,6 +93,9 @@ declare module "http" {
 // Apply security middleware BEFORE body parsers
 applySecurity(app);
 
+// Cookie parser (required for CSRF protection)
+app.use(cookieParser());
+
 // Add size limits to prevent DoS
 app.use(
   express.json({
@@ -105,6 +110,10 @@ app.use(express.urlencoded({
   extended: false,
   limit: process.env.BODY_LIMIT || "10mb",
 }));
+
+// CSRF token generation for all requests
+// This sets the CSRF token cookie on every request
+app.use(setCsrfToken);
 
 export function log(message: string, source = "express") {
   logger.debug(message, { source });
