@@ -11,6 +11,7 @@ import * as feedbackController from "./controllers/feedback";
 import * as chatbotsController from "./controllers/chatbots";
 import { clerkAuthMiddleware as authMiddleware, loadSubscription } from "./middleware/clerkAuth";
 import { handleClerkWebhook } from "./middleware/clerkWebhook";
+import { getCsrfToken, validateCsrfToken } from "./middleware/csrf";
 import { AppError } from "./utils/errors";
 import logger from "./utils/logger";
 import { redis } from "./utils/redis";
@@ -92,6 +93,9 @@ export async function registerRoutes(
 
     next();
   });
+
+  // CSRF token endpoint
+  app.get("/api/csrf-token", getCsrfToken);
 
   // Basic health check
   app.get("/api/health", async (_req: Request, res: Response) => {
@@ -323,6 +327,10 @@ export async function registerRoutes(
 
   // Clerk Webhook (must be before JSON body parser for raw body)
   app.post("/api/webhooks/clerk", handleClerkWebhook);
+
+  // Apply CSRF validation to all API routes that modify data
+  // This middleware validates CSRF tokens for POST, PUT, PATCH, DELETE requests
+  app.use("/api", validateCsrfToken);
 
   // API Routes
   app.use("/api/chatbots", chatbotRoutes);
