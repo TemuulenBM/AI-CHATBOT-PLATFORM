@@ -224,7 +224,7 @@ async function generateDailyStats(): Promise<{ processed: number }> {
       throw chatbotError;
     }
 
-    const uniqueChatbotIds = [...new Set(chatbots?.map((c) => c.chatbot_id) || [])];
+    const uniqueChatbotIds = Array.from(new Set(chatbots?.map((c) => c.chatbot_id) || []));
 
     logger.info(`Generating stats for ${uniqueChatbotIds.length} chatbots`);
 

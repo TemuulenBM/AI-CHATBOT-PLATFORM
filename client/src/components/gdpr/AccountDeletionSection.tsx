@@ -53,7 +53,9 @@ export function AccountDeletionSection() {
   const fetchDeletionStatus = useCallback(async () => {
     try {
       const headers = await getAuthHeaders();
-      const response = await fetch('/api/gdpr/delete-account/status', { headers });
+      const response = await fetch('/api/gdpr/delete-account/status', { 
+        headers: headers as HeadersInit 
+      });
 
       if (response.ok) {
         const data = await response.json();
@@ -97,8 +99,8 @@ export function AccountDeletionSection() {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          ...headers,
-        },
+          ...(headers as Record<string, string>),
+        } as HeadersInit,
         body: JSON.stringify({
           confirmEmail,
           reason: reason.trim() || null,
@@ -143,7 +145,7 @@ export function AccountDeletionSection() {
       const headers = await getAuthHeaders();
       const response = await fetch(`/api/gdpr/delete-account/${deletionRequest.id}`, {
         method: 'DELETE',
-        headers,
+        headers: headers as HeadersInit,
       });
 
       const data = await response.json();
