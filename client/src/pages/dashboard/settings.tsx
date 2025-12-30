@@ -20,7 +20,11 @@ import {
   Zap,
   Calendar,
   CheckCircle2,
+  Database,
+  Trash2,
 } from "lucide-react";
+import { DataExportSection } from "@/components/gdpr/DataExportSection";
+import { AccountDeletionSection } from "@/components/gdpr/AccountDeletionSection";
 
 // Paddle.js type declarations
 declare global {
@@ -716,6 +720,36 @@ export default function Settings() {
                   </div>
                 )}
               </div>
+            </GlassCard>
+
+            {/* Data Export Section */}
+            <GlassCard className="p-6">
+              <div className="flex items-center gap-3 mb-6">
+                <div className="h-10 w-10 rounded-lg bg-blue-500/10 flex items-center justify-center text-blue-400">
+                  <Database className="h-5 w-5" />
+                </div>
+                <div>
+                  <h2 className="font-semibold">Export Your Data</h2>
+                  <p className="text-sm text-muted-foreground">Download a complete copy of your personal data</p>
+                </div>
+              </div>
+
+              <DataExportSection />
+            </GlassCard>
+
+            {/* Account Deletion Section */}
+            <GlassCard className="p-6">
+              <div className="flex items-center gap-3 mb-6">
+                <div className="h-10 w-10 rounded-lg bg-red-500/10 flex items-center justify-center text-red-400">
+                  <Trash2 className="h-5 w-5" />
+                </div>
+                <div>
+                  <h2 className="font-semibold">Delete Your Account</h2>
+                  <p className="text-sm text-muted-foreground">Permanently delete your account and all associated data</p>
+                </div>
+              </div>
+
+              <AccountDeletionSection />
             </GlassCard>
           </div>
         </div>

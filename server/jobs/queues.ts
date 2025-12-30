@@ -292,6 +292,16 @@ export const scheduledRescrapeQueue = new Queue("scheduled-rescrape", { connecti
 
 scheduledRescrapeQueue.on("error", handleQueueError);
 
+// GDPR Data Export Queue
+export const dataExportQueue = new Queue("data-export", { connection });
+
+dataExportQueue.on("error", handleQueueError);
+
+// GDPR Account Deletion Queue
+export const accountDeletionQueue = new Queue("account-deletion", { connection });
+
+accountDeletionQueue.on("error", handleQueueError);
+
 interface ScheduledRescrapeJobData {
   // Empty data - job fetches chatbots that need re-scraping
 }
@@ -445,13 +455,25 @@ scheduledRescrapeWorker.on("failed", (job, err) => {
   logger.error("Scheduled re-scrape job failed", { jobId: job?.id, error: err.message });
 });
 
+// Import GDPR workers (they self-register)
+import './data-export-processor';
+import './account-deletion-processor';
+import { scheduledDeletionQueue, scheduledDeletionWorker, initScheduledDeletion } from './deletion-scheduler';
+
+// Export GDPR scheduler init function
+export { initScheduledDeletion };
+
 // Graceful shutdown
 export async function closeQueues(): Promise<void> {
   await scrapeWorker.close();
   await embeddingWorker.close();
   await scheduledRescrapeWorker.close();
+  await scheduledDeletionWorker.close();
   await scrapeQueue.close();
   await embeddingQueue.close();
   await scheduledRescrapeQueue.close();
+  await dataExportQueue.close();
+  await accountDeletionQueue.close();
+  await scheduledDeletionQueue.close();
   logger.info("All queues closed");
 }
