@@ -110,9 +110,9 @@ export const dataExportWorker = new Worker<DataExportJobData>(
       await archive.finalize();
 
       // Wait for the output stream to finish
-      await new Promise((resolve, reject) => {
-        output.on('close', resolve);
-        output.on('error', reject);
+      await new Promise<void>((resolve, reject) => {
+        output.on('close', () => resolve());
+        output.on('error', (err) => reject(err));
       });
 
       const fileSize = archive.pointer();

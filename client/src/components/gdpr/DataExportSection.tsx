@@ -49,7 +49,9 @@ export function DataExportSection() {
   const fetchExports = useCallback(async () => {
     try {
       const headers = await getAuthHeaders();
-      const response = await fetch('/api/gdpr/data-export', { headers });
+      const response = await fetch('/api/gdpr/data-export', { 
+        headers: headers as HeadersInit 
+      });
 
       if (response.ok) {
         const data = await response.json();
@@ -75,8 +77,8 @@ export function DataExportSection() {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          ...headers,
-        },
+          ...(headers as Record<string, string>),
+        } as HeadersInit,
         body: JSON.stringify({ format: 'json' }),
       });
 
@@ -111,7 +113,7 @@ export function DataExportSection() {
     try {
       const headers = await getAuthHeaders();
       const response = await fetch(`/api/gdpr/data-export/${requestId}/download`, {
-        headers,
+        headers: headers as HeadersInit,
       });
 
       if (!response.ok) {

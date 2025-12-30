@@ -51,6 +51,9 @@ function parseRedisUrl(url: string): RedisOptions {
 
 export const redis = new Redis(parseRedisUrl(redisUrl));
 
+// Track if quota error has been logged to avoid spam
+let quotaErrorLogged = false;
+
 redis.on("connect", () => {
   logger.info("Redis connected");
 });
@@ -68,11 +71,11 @@ redis.on("error", (error: NodeJS.ErrnoException) => {
     error.message.includes("rate limit")
   )) {
     // Only log once per session to avoid spam
-    if (!redis._quotaErrorLogged) {
+    if (!quotaErrorLogged) {
       logger.warn("Redis quota limit reached - some features may be degraded", {
         message: error.message
       });
-      (redis as any)._quotaErrorLogged = true;
+      quotaErrorLogged = true;
     }
     return;
   }

@@ -357,9 +357,10 @@ export async function incrementSessionMessages(
         .single();
 
       if (session) {
+        const currentValue = (session as Record<string, number>)[column] || 0;
         await supabaseAdmin
           .from("widget_sessions")
-          .update({ [column]: (session[column] || 0) + 1 })
+          .update({ [column]: currentValue + 1 })
           .eq("session_id", sessionId);
       }
     }
@@ -391,9 +392,10 @@ export async function incrementSessionInteraction(
       .single();
 
     if (session) {
+      const currentValue = (session as Record<string, number>)[column] || 0;
       await supabaseAdmin
         .from("widget_sessions")
-        .update({ [column]: (session[column] || 0) + 1 })
+        .update({ [column]: currentValue + 1 })
         .eq("session_id", sessionId);
     }
   } catch (error) {
