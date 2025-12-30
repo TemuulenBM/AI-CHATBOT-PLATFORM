@@ -11,7 +11,35 @@ const router = Router();
 router.use(authMiddleware);
 router.use(loadSubscription);
 
-// GET /api/chatbots/stats - Get dashboard stats
+/**
+ * @openapi
+ * /api/chatbots/stats:
+ *   get:
+ *     summary: Get Dashboard Statistics
+ *     description: Retrieve overall statistics across all user's chatbots including total conversations, messages, and sentiment analysis
+ *     tags:
+ *       - Chatbots
+ *     security:
+ *       - BearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Statistics retrieved successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 total_chatbots:
+ *                   type: integer
+ *                 total_conversations:
+ *                   type: integer
+ *                 total_messages:
+ *                   type: integer
+ *                 sentiment_summary:
+ *                   type: object
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ */
 router.get("/stats", chatbotsController.getStats);
 
 // GET /api/chatbots/stats/volume - Get message volume trends
@@ -24,7 +52,64 @@ router.get(
   chatbotsController.getAllConversations
 );
 
-// POST /api/chatbots - Create chatbot
+/**
+ * @openapi
+ * /api/chatbots:
+ *   post:
+ *     summary: Create New Chatbot
+ *     description: Create a new AI chatbot by providing a website URL. The system will scrape the website and generate embeddings for semantic search. Rate limited based on subscription plan.
+ *     tags:
+ *       - Chatbots
+ *     security:
+ *       - BearerAuth: []
+ *       - CsrfToken: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/CreateChatbotRequest'
+ *     responses:
+ *       201:
+ *         description: Chatbot created successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: Chatbot created successfully
+ *                 chatbot:
+ *                   $ref: '#/components/schemas/Chatbot'
+ *       400:
+ *         $ref: '#/components/responses/ValidationError'
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ *       429:
+ *         $ref: '#/components/responses/RateLimitError'
+ *   get:
+ *     summary: List All Chatbots
+ *     description: Get a list of all chatbots owned by the authenticated user
+ *     tags:
+ *       - Chatbots
+ *     security:
+ *       - BearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Chatbots retrieved successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 chatbots:
+ *                   type: array
+ *                   items:
+ *                     $ref: '#/components/schemas/Chatbot'
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ */
 router.post(
   "/",
   embeddingRateLimit,
@@ -32,10 +117,113 @@ router.post(
   chatbotsController.createChatbot
 );
 
-// GET /api/chatbots - List chatbots
 router.get("/", chatbotsController.listChatbots);
 
-// GET /api/chatbots/:id - Get single chatbot
+/**
+ * @openapi
+ * /api/chatbots/{id}:
+ *   get:
+ *     summary: Get Chatbot Details
+ *     description: Retrieve detailed information about a specific chatbot including configuration and settings
+ *     tags:
+ *       - Chatbots
+ *     security:
+ *       - BearerAuth: []
+ *     parameters:
+ *       - $ref: '#/components/parameters/ChatbotId'
+ *     responses:
+ *       200:
+ *         description: Chatbot details retrieved successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 chatbot:
+ *                   $ref: '#/components/schemas/Chatbot'
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ *       404:
+ *         $ref: '#/components/responses/NotFoundError'
+ *   patch:
+ *     summary: Update Chatbot
+ *     description: Update chatbot configuration including personality, colors, prompts, and settings
+ *     tags:
+ *       - Chatbots
+ *     security:
+ *       - BearerAuth: []
+ *       - CsrfToken: []
+ *     parameters:
+ *       - $ref: '#/components/parameters/ChatbotId'
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               name:
+ *                 type: string
+ *               personality:
+ *                 type: string
+ *               system_prompt:
+ *                 type: string
+ *               initial_message:
+ *                 type: string
+ *               suggested_questions:
+ *                 type: array
+ *                 items:
+ *                   type: string
+ *               theme_color:
+ *                 type: string
+ *               text_color:
+ *                 type: string
+ *               branding_url:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Chatbot updated successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                 chatbot:
+ *                   $ref: '#/components/schemas/Chatbot'
+ *       400:
+ *         $ref: '#/components/responses/ValidationError'
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ *       404:
+ *         $ref: '#/components/responses/NotFoundError'
+ *   delete:
+ *     summary: Delete Chatbot
+ *     description: Permanently delete a chatbot and all associated data including conversations and embeddings
+ *     tags:
+ *       - Chatbots
+ *     security:
+ *       - BearerAuth: []
+ *       - CsrfToken: []
+ *     parameters:
+ *       - $ref: '#/components/parameters/ChatbotId'
+ *     responses:
+ *       200:
+ *         description: Chatbot deleted successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: Chatbot deleted successfully
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ *       404:
+ *         $ref: '#/components/responses/NotFoundError'
+ */
 router.get(
   "/:id",
   validate({ params: schemas.uuidParam }),
@@ -157,28 +345,94 @@ router.get(
 
 // ===== Knowledge Base Routes =====
 
-// GET /api/chatbots/:id/knowledge/stats - Get knowledge base statistics
+/**
+ * @openapi
+ * /api/chatbots/{id}/knowledge:
+ *   post:
+ *     summary: Add Knowledge Entry
+ *     description: Add a custom Q&A entry to the chatbot's knowledge base. The system will generate embeddings for semantic search.
+ *     tags:
+ *       - Knowledge Base
+ *     security:
+ *       - BearerAuth: []
+ *       - CsrfToken: []
+ *     parameters:
+ *       - $ref: '#/components/parameters/ChatbotId'
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [question, answer]
+ *             properties:
+ *               question:
+ *                 type: string
+ *                 example: What are your business hours?
+ *               answer:
+ *                 type: string
+ *                 example: We are open Monday-Friday, 9 AM to 5 PM EST.
+ *               source_url:
+ *                 type: string
+ *                 format: uri
+ *     responses:
+ *       201:
+ *         description: Knowledge entry added successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                 entry:
+ *                   $ref: '#/components/schemas/KnowledgeEntry'
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ *       404:
+ *         $ref: '#/components/responses/NotFoundError'
+ *   get:
+ *     summary: List Knowledge Entries
+ *     description: Get all custom knowledge entries for a chatbot
+ *     tags:
+ *       - Knowledge Base
+ *     security:
+ *       - BearerAuth: []
+ *     parameters:
+ *       - $ref: '#/components/parameters/ChatbotId'
+ *     responses:
+ *       200:
+ *         description: Knowledge entries retrieved successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 entries:
+ *                   type: array
+ *                   items:
+ *                     $ref: '#/components/schemas/KnowledgeEntry'
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ */
 router.get(
   "/:id/knowledge/stats",
   validate({ params: schemas.uuidParam }),
   knowledgeBaseController.getKnowledgeStats
 );
 
-// POST /api/chatbots/:id/knowledge/bulk - Bulk import knowledge entries
 router.post(
   "/:id/knowledge/bulk",
   validate({ params: schemas.uuidParam }),
   knowledgeBaseController.bulkImportKnowledge
 );
 
-// POST /api/chatbots/:id/knowledge - Add knowledge entry
 router.post(
   "/:id/knowledge",
   validate({ params: schemas.uuidParam }),
   knowledgeBaseController.addKnowledgeEntry
 );
 
-// GET /api/chatbots/:id/knowledge - List knowledge entries
 router.get(
   "/:id/knowledge",
   validate({ params: schemas.uuidParam }),

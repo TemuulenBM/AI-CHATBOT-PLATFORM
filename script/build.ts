@@ -54,6 +54,8 @@ async function buildAll() {
     outfile: "dist/index.cjs",
     define: {
       "process.env.NODE_ENV": '"production"',
+      // Define import.meta as empty object to suppress warnings in CJS build
+      "import.meta": "{}",
     },
     minify: true,
     external: externals,

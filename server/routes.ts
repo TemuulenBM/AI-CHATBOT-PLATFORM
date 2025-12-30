@@ -94,10 +94,76 @@ export async function registerRoutes(
     next();
   });
 
-  // CSRF token endpoint
+  /**
+   * @openapi
+   * /api/csrf-token:
+   *   get:
+   *     summary: Get CSRF Token
+   *     description: Obtain a CSRF token for state-changing requests. The token is automatically set in cookies and should be included in the X-CSRF-Token header for POST, PUT, PATCH, and DELETE requests.
+   *     tags:
+   *       - Health & Monitoring
+   *     responses:
+   *       200:
+   *         description: CSRF token returned successfully
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 csrfToken:
+   *                   type: string
+   *                   description: CSRF token for request validation
+   */
   app.get("/api/csrf-token", getCsrfToken);
 
-  // Basic health check
+  /**
+   * @openapi
+   * /api/health:
+   *   get:
+   *     summary: Basic Health Check
+   *     description: Quick health check endpoint that verifies Redis connectivity. Returns 200 if healthy, 503 if degraded.
+   *     tags:
+   *       - Health & Monitoring
+   *     responses:
+   *       200:
+   *         description: Service is healthy
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 status:
+   *                   type: string
+   *                   enum: [ok]
+   *                 timestamp:
+   *                   type: string
+   *                   format: date-time
+   *                 services:
+   *                   type: object
+   *                   properties:
+   *                     redis:
+   *                       type: string
+   *                       enum: [connected]
+   *       503:
+   *         description: Service is degraded
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 status:
+   *                   type: string
+   *                   enum: [degraded]
+   *                 timestamp:
+   *                   type: string
+   *                   format: date-time
+   *                 services:
+   *                   type: object
+   *                   properties:
+   *                     redis:
+   *                       type: string
+   *                       enum: [disconnected]
+   */
   app.get("/api/health", async (_req: Request, res: Response) => {
     try {
       await redis.ping();
@@ -119,7 +185,28 @@ export async function registerRoutes(
     }
   });
 
-  // Detailed health check endpoint
+  /**
+   * @openapi
+   * /api/health/detailed:
+   *   get:
+   *     summary: Detailed Health Check
+   *     description: Comprehensive health check that tests all service dependencies including database, Redis, OpenAI, Paddle, job queues, and memory usage.
+   *     tags:
+   *       - Health & Monitoring
+   *     responses:
+   *       200:
+   *         description: All services are healthy
+   *         content:
+   *           application/json:
+   *             schema:
+   *               $ref: '#/components/schemas/HealthCheck'
+   *       503:
+   *         description: One or more services are degraded
+   *         content:
+   *           application/json:
+   *             schema:
+   *               $ref: '#/components/schemas/HealthCheck'
+   */
   app.get("/api/health/detailed", async (_req: Request, res: Response) => {
     const checks: Record<string, { status: string; latency?: number; error?: string; details?: unknown }> = {};
     let overallStatus = "ok";
@@ -239,7 +326,39 @@ export async function registerRoutes(
   // Monitoring & Observability Endpoints
   // ============================================
 
-  // Metrics endpoint - returns collected metrics
+  /**
+   * @openapi
+   * /api/monitoring/metrics:
+   *   get:
+   *     summary: Get Performance Metrics
+   *     description: Returns collected performance metrics including request counts, response times, and error rates. Requires authentication.
+   *     tags:
+   *       - Health & Monitoring
+   *     security:
+   *       - BearerAuth: []
+   *     responses:
+   *       200:
+   *         description: Metrics retrieved successfully
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 timestamp:
+   *                   type: string
+   *                   format: date-time
+   *                 requests:
+   *                   type: object
+   *                   description: Request statistics by endpoint
+   *                 responseTimes:
+   *                   type: object
+   *                   description: Average response times
+   *                 errorRates:
+   *                   type: object
+   *                   description: Error rates by status code
+   *       401:
+   *         $ref: '#/components/responses/UnauthorizedError'
+   */
   app.get("/api/monitoring/metrics", authMiddleware, async (_req: Request, res: Response) => {
     try {
       const metrics = getMetricsSnapshot();

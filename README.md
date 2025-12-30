@@ -109,6 +109,54 @@ SENTRY_DSN=https://your-sentry-dsn
 
 See [.env.example](./.env.example) for complete configuration.
 
+## API Documentation
+
+ConvoAI provides comprehensive REST API documentation using OpenAPI/Swagger specification.
+
+### Accessing the Documentation
+
+Once the server is running, access the interactive API documentation at:
+
+**Development:** `http://localhost:5000/api-docs`
+**Production:** `https://your-domain.com/api-docs`
+
+### Documentation Features
+
+- **Interactive API Explorer**: Test endpoints directly from the browser
+- **Request/Response Examples**: See example payloads for all endpoints
+- **Authentication Guide**: Learn how to authenticate API requests
+- **Schema Definitions**: Detailed models for all request and response objects
+- **Error Codes**: Comprehensive error handling documentation
+
+### Raw OpenAPI Specification
+
+Access the raw OpenAPI JSON specification at:
+- `GET /api-docs.json`
+
+This can be imported into API clients like Postman, Insomnia, or used for code generation.
+
+### API Authentication
+
+Most endpoints require authentication using Clerk JWT tokens:
+
+```bash
+# Include the Authorization header in requests
+Authorization: Bearer YOUR_JWT_TOKEN
+```
+
+### CSRF Protection
+
+State-changing requests (POST, PUT, PATCH, DELETE) require CSRF tokens:
+
+1. Obtain token: `GET /api/csrf-token`
+2. Include in header: `X-CSRF-Token: YOUR_CSRF_TOKEN`
+
+### Rate Limiting
+
+- Chat endpoints: Rate limited to prevent abuse
+- Chatbot creation: Rate limited based on subscription plan
+- Analytics: Rate limited per chatbot
+
 ## Database Resilience
 
 This project implements industry-standard database resilience practices:

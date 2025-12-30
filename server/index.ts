@@ -2,6 +2,7 @@ import "dotenv/config";
 import * as Sentry from "@sentry/node";
 import express from "express";
 import cookieParser from "cookie-parser";
+import swaggerUi from "swagger-ui-express";
 import { registerRoutes } from "./routes";
 import { serveStatic } from "./static";
 import { createServer } from "http";
@@ -10,6 +11,7 @@ import logger from "./utils/logger";
 import { initializeEnvironment } from "./utils/env";
 import { applySecurity } from "./middleware/security";
 import { setCsrfToken } from "./middleware/csrf";
+import { swaggerSpec } from "./config/swagger";
 
 // Validate environment variables at startup
 initializeEnvironment();
@@ -114,6 +116,22 @@ app.use(express.urlencoded({
 // CSRF token generation for all requests
 // This sets the CSRF token cookie on every request
 app.use(setCsrfToken);
+
+// API Documentation with Swagger UI
+// Accessible at /api-docs for interactive API exploration
+app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec, {
+  customCss: '.swagger-ui .topbar { display: none }',
+  customSiteTitle: 'ConvoAI API Documentation',
+  customfavIcon: '/favicon.ico',
+}));
+
+// Serve raw OpenAPI spec as JSON
+app.get('/api-docs.json', (_req, res) => {
+  res.setHeader('Content-Type', 'application/json');
+  res.send(swaggerSpec);
+});
+
+logger.info('API documentation available at /api-docs');
 
 export function log(message: string, source = "express") {
   logger.debug(message, { source });
