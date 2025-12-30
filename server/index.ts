@@ -6,7 +6,7 @@ import swaggerUi from "swagger-ui-express";
 import { registerRoutes } from "./routes";
 import { serveStatic } from "./static";
 import { createServer } from "http";
-import { closeQueues, initScheduledRescrape } from "./jobs/queues";
+import { closeQueues, initScheduledRescrape, initScheduledDeletion } from "./jobs/queues";
 import logger from "./utils/logger";
 import { initializeEnvironment } from "./utils/env";
 import { applySecurity } from "./middleware/security";
@@ -212,6 +212,13 @@ app.use((req, res, next) => {
         await initScheduledRescrape();
       } catch (error) {
         logger.warn("Failed to initialize scheduled re-scrape (Redis may be unavailable)", { error });
+      }
+
+      // Initialize GDPR scheduled deletion cron job
+      try {
+        await initScheduledDeletion();
+      } catch (error) {
+        logger.warn("Failed to initialize scheduled deletion (Redis may be unavailable)", { error });
       }
 
       // Initialize analytics cleanup job

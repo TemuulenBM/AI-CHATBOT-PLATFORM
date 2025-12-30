@@ -5,9 +5,11 @@ import { SignIn, SignUp } from "@clerk/clerk-react";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { ErrorBoundary } from "@/components/error-boundary";
+import { CookieConsentBanner } from "@/components/gdpr/CookieConsentBanner";
 import NotFound from "@/pages/not-found";
 import Landing from "@/pages/landing";
 import WidgetDemo from "@/pages/widget-demo";
+import PrivacyPolicy from "@/pages/privacy-policy";
 import Dashboard from "@/pages/dashboard/index";
 import ChatbotsList from "@/pages/dashboard/chatbots";
 import CreateChatbot from "@/pages/dashboard/create-chatbot";
@@ -22,6 +24,7 @@ function Router() {
     <Switch>
       <Route path="/" component={Landing} />
       <Route path="/widget/demo" component={WidgetDemo} />
+      <Route path="/privacy-policy" component={PrivacyPolicy} />
       <Route path="/login">
         <div className="min-h-screen flex items-center justify-center bg-background">
           <SignIn
@@ -90,6 +93,7 @@ function App() {
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
         <Toaster />
+        <CookieConsentBanner />
         <ErrorBoundary>
           <Router />
         </ErrorBoundary>
