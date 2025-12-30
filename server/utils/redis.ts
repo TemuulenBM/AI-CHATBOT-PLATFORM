@@ -60,7 +60,23 @@ redis.on("error", (error: NodeJS.ErrnoException) => {
   if (error.code === "ECONNRESET" || error.code === "EPIPE" || error.code === "ETIMEDOUT") {
     return;
   }
-  
+
+  // Silently ignore Redis quota/rate limit errors (common in free tiers)
+  if (error.message && (
+    error.message.includes("max requests limit exceeded") ||
+    error.message.includes("quota exceeded") ||
+    error.message.includes("rate limit")
+  )) {
+    // Only log once per session to avoid spam
+    if (!redis._quotaErrorLogged) {
+      logger.warn("Redis quota limit reached - some features may be degraded", {
+        message: error.message
+      });
+      (redis as any)._quotaErrorLogged = true;
+    }
+    return;
+  }
+
   logger.error("Redis error", { error: error.message, code: error.code });
   if (process.env.NODE_ENV === "production") {
     logger.error("Redis connection failed in production - this may cause service degradation");

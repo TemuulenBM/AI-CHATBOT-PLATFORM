@@ -6,14 +6,46 @@ import { chatRateLimit } from "../middleware/rateLimit";
 
 const router = Router();
 
-// POST /api/chat/support - Built-in support bot (no auth required)
+/**
+ * @openapi
+ * /api/chat/message:
+ *   post:
+ *     summary: Send Chat Message
+ *     description: Send a message to a chatbot and receive a response. This endpoint returns the complete response in one request (non-streaming). Rate limited to prevent abuse.
+ *     tags:
+ *       - Chat
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/ChatMessageRequest'
+ *     responses:
+ *       200:
+ *         description: Message sent successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   description: Bot's response message
+ *                 conversation_id:
+ *                   type: string
+ *                   format: uuid
+ *                   description: Unique conversation identifier
+ *       400:
+ *         $ref: '#/components/responses/ValidationError'
+ *       429:
+ *         $ref: '#/components/responses/RateLimitError'
+ */
 router.post(
   "/support",
   chatRateLimit,
   chatController.supportBotMessage
 );
 
-// POST /api/chat/message - Send message (non-streaming)
 router.post(
   "/message",
   chatRateLimit,
@@ -21,7 +53,33 @@ router.post(
   chatController.sendMessage
 );
 
-// POST /api/chat/stream - Send message with SSE streaming
+/**
+ * @openapi
+ * /api/chat/stream:
+ *   post:
+ *     summary: Stream Chat Message
+ *     description: Send a message to a chatbot and receive a streaming response using Server-Sent Events (SSE). Provides real-time token-by-token response. Rate limited to prevent abuse.
+ *     tags:
+ *       - Chat
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/ChatMessageRequest'
+ *     responses:
+ *       200:
+ *         description: Streaming response started
+ *         content:
+ *           text/event-stream:
+ *             schema:
+ *               type: string
+ *               description: Server-Sent Events stream with message tokens
+ *       400:
+ *         $ref: '#/components/responses/ValidationError'
+ *       429:
+ *         $ref: '#/components/responses/RateLimitError'
+ */
 router.post(
   "/stream",
   chatRateLimit,

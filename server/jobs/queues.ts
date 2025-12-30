@@ -9,29 +9,38 @@ import logger from "../utils/logger";
 function getRedisConnection() {
   const redisUrl = process.env.REDIS_URL || "redis://localhost:6379";
   const url = new URL(redisUrl);
-  
+
   const connection: {
     host: string;
     port: number;
     password?: string;
     tls?: { rejectUnauthorized: boolean };
     maxRetriesPerRequest: null;
+    retryStrategy?: (times: number) => number | void;
   } = {
     host: url.hostname,
     port: parseInt(url.port || "6379"),
     maxRetriesPerRequest: null, // Required for BullMQ workers
+    retryStrategy(times: number) {
+      // Reduce retry attempts when quota is exceeded
+      if (times > 3) {
+        logger.debug("Redis retry limit reached for BullMQ - pausing retries");
+        return undefined; // Stop retrying
+      }
+      return Math.min(times * 100, 2000);
+    },
   };
-  
+
   // Extract password from URL (format: rediss://default:PASSWORD@host:port)
   if (url.password) {
     connection.password = url.password;
   }
-  
+
   // Enable TLS for rediss:// URLs (Upstash requires TLS)
   if (url.protocol === "rediss:") {
     connection.tls = { rejectUnauthorized: false };
   }
-  
+
   return connection;
 }
 
@@ -42,6 +51,22 @@ export const scrapeQueue = new Queue("scrape", { connection });
 
 // Embedding Queue
 export const embeddingQueue = new Queue("embedding", { connection });
+
+// Suppress quota exceeded errors from queues
+let quotaErrorLoggedForQueues = false;
+const handleQueueError = (err: Error) => {
+  if (err.message && err.message.includes("max requests limit exceeded")) {
+    if (!quotaErrorLoggedForQueues) {
+      logger.warn("Redis quota limit reached - job queues may be degraded");
+      quotaErrorLoggedForQueues = true;
+    }
+    return;
+  }
+  logger.error("Queue error", { error: err.message });
+};
+
+scrapeQueue.on("error", handleQueueError);
+embeddingQueue.on("error", handleQueueError);
 
 interface ScrapeJobData {
   chatbotId: string;
@@ -229,6 +254,22 @@ export const embeddingWorker = new Worker<EmbeddingJobData>(
   }
 );
 
+// Error handlers for workers
+let quotaErrorLoggedForWorkers = false;
+const handleWorkerError = (err: Error) => {
+  if (err.message && err.message.includes("max requests limit exceeded")) {
+    if (!quotaErrorLoggedForWorkers) {
+      logger.warn("Redis quota limit reached - workers may be degraded");
+      quotaErrorLoggedForWorkers = true;
+    }
+    return;
+  }
+  logger.error("Worker error", { error: err.message });
+};
+
+scrapeWorker.on("error", handleWorkerError);
+embeddingWorker.on("error", handleWorkerError);
+
 // Event handlers
 scrapeWorker.on("completed", (job) => {
   logger.info("Scrape job completed", { jobId: job.id, result: job.returnvalue });
@@ -248,6 +289,8 @@ embeddingWorker.on("failed", (job, err) => {
 
 // Scheduled Re-scraping Queue
 export const scheduledRescrapeQueue = new Queue("scheduled-rescrape", { connection });
+
+scheduledRescrapeQueue.on("error", handleQueueError);
 
 interface ScheduledRescrapeJobData {
   // Empty data - job fetches chatbots that need re-scraping
@@ -389,6 +432,9 @@ export async function initScheduledRescrape(): Promise<void> {
 
   logger.info("Scheduled re-scrape cron job initialized (runs daily at 2 AM)");
 }
+
+// Error handler for scheduled rescrape worker
+scheduledRescrapeWorker.on("error", handleWorkerError);
 
 // Event handlers for scheduled rescrape
 scheduledRescrapeWorker.on("completed", (job) => {
