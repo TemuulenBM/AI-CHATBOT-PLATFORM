@@ -6,7 +6,7 @@
 -- Stores user data export requests (Subject Access Requests - SAR)
 CREATE TABLE IF NOT EXISTS data_export_requests (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   request_date TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   status VARCHAR(20) NOT NULL DEFAULT 'pending', -- pending, processing, completed, failed
   export_format VARCHAR(10) NOT NULL DEFAULT 'json', -- json, html
@@ -33,14 +33,14 @@ CREATE INDEX idx_data_export_requests_request_date ON data_export_requests(reque
 -- Stores user account deletion requests (Right to Erasure)
 CREATE TABLE IF NOT EXISTS deletion_requests (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   request_date TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   reason TEXT,
   status VARCHAR(20) NOT NULL DEFAULT 'pending', -- pending, processing, completed, failed, cancelled
   scheduled_deletion_date TIMESTAMPTZ, -- 30-day grace period
   completed_at TIMESTAMPTZ,
   cancelled_at TIMESTAMPTZ,
-  cancelled_by UUID REFERENCES users(id),
+  cancelled_by TEXT REFERENCES users(id),
 
   -- Audit trail
   deleted_data JSONB, -- Summary of deleted data
