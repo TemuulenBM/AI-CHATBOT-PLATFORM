@@ -146,8 +146,12 @@
     "@types/swagger-ui-express": "^4.1.8",
     "@types/ws": "^8.5.13",
     "@types/xml2js": "^0.4.14",
+    "@vite-pwa/assets-generator": "^1.0.2",
     "@vitest/coverage-v8": "^1.2.0",
+    "sharp": "^0.34.5",
     "supertest": "^6.3.4",
+    "vite-imagetools": "^9.0.2",
+    "vite-plugin-imagemin": "^0.6.1",
     "vitest": "^1.2.0"
   },
   "optionalDependencies": {
