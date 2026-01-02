@@ -3,12 +3,51 @@ import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import path from "path";
 import { metaImagesPlugin } from "./vite-plugin-meta-images";
+import { imagetools } from "vite-imagetools";
+import viteImagemin from "vite-plugin-imagemin";
 
 export default defineConfig({
   plugins: [
     react(),
     tailwindcss(),
     metaImagesPlugin(),
+    imagetools({
+      defaultDirectives: new URLSearchParams({
+        format: "webp;avif;jpg",
+        quality: "80",
+        w: "400;800;1200",
+      }),
+    }),
+    viteImagemin({
+      gifsicle: {
+        optimizationLevel: 7,
+        interlaced: false,
+      },
+      optipng: {
+        optimizationLevel: 7,
+      },
+      mozjpeg: {
+        quality: 80,
+      },
+      pngquant: {
+        quality: [0.8, 0.9],
+        speed: 4,
+      },
+      svgo: {
+        plugins: [
+          {
+            name: "removeViewBox",
+          },
+          {
+            name: "removeEmptyAttrs",
+            active: false,
+          },
+        ],
+      },
+      webp: {
+        quality: 80,
+      },
+    }),
   ],
   resolve: {
     alias: {
@@ -26,6 +65,30 @@ export default defineConfig({
   build: {
     outDir: path.resolve(import.meta.dirname, "dist/public"),
     emptyOutDir: true,
+    assetsInlineLimit: 4096,
+    cssCodeSplit: true,
+    minify: "esbuild",
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          vendor: ["react", "react-dom", "wouter"],
+          ui: ["@radix-ui/react-dialog", "@radix-ui/react-dropdown-menu", "framer-motion"],
+        },
+        assetFileNames: (assetInfo) => {
+          if (!assetInfo.name) return `assets/[name]-[hash][extname]`;
+          const info = assetInfo.name.split(".");
+          const extType = info[info.length - 1];
+          if (/png|jpe?g|svg|gif|tiff|bmp|ico|webp|avif/i.test(extType)) {
+            return `assets/images/[name]-[hash][extname]`;
+          } else if (/woff|woff2|eot|ttf|otf/i.test(extType)) {
+            return `assets/fonts/[name]-[hash][extname]`;
+          }
+          return `assets/[name]-[hash][extname]`;
+        },
+        chunkFileNames: "assets/js/[name]-[hash].js",
+        entryFileNames: "assets/js/[name]-[hash].js",
+      },
+    },
   },
   server: {
     host: "0.0.0.0",

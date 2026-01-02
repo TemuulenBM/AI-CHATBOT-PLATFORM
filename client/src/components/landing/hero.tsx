@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import { ArrowRight, Play, CheckCircle2 } from "lucide-react";
 import { Link } from "wouter";
 import heroImage from "@assets/generated_images/3d_floating_futuristic_chatbot_robot_head.png";
+import { OptimizedImage } from "@/components/OptimizedImage";
 
 export function Hero() {
   return (
@@ -61,13 +62,17 @@ export function Hero() {
           transition={{ duration: 0.8, delay: 0.2 }}
         >
           <div className="relative z-10 animate-[float_6s_ease-in-out_infinite]">
-            <img 
-              src={heroImage} 
-              alt="AI Chatbot" 
+            <OptimizedImage
+              src={heroImage}
+              alt="AI Chatbot - Futuristic 3D Robot Head"
               className="w-full max-w-[600px] drop-shadow-2xl"
+              width={600}
+              height={600}
+              priority={true}
+              sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 600px"
             />
           </div>
-          
+
           {/* Decorative rings */}
           <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] border border-white/5 rounded-full" />
           <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[450px] h-[450px] border border-white/10 rounded-full" />
