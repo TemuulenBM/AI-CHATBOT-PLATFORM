@@ -89,12 +89,8 @@ Common HTTP status codes:
     },
     servers: [
       {
-        url: 'http://localhost:3000',
-        description: 'Development server',
-      },
-      {
-        url: 'https://api.convoai.com',
-        description: 'Production server',
+        url: process.env.APP_URL || 'http://localhost:5000',
+        description: process.env.NODE_ENV === 'production' ? 'Production server' : 'Development server',
       },
     ],
     tags: [

@@ -5,6 +5,7 @@
   "outputDirectory": "dist/public",
   "installCommand": "npm install",
   "framework": "vite",
+  "_comment": "Backend URL configured for Render.com deployment. Update this if you change your backend URL.",
   "rewrites": [
     {
       "source": "/api/:path*",

@@ -25,8 +25,8 @@ import {
 } from "lucide-react";
 import { Link } from "wouter";
 
-// Production backend URL for code examples shown to users
-const PRODUCTION_URL = "https://ai-chatbot-platform-iiuf.onrender.com";
+// Get production backend URL from environment variable or use placeholder
+const PRODUCTION_URL = import.meta.env.VITE_API_URL || "https://your-backend.onrender.com";
 
 // Get the actual backend URL for loading the widget (localhost or production)
 function getBackendUrl() {

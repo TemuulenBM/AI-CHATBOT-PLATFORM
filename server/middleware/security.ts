@@ -62,7 +62,7 @@ function corsOriginValidator(origin: string | undefined, callback: (err: Error |
  */
 export function configureHelmet(app: Express): void {
   const isDevelopment = process.env.NODE_ENV !== "production";
-  const productionBackendUrl = process.env.APP_URL || "https://ai-chatbot-platform-iiuf.onrender.com";
+  const productionBackendUrl = process.env.APP_URL || "http://localhost:5000";
 
   app.use((req, res, next) => {
     helmet({
@@ -77,10 +77,8 @@ export function configureHelmet(app: Express): void {
               ? ["'unsafe-inline'", "'unsafe-eval'"]
               : [`'nonce-${req.cspNonce}'`]
             ),
-            // Allow production backend domain for widget loading
+            // Allow backend domain for widget loading
             productionBackendUrl,
-            "https://ai-chatbot-platform-iiuf.onrender.com",
-            "https://*.onrender.com",
             // Third-party services
             "https://js.stripe.com", // Stripe checkout (legacy)
             "https://cdn.paddle.com", // Paddle checkout
@@ -120,7 +118,6 @@ export function configureHelmet(app: Express): void {
             "https://*.sentry.io",
             "https://*.clerk.accounts.dev", // Clerk API
             "https://clerk.accounts.dev", // Clerk API
-            "https://*.onrender.com",
           ],
           frameSrc: [
             "'self'",

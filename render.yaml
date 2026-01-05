@@ -38,7 +38,9 @@ services:
           name: convoai-backend
           property: host
       - key: ALLOWED_ORIGINS
-        value: "https://ai-chatbot-platform-iiuf.onrender.com,https://convo-ai-eight.vercel.app"
+        sync: false # Set to your backend and frontend URLs (e.g., https://your-backend.onrender.com,https://your-frontend.vercel.app)
+      - key: FRONTEND_URL
+        sync: false # Set to your frontend URL (e.g., https://your-frontend.vercel.app)
       - key: PADDLE_API_KEY
         sync: false
       - key: PADDLE_WEBHOOK_SECRET
