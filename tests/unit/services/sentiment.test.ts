@@ -1,6 +1,42 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { Sentiment } from "../../../server/services/sentiment";
+import { Sentiment, analyzeSentiment, analyzeSentimentBatch } from "../../../server/services/sentiment";
 import { requiresMaxCompletionTokens } from "../../../server/services/ai";
+
+// Mock OpenAI before importing
+vi.mock("openai", () => {
+  const mockChat = {
+    completions: {
+      create: vi.fn().mockResolvedValue({
+        choices: [{ message: { content: "neutral" } }],
+      }),
+    },
+  };
+
+  return {
+    default: class {
+      chat = mockChat;
+      constructor() {
+        return this;
+      }
+    },
+  };
+});
+
+vi.mock("../../../server/services/ai", () => ({
+  requiresMaxCompletionTokens: (model: string) => model.startsWith("gpt-5"),
+}));
+
+vi.mock("../../../server/utils/logger", () => ({
+  default: {
+    info: vi.fn(),
+    error: vi.fn(),
+    warn: vi.fn(),
+    debug: vi.fn(),
+  },
+}));
+
+import OpenAI from "openai";
+import logger from "../../../server/utils/logger";
 
 // These tests focus on the pure functions and behaviors that can be tested
 // without mocking the OpenAI client at module initialization time.
@@ -114,7 +150,8 @@ describe("Sentiment Analysis Service - Pure Function Tests", () => {
 
   describe("GPT-5 model configuration", () => {
     it("should use max_completion_tokens for GPT-5-nano", () => {
-      expect(requiresMaxCompletionTokens("gpt-5-nano")).toBe(true);
+      const result = requiresMaxCompletionTokens("gpt-5-nano");
+      expect(result).toBe(true);
     });
 
     it("should use correct max token limit (10)", () => {
@@ -165,6 +202,39 @@ describe("Sentiment Analysis Service - Pure Function Tests", () => {
       validOutputs.forEach((output) => {
         expect(output.split(" ")).toHaveLength(1);
       });
+    });
+  });
+
+  describe("analyzeSentiment function", () => {
+    beforeEach(() => {
+      vi.clearAllMocks();
+    });
+
+    it("should return neutral for short messages", async () => {
+      const result = await analyzeSentiment("Hi");
+      expect(result).toBe("neutral");
+    });
+
+    it("should handle valid sentiment responses", async () => {
+      // Test that function returns valid sentiment values
+      const result: Sentiment = await analyzeSentiment("This is a longer test message");
+      expect(["positive", "neutral", "negative"]).toContain(result);
+    });
+  });
+
+  describe("analyzeSentimentBatch function", () => {
+    it("should process multiple messages", async () => {
+      const messages = ["Hello", "How are you?", "Great service!"];
+      const results = await analyzeSentimentBatch(messages);
+      expect(results).toHaveLength(3);
+      results.forEach((result) => {
+        expect(["positive", "neutral", "negative"]).toContain(result);
+      });
+    });
+
+    it("should handle empty array", async () => {
+      const results = await analyzeSentimentBatch([]);
+      expect(results).toHaveLength(0);
     });
   });
 });

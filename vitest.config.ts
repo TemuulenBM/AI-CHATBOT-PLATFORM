@@ -19,11 +19,11 @@ export default defineConfig({
         "server/static.ts",
       ],
       thresholds: {
-        // Start with lower thresholds and increase as more tests are added
-        lines: 10,
-        functions: 30,
-        branches: 50,
-        statements: 10,
+        // Target 60%+ coverage
+        lines: 60,
+        functions: 60,
+        branches: 60,
+        statements: 60,
       },
     },
     setupFiles: ["./tests/setup.ts"],
