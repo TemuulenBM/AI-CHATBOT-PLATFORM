@@ -5,6 +5,7 @@ import { deleteCache } from "../utils/redis";
 import logger from "../utils/logger";
 import { ExternalServiceError, ValidationError } from "../utils/errors";
 import { alertCritical, alertWarning, incrementCounter } from "../utils/monitoring";
+import EmailService from "./email";
 
 const PADDLE_API_KEY = process.env.PADDLE_API_KEY;
 const PADDLE_ENVIRONMENT = process.env.PADDLE_ENVIRONMENT || "sandbox";
@@ -458,6 +459,20 @@ export class PaddleService {
 
     await deleteCache(`subscription:${userId}`);
     logger.info("Subscription activated and usage reset", { userId, plan, transactionId: transaction.id });
+
+    // Send subscription confirmation email
+    const { data: user } = await supabaseAdmin
+      .from("users")
+      .select("email")
+      .eq("id", userId)
+      .single();
+
+    if (user?.email && transaction.details?.totals?.total) {
+      const planName = plan.charAt(0).toUpperCase() + plan.slice(1); // Capitalize first letter
+      const amount = `$${(parseInt(transaction.details.totals.total) / 100).toFixed(2)}`;
+      await EmailService.sendSubscriptionConfirmation(user.email, `${planName} Plan`, amount);
+      logger.info("Subscription confirmation email sent", { userId, email: user.email, plan });
+    }
   }
 
   private async handleSubscriptionCreated(subscription: PaddleSubscription): Promise<void> {

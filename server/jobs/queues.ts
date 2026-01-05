@@ -4,6 +4,7 @@ import { scrapeWebsite } from "../services/scraper";
 import { embeddingService } from "../services/embedding";
 import { supabaseAdmin } from "../utils/supabase";
 import logger from "../utils/logger";
+import EmailService from "../services/email";
 
 // Parse Redis URL for BullMQ connection (supports Upstash with TLS)
 function getRedisConnection() {
@@ -220,6 +221,26 @@ export const embeddingWorker = new Worker<EmbeddingJobData>(
         embeddingsCreated: embeddingCount,
         isRescrape,
       });
+
+      // Send training complete email to the chatbot owner
+      const { data: chatbot } = await supabaseAdmin
+        .from("chatbots")
+        .select("name, user_id, users!inner(email)")
+        .eq("id", chatbotId)
+        .single();
+
+      if (chatbot && chatbot.users) {
+        const users = chatbot.users as any;
+        const userEmail = users.email;
+        if (userEmail) {
+          await EmailService.sendTrainingCompleteEmail(
+            userEmail,
+            chatbot.name,
+            embeddingCount
+          );
+          logger.info("Training complete email sent", { chatbotId, email: userEmail });
+        }
+      }
 
       return { embeddingsCreated: embeddingCount };
     } catch (error) {

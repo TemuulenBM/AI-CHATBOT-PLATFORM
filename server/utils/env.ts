@@ -54,6 +54,10 @@ const ENV_VARS: EnvConfig[] = [
   { name: "SENTRY_PROFILES_SAMPLE_RATE", required: false, description: "Sentry profiles sample rate (0.0-1.0, default: 0.1)" },
   { name: "LOG_LEVEL", required: false, description: "Winston log level (debug, info, warn, error)" },
   { name: "LOG_DIR", required: false, description: "Directory for log files in production (default: logs)" },
+
+  // Email Service (Resend)
+  { name: "RESEND_API_KEY", required: false, description: "Resend API key for email notifications (100/day free)" },
+  { name: "EMAIL_FROM", required: false, description: "Default sender email address" },
 ];
 
 export interface ValidationResult {

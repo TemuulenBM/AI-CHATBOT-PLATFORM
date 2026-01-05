@@ -2,6 +2,7 @@ import { Request, Response, NextFunction } from "express";
 import { Webhook } from "svix";
 import { supabaseAdmin } from "../utils/supabase";
 import logger from "../utils/logger";
+import EmailService from "../services/email";
 
 interface ClerkWebhookEvent {
   type: string;
@@ -143,6 +144,13 @@ export async function handleClerkWebhook(
             error: subError,
             userId,
           });
+        }
+
+        // Send welcome email
+        if (email) {
+          const userName = data.first_name || email.split('@')[0];
+          await EmailService.sendWelcomeEmail(email, userName);
+          logger.info("Welcome email sent", { userId, email });
         }
 
         break;

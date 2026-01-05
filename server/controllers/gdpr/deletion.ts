@@ -9,6 +9,7 @@ import { Request, Response } from 'express';
 import { supabaseAdmin } from '../../utils/supabase';
 import { z } from 'zod';
 import logger from '../../utils/logger';
+import EmailService from '../../services/email';
 
 const requestDeletionSchema = z.object({
   confirmEmail: z.string().email(),
@@ -160,7 +161,8 @@ export const requestAccountDeletion = async (req: Request, res: Response) => {
       scheduledDate,
     });
 
-    // TODO: Send confirmation email
+    // Send confirmation email
+    await EmailService.sendAccountDeletionConfirmation(user.email, user.email.split('@')[0], scheduledDate);
 
     res.status(202).json({
       requestId: request.id,

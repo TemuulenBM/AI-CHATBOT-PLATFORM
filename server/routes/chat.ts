@@ -3,6 +3,7 @@ import * as chatController from "../controllers/chat";
 import { getChatbotPublic } from "../controllers/chatbots";
 import { validate, schemas } from "../middleware/validation";
 import { chatRateLimit } from "../middleware/rateLimit";
+import { checkUsageLimits } from "../middleware/usage-monitor";
 
 const router = Router();
 
@@ -50,6 +51,7 @@ router.post(
   "/message",
   chatRateLimit,
   validate({ body: schemas.chatMessage }),
+  checkUsageLimits,
   chatController.sendMessage
 );
 
@@ -84,6 +86,7 @@ router.post(
   "/stream",
   chatRateLimit,
   validate({ body: schemas.chatMessage }),
+  checkUsageLimits,
   chatController.streamMessage
 );
 

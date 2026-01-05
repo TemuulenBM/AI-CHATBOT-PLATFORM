@@ -17,6 +17,7 @@ import logger from '../utils/logger';
 import archiver from 'archiver';
 import { createWriteStream, mkdirSync } from 'fs';
 import { join } from 'path';
+import EmailService from '../services/email';
 
 // Get Redis connection from existing queues file
 import { getRedisConnection } from './queue-connection';
@@ -137,7 +138,15 @@ export const dataExportWorker = new Worker<DataExportJobData>(
         expiresAt,
       });
 
-      // TODO: Send email notification to user
+      // Send email notification to user with download link
+      const downloadUrl = `${process.env.APP_URL}/api/gdpr/data-export/${requestId}/download`;
+
+      if (userData.user?.email) {
+        await EmailService.sendDataExportEmail(userData.user.email, downloadUrl, expiresAt);
+        logger.info('Data export email sent', { requestId, email: userData.user.email });
+      } else {
+        logger.warn('User email not found, skipping email notification', { requestId, userId });
+      }
 
       return { fileSize, expiresAt };
     } catch (error) {

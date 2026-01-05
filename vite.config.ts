@@ -4,7 +4,6 @@ import tailwindcss from "@tailwindcss/vite";
 import path from "path";
 import { metaImagesPlugin } from "./vite-plugin-meta-images";
 import { imagetools } from "vite-imagetools";
-import viteImagemin from "vite-plugin-imagemin";
 
 export default defineConfig({
   plugins: [
@@ -17,36 +16,6 @@ export default defineConfig({
         quality: "80",
         w: "400;800;1200",
       }),
-    }),
-    viteImagemin({
-      gifsicle: {
-        optimizationLevel: 7,
-        interlaced: false,
-      },
-      optipng: {
-        optimizationLevel: 7,
-      },
-      mozjpeg: {
-        quality: 80,
-      },
-      pngquant: {
-        quality: [0.8, 0.9],
-        speed: 4,
-      },
-      svgo: {
-        plugins: [
-          {
-            name: "removeViewBox",
-          },
-          {
-            name: "removeEmptyAttrs",
-            active: false,
-          },
-        ],
-      },
-      webp: {
-        quality: 80,
-      },
     }),
   ],
   resolve: {
