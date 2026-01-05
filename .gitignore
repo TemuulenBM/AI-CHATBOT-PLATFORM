@@ -6,13 +6,22 @@ vite.config.ts.*
 *.tar.gz
 .local/
 
-# Environment files
+# Environment files - CRITICAL: Never commit these!
 .env
 .env.local
 .env.*.local
+.env.production
+.env.development
+.env.test
+client/.env
 client/.env.local
+client/.env.*.local
+server/.env
+server/.env.local
 RENDER_ENV_VARS.txt
 *_ENV_VARS.txt
+*.env.backup
+.envrc
 
 # Logs
 logs/
