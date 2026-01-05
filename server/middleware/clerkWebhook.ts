@@ -19,6 +19,14 @@ interface ClerkWebhookEvent {
     created_at?: number;
     updated_at?: number;
     deleted?: boolean;
+    public_metadata?: {
+      is_admin?: boolean;
+      [key: string]: unknown;
+    };
+    unsafe_metadata?: {
+      is_admin?: boolean;
+      [key: string]: unknown;
+    };
   };
 }
 
@@ -42,6 +50,25 @@ function getPrimaryEmail(data: ClerkWebhookEvent["data"]): string {
 
   // Fallback to first email
   return data.email_addresses[0].email_address;
+}
+
+/**
+ * Get admin status from Clerk user metadata
+ * Checks both public_metadata and unsafe_metadata
+ * public_metadata is preferred as it's set by the admin dashboard
+ */
+function getAdminStatus(data: ClerkWebhookEvent["data"]): boolean {
+  // Check public_metadata first (set from Clerk dashboard)
+  if (data.public_metadata?.is_admin === true) {
+    return true;
+  }
+
+  // Fallback to unsafe_metadata (can be set by user but requires verification)
+  if (data.unsafe_metadata?.is_admin === true) {
+    return true;
+  }
+
+  return false;
 }
 
 /**
@@ -103,27 +130,29 @@ export async function handleClerkWebhook(
     switch (type) {
       case "user.created": {
         const email = getPrimaryEmail(data);
+        const isAdmin = getAdminStatus(data);
 
         // Create user in Supabase
         const { error: userError } = await supabaseAdmin.from("users").insert({
           id: userId,
           email: email,
           password_hash: null, // Clerk users don't have local passwords
+          is_admin: isAdmin,
         });
 
         if (userError) {
           // Handle unique constraint violation
           if (userError.code === "23505") {
-            logger.debug("User already exists, updating email", { userId });
+            logger.debug("User already exists, updating email and admin status", { userId });
             await supabaseAdmin
               .from("users")
-              .update({ email })
+              .update({ email, is_admin: isAdmin })
               .eq("id", userId);
           } else {
             throw userError;
           }
         } else {
-          logger.info("Created user from webhook", { userId, email });
+          logger.info("Created user from webhook", { userId, email, isAdmin });
         }
 
         // Create default subscription
@@ -158,16 +187,21 @@ export async function handleClerkWebhook(
 
       case "user.updated": {
         const email = getPrimaryEmail(data);
+        const isAdmin = getAdminStatus(data);
 
         const { error } = await supabaseAdmin
           .from("users")
-          .update({ email })
+          .update({ email, is_admin: isAdmin })
           .eq("id", userId);
 
         if (error) {
           logger.error("Failed to update user from webhook", { error, userId });
         } else {
-          logger.info("Updated user email from webhook", { userId, email });
+          logger.info("Updated user from webhook", { userId, email, isAdmin });
+
+          // Invalidate admin status cache when user is updated
+          const { invalidateAdminCache } = await import("./adminAuth");
+          await invalidateAdminCache(userId);
         }
 
         break;
