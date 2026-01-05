@@ -4,11 +4,31 @@ import { Request, Response, NextFunction } from "express";
 // Mock dependencies before importing
 const mockVerify = vi.fn();
 
-vi.mock("svix", () => ({
-  Webhook: vi.fn().mockImplementation(() => ({
-    verify: mockVerify,
-  })),
-}));
+vi.mock("resend", () => {
+  const mockEmails = {
+    send: vi.fn().mockResolvedValue({ data: { id: "test-email-id" }, error: null }),
+  };
+
+  return {
+    Resend: class {
+      emails = mockEmails;
+      constructor() {
+        return this;
+      }
+    },
+  };
+});
+
+vi.mock("svix", () => {
+  return {
+    Webhook: class {
+      verify = mockVerify;
+      constructor() {
+        return this;
+      }
+    },
+  };
+});
 
 vi.mock("../../../server/utils/supabase", () => ({
   supabaseAdmin: {

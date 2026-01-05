@@ -2,28 +2,42 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { AIService, requiresMaxCompletionTokens } from "../../../server/services/ai";
 
 // Mock external dependencies
-vi.mock("openai", () => ({
-  default: vi.fn().mockImplementation(() => ({
-    chat: {
-      completions: {
-        create: vi.fn().mockResolvedValue({
-          choices: [{ message: { content: "Mock response" } }],
-        }),
-      },
-    },
-  })),
-}));
-
-vi.mock("@anthropic-ai/sdk", () => ({
-  default: vi.fn().mockImplementation(() => ({
-    messages: {
+vi.mock("openai", () => {
+  const mockChat = {
+    completions: {
       create: vi.fn().mockResolvedValue({
-        content: [{ type: "text", text: "Mock Anthropic response" }],
+        choices: [{ message: { content: "Mock response" } }],
       }),
-      stream: vi.fn(),
     },
-  })),
-}));
+  };
+
+  return {
+    default: class {
+      chat = mockChat;
+      constructor() {
+        return this;
+      }
+    },
+  };
+});
+
+vi.mock("@anthropic-ai/sdk", () => {
+  const mockMessages = {
+    create: vi.fn().mockResolvedValue({
+      content: [{ type: "text", text: "Mock Anthropic response" }],
+    }),
+    stream: vi.fn(),
+  };
+
+  return {
+    default: class {
+      messages = mockMessages;
+      constructor() {
+        return this;
+      }
+    },
+  };
+});
 
 vi.mock("../../../server/services/embedding", () => ({
   embeddingService: {
@@ -192,6 +206,8 @@ describe("AI Service", () => {
           id: "kb1",
           question: "What is your return policy?",
           answer: "We offer 30-day returns",
+          category: null,
+          priority: 0,
           similarity: 0.95,
         },
       ]);
@@ -212,6 +228,8 @@ describe("AI Service", () => {
           id: "kb1",
           question: "What is your return policy?",
           answer: "We offer 30-day returns",
+          category: null,
+          priority: 0,
           similarity: 0.5, // Below 0.8 threshold
         },
       ]);
@@ -295,8 +313,8 @@ describe("AI Service", () => {
     it("should handle conversation history", async () => {
       const context = { relevantContent: "", sources: [] };
       const history = [
-        { role: "user" as const, content: "Previous question" },
-        { role: "assistant" as const, content: "Previous answer" },
+        { role: "user" as const, content: "Previous question", timestamp: new Date().toISOString() },
+        { role: "assistant" as const, content: "Previous answer", timestamp: new Date().toISOString() },
       ];
       const settings = { personality: 50 } as any;
 

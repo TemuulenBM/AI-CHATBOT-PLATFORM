@@ -1,5 +1,22 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { Request, Response } from "express";
+
+// Mock Resend before any imports
+vi.mock("resend", () => {
+  const mockEmails = {
+    send: vi.fn().mockResolvedValue({ data: { id: "test-email-id" }, error: null }),
+  };
+
+  return {
+    Resend: class {
+      emails = mockEmails;
+      constructor() {
+        return this;
+      }
+    },
+  };
+});
+
 import {
   listDeletionRequests,
   getDeletionStatus,

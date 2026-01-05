@@ -69,20 +69,27 @@ vi.mock("../../../server/services/sentiment", () => ({
   analyzeSentiment: vi.fn().mockResolvedValue("positive"),
 }));
 
-vi.mock("openai", () => ({
-  default: vi.fn().mockImplementation(() => ({
-    chat: {
-      completions: {
-        create: vi.fn().mockResolvedValue({
-          async *[Symbol.asyncIterator]() {
-            yield { choices: [{ delta: { content: "Hello " } }] };
-            yield { choices: [{ delta: { content: "there!" } }] };
-          },
-        }),
-      },
+vi.mock("openai", () => {
+  const mockChat = {
+    completions: {
+      create: vi.fn().mockResolvedValue({
+        async *[Symbol.asyncIterator]() {
+          yield { choices: [{ delta: { content: "Hello " } }] };
+          yield { choices: [{ delta: { content: "there!" } }] };
+        },
+      }),
     },
-  })),
-}));
+  };
+
+  return {
+    default: class {
+      chat = mockChat;
+      constructor() {
+        return this;
+      }
+    },
+  };
+});
 
 import { verifyToken } from "@clerk/backend";
 import { supabaseAdmin } from "../../../server/utils/supabase";

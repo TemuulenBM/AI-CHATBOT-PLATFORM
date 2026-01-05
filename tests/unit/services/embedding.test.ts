@@ -4,15 +4,22 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 process.env.OPENAI_API_KEY = "test-key";
 
 // Mock dependencies before importing
-vi.mock("openai", () => ({
-  default: vi.fn().mockImplementation(() => ({
-    embeddings: {
-      create: vi.fn().mockResolvedValue({
-        data: [{ embedding: Array(1536).fill(0.1) }],
-      }),
+vi.mock("openai", () => {
+  const mockEmbeddings = {
+    create: vi.fn().mockResolvedValue({
+      data: [{ embedding: Array(1536).fill(0.1) }],
+    }),
+  };
+
+  return {
+    default: class {
+      embeddings = mockEmbeddings;
+      constructor() {
+        return this;
+      }
     },
-  })),
-}));
+  };
+});
 
 vi.mock("../../../server/utils/supabase", () => ({
   supabaseAdmin: {

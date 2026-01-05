@@ -39,20 +39,27 @@ vi.mock("../../../server/utils/logger", () => ({
   },
 }));
 
-vi.mock("openai", () => ({
-  default: vi.fn().mockImplementation(() => ({
-    chat: {
-      completions: {
-        create: vi.fn().mockResolvedValue({
-          [Symbol.asyncIterator]: async function* () {
-            yield { choices: [{ delta: { content: "Hello" } }] };
-            yield { choices: [{ delta: { content: " there" } }] };
-          },
-        }),
-      },
+vi.mock("openai", () => {
+  const mockChat = {
+    completions: {
+      create: vi.fn().mockResolvedValue({
+        [Symbol.asyncIterator]: async function* () {
+          yield { choices: [{ delta: { content: "Hello" } }] };
+          yield { choices: [{ delta: { content: " there" } }] };
+        },
+      }),
     },
-  })),
-}));
+  };
+
+  return {
+    default: class {
+      chat = mockChat;
+      constructor() {
+        return this;
+      }
+    },
+  };
+});
 
 import { getConversation } from "../../../server/controllers/chat";
 import { supabaseAdmin } from "../../../server/utils/supabase";

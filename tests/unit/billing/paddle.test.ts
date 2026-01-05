@@ -3,6 +3,20 @@ import crypto from "crypto";
 
 // Mock dependencies before importing the module
 vi.mock("axios");
+vi.mock("resend", () => {
+  const mockEmails = {
+    send: vi.fn().mockResolvedValue({ data: { id: "test-email-id" }, error: null }),
+  };
+
+  return {
+    Resend: class {
+      emails = mockEmails;
+      constructor() {
+        return this;
+      }
+    },
+  };
+});
 vi.mock("../../../server/utils/supabase", () => ({
   supabaseAdmin: {
     from: vi.fn(() => ({
