@@ -11,11 +11,9 @@ export default defineConfig({
     tailwindcss(),
     metaImagesPlugin(),
     imagetools({
-      defaultDirectives: new URLSearchParams({
-        format: "webp;avif;jpg",
-        quality: "80",
-        w: "400;800;1200",
-      }),
+      // Don't use defaultDirectives to avoid conflicts when images are used with query params
+      // Transformations should be explicitly requested via query parameters in the import or URL
+      // This prevents vite-imagetools from trying to process images that are already processed
     }),
   ],
   resolve: {

@@ -1,0 +1,1634 @@
+import { describe, it, expect, vi, beforeEach } from "vitest";
+import {
+  getDashboardStats,
+  getConversationTrends,
+  getMessageVolumeByDay,
+  getTopQuestions,
+  getChatbotAnalytics,
+  getSentimentBreakdown,
+  getAverageResponseTime,
+  getSatisfactionMetrics,
+  getSentimentTrends,
+  getConversationRate,
+  getResponseTimeTrends,
+  compareChatbots,
+  exportAnalytics,
+  trackWidgetEvent,
+  getWidgetAnalyticsSummary,
+  invalidateAnalyticsCache,
+  invalidateChatbotAnalyticsCache,
+  DashboardStats,
+  ConversationTrendPoint,
+  MessageVolumePoint,
+  TopQuestion,
+  ChatbotAnalytics,
+  SentimentBreakdown,
+  SatisfactionMetrics,
+  SentimentTrendPoint,
+  ConversationRateMetrics,
+  ResponseTimeTrendPoint,
+  ChatbotComparisonItem,
+} from "../../../server/services/analytics";
+
+// Mock dependencies
+vi.mock("../../../server/utils/supabase", () => ({
+  supabaseAdmin: {
+    from: vi.fn(),
+  },
+  ConversationMessage: {},
+}));
+
+vi.mock("../../../server/utils/redis", () => ({
+  getCache: vi.fn().mockResolvedValue(null),
+  setCache: vi.fn().mockResolvedValue(undefined),
+  deleteCachePattern: vi.fn().mockResolvedValue(undefined),
+}));
+
+vi.mock("../../../server/utils/logger", () => ({
+  default: {
+    info: vi.fn(),
+    error: vi.fn(),
+    warn: vi.fn(),
+    debug: vi.fn(),
+  },
+}));
+
+import { getCache, setCache, deleteCachePattern } from "../../../server/utils/redis";
+import { supabaseAdmin } from "../../../server/utils/supabase";
+import logger from "../../../server/utils/logger";
+
+describe("Analytics Service", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  describe("getDashboardStats - Cached", () => {
+    it("should return cached stats when available", async () => {
+      const cachedStats: DashboardStats = {
+        totalChatbots: 5,
+        activeChatbots: 3,
+        totalMessages: 100,
+        totalConversations: 20,
+        avgResponseTime: 500,
+      };
+      vi.mocked(getCache).mockResolvedValueOnce(cachedStats);
+
+      const result = await getDashboardStats("user123");
+
+      expect(result).toEqual(cachedStats);
+    });
+  });
+
+  describe("getConversationTrends - Cached", () => {
+    it("should return cached trends when available", async () => {
+      const cachedTrends: ConversationTrendPoint[] = [
+        { date: "2024-01-01", conversations: 5, messages: 25 },
+        { date: "2024-01-02", conversations: 3, messages: 15 },
+      ];
+      vi.mocked(getCache).mockResolvedValueOnce(cachedTrends);
+
+      const result = await getConversationTrends("chatbot123", 7);
+
+      expect(result).toEqual(cachedTrends);
+    });
+  });
+
+  describe("getMessageVolumeByDay - Cached", () => {
+    it("should return cached volume when available", async () => {
+      const cachedVolume: MessageVolumePoint[] = [
+        { date: "2024-01-01", messages: 50 },
+        { date: "2024-01-02", messages: 30 },
+      ];
+      vi.mocked(getCache).mockResolvedValueOnce(cachedVolume);
+
+      const result = await getMessageVolumeByDay("user123", 7);
+
+      expect(result).toEqual(cachedVolume);
+    });
+  });
+
+  describe("getTopQuestions - Cached", () => {
+    it("should return cached questions when available", async () => {
+      const cachedQuestions: TopQuestion[] = [
+        { question: "How do I get started?", count: 10, lastAsked: "2024-01-15" },
+        { question: "What is your pricing?", count: 8, lastAsked: "2024-01-14" },
+      ];
+      vi.mocked(getCache).mockResolvedValueOnce(cachedQuestions);
+
+      const result = await getTopQuestions("chatbot123", 10);
+
+      expect(result).toEqual(cachedQuestions);
+    });
+  });
+
+  describe("getChatbotAnalytics - Cached", () => {
+    it("should return cached analytics when available", async () => {
+      const cachedAnalytics: ChatbotAnalytics = {
+        chatbotId: "chatbot123",
+        totalConversations: 50,
+        totalMessages: 250,
+        avgMessagesPerConversation: 5,
+        avgResponseTime: 800,
+      };
+      vi.mocked(getCache).mockResolvedValueOnce(cachedAnalytics);
+
+      const result = await getChatbotAnalytics("chatbot123");
+
+      expect(result).toEqual(cachedAnalytics);
+    });
+  });
+
+  describe("getSentimentBreakdown - Cached", () => {
+    it("should return cached breakdown when available", async () => {
+      const cachedBreakdown = {
+        positive: 60,
+        neutral: 30,
+        negative: 10,
+        total: 100,
+      };
+      vi.mocked(getCache).mockResolvedValueOnce(cachedBreakdown);
+
+      const result = await getSentimentBreakdown("chatbot123");
+
+      expect(result).toEqual(cachedBreakdown);
+    });
+  });
+
+  describe("Interface Types", () => {
+    it("DashboardStats should have correct structure", () => {
+      const stats: DashboardStats = {
+        totalChatbots: 5,
+        activeChatbots: 3,
+        totalMessages: 100,
+        totalConversations: 20,
+        avgResponseTime: 500,
+      };
+
+      expect(stats.totalChatbots).toBeTypeOf("number");
+      expect(stats.activeChatbots).toBeTypeOf("number");
+      expect(stats.totalMessages).toBeTypeOf("number");
+      expect(stats.totalConversations).toBeTypeOf("number");
+    });
+
+    it("DashboardStats avgResponseTime can be null", () => {
+      const stats: DashboardStats = {
+        totalChatbots: 0,
+        activeChatbots: 0,
+        totalMessages: 0,
+        totalConversations: 0,
+        avgResponseTime: null,
+      };
+
+      expect(stats.avgResponseTime).toBeNull();
+    });
+
+    it("ConversationTrendPoint should have correct structure", () => {
+      const trend: ConversationTrendPoint = {
+        date: "2024-01-01",
+        conversations: 5,
+        messages: 25,
+      };
+
+      expect(trend.date).toBeTypeOf("string");
+      expect(trend.conversations).toBeTypeOf("number");
+      expect(trend.messages).toBeTypeOf("number");
+    });
+
+    it("MessageVolumePoint should have correct structure", () => {
+      const volume: MessageVolumePoint = {
+        date: "2024-01-01",
+        messages: 50,
+      };
+
+      expect(volume.date).toBeTypeOf("string");
+      expect(volume.messages).toBeTypeOf("number");
+    });
+
+    it("TopQuestion should have correct structure", () => {
+      const question: TopQuestion = {
+        question: "How do I get started?",
+        count: 10,
+        lastAsked: "2024-01-15",
+      };
+
+      expect(question.question).toBeTypeOf("string");
+      expect(question.count).toBeTypeOf("number");
+      expect(question.lastAsked).toBeTypeOf("string");
+    });
+
+    it("ChatbotAnalytics should have correct structure", () => {
+      const analytics: ChatbotAnalytics = {
+        chatbotId: "chatbot123",
+        totalConversations: 50,
+        totalMessages: 250,
+        avgMessagesPerConversation: 5,
+        avgResponseTime: 800,
+      };
+
+      expect(analytics.chatbotId).toBeTypeOf("string");
+      expect(analytics.totalConversations).toBeTypeOf("number");
+      expect(analytics.avgMessagesPerConversation).toBeTypeOf("number");
+    });
+
+    it("ChatbotAnalytics avgResponseTime can be null", () => {
+      const analytics: ChatbotAnalytics = {
+        chatbotId: "chatbot123",
+        totalConversations: 0,
+        totalMessages: 0,
+        avgMessagesPerConversation: 0,
+        avgResponseTime: null,
+      };
+
+      expect(analytics.avgResponseTime).toBeNull();
+    });
+  });
+
+  describe("Cache key patterns", () => {
+    it("should use correct dashboard cache key pattern", () => {
+      const userId = "user_abc123";
+      const cacheKey = `analytics:dashboard:${userId}`;
+      expect(cacheKey).toBe("analytics:dashboard:user_abc123");
+    });
+
+    it("should use correct trends cache key pattern", () => {
+      const chatbotId = "chatbot123";
+      const days = 7;
+      const cacheKey = `analytics:trends:${chatbotId}:${days}`;
+      expect(cacheKey).toBe("analytics:trends:chatbot123:7");
+    });
+
+    it("should use correct volume cache key pattern", () => {
+      const userId = "user_abc";
+      const days = 30;
+      const cacheKey = `analytics:volume:${userId}:${days}`;
+      expect(cacheKey).toBe("analytics:volume:user_abc:30");
+    });
+
+    it("should use correct questions cache key pattern", () => {
+      const chatbotId = "chatbot123";
+      const limit = 10;
+      const cacheKey = `analytics:questions:${chatbotId}:${limit}`;
+      expect(cacheKey).toBe("analytics:questions:chatbot123:10");
+    });
+
+    it("should use correct chatbot analytics cache key pattern", () => {
+      const chatbotId = "chatbot123";
+      const cacheKey = `analytics:chatbot:${chatbotId}`;
+      expect(cacheKey).toBe("analytics:chatbot:chatbot123");
+    });
+
+    it("should use correct sentiment cache key pattern", () => {
+      const chatbotId = "chatbot123";
+      const cacheKey = `analytics:sentiment:${chatbotId}`;
+      expect(cacheKey).toBe("analytics:sentiment:chatbot123");
+    });
+  });
+
+  describe("Date formatting for trends", () => {
+    it("should format dates as ISO date strings", () => {
+      const date = new Date("2024-01-15T10:30:00Z");
+      const dateKey = date.toISOString().split("T")[0];
+      expect(dateKey).toBe("2024-01-15");
+    });
+
+    it("should create date buckets for specified days", () => {
+      const days = 7;
+      const dailyData = new Map<string, { conversations: number; messages: number }>();
+
+      for (let i = 0; i < days; i++) {
+        const date = new Date();
+        date.setDate(date.getDate() - (days - 1 - i));
+        const dateKey = date.toISOString().split("T")[0];
+        dailyData.set(dateKey, { conversations: 0, messages: 0 });
+      }
+
+      expect(dailyData.size).toBe(7);
+    });
+  });
+
+  describe("Response time calculations", () => {
+    it("should only count reasonable response times under 60 seconds", () => {
+      const responseTime = 45000; // 45 seconds
+      const isReasonable = responseTime > 0 && responseTime < 60000;
+      expect(isReasonable).toBe(true);
+    });
+
+    it("should exclude response times over 60 seconds", () => {
+      const responseTime = 90000; // 90 seconds
+      const isReasonable = responseTime > 0 && responseTime < 60000;
+      expect(isReasonable).toBe(false);
+    });
+
+    it("should exclude negative response times", () => {
+      const responseTime = -1000;
+      const isReasonable = responseTime > 0 && responseTime < 60000;
+      expect(isReasonable).toBe(false);
+    });
+
+    it("should calculate average correctly", () => {
+      const times = [1000, 2000, 3000];
+      const total = times.reduce((a, b) => a + b, 0);
+      const avg = Math.round(total / times.length);
+      expect(avg).toBe(2000);
+    });
+  });
+
+  // ==================== COMPREHENSIVE FUNCTION TESTS ====================
+
+  describe("getDashboardStats - Full Tests", () => {
+    it("should fetch and calculate dashboard stats correctly", async () => {
+      // Create separate mock chains for each database call
+      const mockSelect1 = { eq: vi.fn().mockResolvedValue({ count: 10 }) };
+      const mockSelect2 = {
+        eq: vi.fn().mockReturnValue({
+          eq: vi.fn().mockResolvedValue({ count: 7 }),
+        }),
+      };
+      const mockSelect3 = { eq: vi.fn().mockResolvedValue({ data: [{ id: "chatbot1" }, { id: "chatbot2" }] }) };
+      const mockSelect4 = {
+        in: vi.fn().mockResolvedValue({
+          data: [
+            {
+              messages: [
+                { role: "user", content: "Hi", timestamp: "2024-01-01T10:00:00Z" },
+                { role: "assistant", content: "Hello", timestamp: "2024-01-01T10:00:02Z" },
+              ],
+              created_at: "2024-01-01T10:00:00Z",
+              updated_at: "2024-01-01T10:00:02Z",
+            },
+          ],
+          count: 1,
+        }),
+      };
+
+      vi.mocked(supabaseAdmin.from)
+        .mockReturnValueOnce({ select: vi.fn().mockReturnValue(mockSelect1) } as any)
+        .mockReturnValueOnce({ select: vi.fn().mockReturnValue(mockSelect2) } as any)
+        .mockReturnValueOnce({ select: vi.fn().mockReturnValue(mockSelect3) } as any)
+        .mockReturnValueOnce({ select: vi.fn().mockReturnValue(mockSelect4) } as any);
+
+      const result = await getDashboardStats("user123");
+
+      expect(result).toEqual({
+        totalChatbots: 10,
+        activeChatbots: 7,
+        totalMessages: 2,
+        totalConversations: 1,
+        avgResponseTime: 2000,
+      });
+      expect(vi.mocked(setCache)).toHaveBeenCalledWith(
+        "analytics:dashboard:user123",
+        expect.any(Object),
+        300
+      );
+    });
+
+    it("should handle no chatbots gracefully", async () => {
+      const mockFrom = vi.fn();
+      vi.mocked(supabaseAdmin.from).mockReturnValue(mockFrom as any);
+
+      mockFrom
+        .mockReturnValueOnce({
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockResolvedValue({ count: 0 }),
+          }),
+        })
+        .mockReturnValueOnce({
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              eq: vi.fn().mockResolvedValue({ count: 0 }),
+            }),
+          }),
+        })
+        .mockReturnValueOnce({
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockResolvedValue({ data: [] }),
+          }),
+        });
+
+      const result = await getDashboardStats("user123");
+
+      expect(result).toEqual({
+        totalChatbots: 0,
+        activeChatbots: 0,
+        totalMessages: 0,
+        totalConversations: 0,
+        avgResponseTime: null,
+      });
+    });
+
+    it("should throw error on database failure", async () => {
+      const mockFrom = vi.fn();
+      vi.mocked(supabaseAdmin.from).mockReturnValue(mockFrom as any);
+
+      mockFrom.mockReturnValueOnce({
+        select: vi.fn().mockReturnValue({
+          eq: vi.fn().mockRejectedValue(new Error("DB error")),
+        }),
+      });
+
+      await expect(getDashboardStats("user123")).rejects.toThrow("Failed to get dashboard stats");
+      expect(vi.mocked(logger.error)).toHaveBeenCalled();
+    });
+
+    it("should filter out unreasonable response times", async () => {
+      const mockFrom = vi.fn();
+      vi.mocked(supabaseAdmin.from).mockReturnValue(mockFrom as any);
+
+      mockFrom
+        .mockReturnValueOnce({
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockResolvedValue({ count: 1 }),
+          }),
+        })
+        .mockReturnValueOnce({
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              eq: vi.fn().mockResolvedValue({ count: 1 }),
+            }),
+          }),
+        })
+        .mockReturnValueOnce({
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockResolvedValue({ data: [{ id: "chatbot1" }] }),
+          }),
+        })
+        .mockReturnValueOnce({
+          select: vi.fn().mockReturnValue({
+            in: vi.fn().mockResolvedValue({
+              data: [
+                {
+                  messages: [
+                    { role: "user", content: "Hi", timestamp: "2024-01-01T10:00:00Z" },
+                    { role: "assistant", content: "Hello", timestamp: "2024-01-01T10:02:00Z" }, // 2 minutes (too long)
+                  ],
+                },
+              ],
+              count: 1,
+            }),
+          }),
+        });
+
+      const result = await getDashboardStats("user123");
+
+      expect(result.avgResponseTime).toBeNull();
+    });
+  });
+
+  describe("getConversationTrends - Full Tests", () => {
+    it("should return trends with correct date buckets", async () => {
+      const mockFrom = vi.fn();
+      vi.mocked(supabaseAdmin.from).mockReturnValue(mockFrom as any);
+
+      mockFrom.mockReturnValueOnce({
+        select: vi.fn().mockReturnValue({
+          eq: vi.fn().mockReturnValue({
+            gte: vi.fn().mockResolvedValue({
+              data: [
+                {
+                  messages: [{ role: "user", content: "Hi" }],
+                  created_at: new Date().toISOString(),
+                },
+              ],
+            }),
+          }),
+        }),
+      });
+
+      const result = await getConversationTrends("chatbot123", 7);
+
+      expect(result).toHaveLength(7);
+      expect(result[0]).toHaveProperty("date");
+      expect(result[0]).toHaveProperty("conversations");
+      expect(result[0]).toHaveProperty("messages");
+    });
+
+    it("should aggregate conversations by day", async () => {
+      const mockFrom = vi.fn();
+      vi.mocked(supabaseAdmin.from).mockReturnValue(mockFrom as any);
+
+      const today = new Date().toISOString().split("T")[0];
+
+      mockFrom.mockReturnValueOnce({
+        select: vi.fn().mockReturnValue({
+          eq: vi.fn().mockReturnValue({
+            gte: vi.fn().mockResolvedValue({
+              data: [
+                {
+                  messages: [{ role: "user", content: "Hi" }, { role: "assistant", content: "Hello" }],
+                  created_at: `${today}T10:00:00Z`,
+                },
+                {
+                  messages: [{ role: "user", content: "Bye" }],
+                  created_at: `${today}T11:00:00Z`,
+                },
+              ],
+            }),
+          }),
+        }),
+      });
+
+      const result = await getConversationTrends("chatbot123", 7);
+
+      const todayData = result.find((r) => r.date === today);
+      expect(todayData?.conversations).toBe(2);
+      expect(todayData?.messages).toBe(3);
+    });
+
+    it("should handle errors gracefully", async () => {
+      const mockFrom = vi.fn();
+      vi.mocked(supabaseAdmin.from).mockReturnValue(mockFrom as any);
+
+      mockFrom.mockReturnValueOnce({
+        select: vi.fn().mockReturnValue({
+          eq: vi.fn().mockReturnValue({
+            gte: vi.fn().mockRejectedValue(new Error("DB error")),
+          }),
+        }),
+      });
+
+      await expect(getConversationTrends("chatbot123", 7)).rejects.toThrow(
+        "Failed to get conversation trends"
+      );
+    });
+  });
+
+  describe("getMessageVolumeByDay - Full Tests", () => {
+    it("should calculate message volume correctly", async () => {
+      const mockFrom = vi.fn();
+      vi.mocked(supabaseAdmin.from).mockReturnValue(mockFrom as any);
+
+      const today = new Date().toISOString().split("T")[0];
+
+      mockFrom
+        .mockReturnValueOnce({
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockResolvedValue({
+              data: [{ id: "chatbot1" }],
+            }),
+          }),
+        })
+        .mockReturnValueOnce({
+          select: vi.fn().mockReturnValue({
+            in: vi.fn().mockReturnValue({
+              gte: vi.fn().mockResolvedValue({
+                data: [
+                  {
+                    messages: [
+                      { role: "user", content: "Hi", timestamp: `${today}T10:00:00Z` },
+                      { role: "assistant", content: "Hello", timestamp: `${today}T10:00:01Z` },
+                    ],
+                  },
+                ],
+              }),
+            }),
+          }),
+        });
+
+      const result = await getMessageVolumeByDay("user123", 7);
+
+      expect(result).toHaveLength(7);
+      const todayData = result.find((r) => r.date === today);
+      expect(todayData?.messages).toBe(2);
+    });
+
+    it("should handle user with no chatbots", async () => {
+      const mockFrom = vi.fn();
+      vi.mocked(supabaseAdmin.from).mockReturnValue(mockFrom as any);
+
+      mockFrom.mockReturnValueOnce({
+        select: vi.fn().mockReturnValue({
+          eq: vi.fn().mockResolvedValue({ data: [] }),
+        }),
+      });
+
+      const result = await getMessageVolumeByDay("user123", 7);
+
+      expect(result).toHaveLength(7);
+      result.forEach((point) => {
+        expect(point.messages).toBe(0);
+      });
+    });
+
+    it("should handle errors and throw", async () => {
+      const mockFrom = vi.fn();
+      vi.mocked(supabaseAdmin.from).mockReturnValue(mockFrom as any);
+
+      mockFrom.mockReturnValueOnce({
+        select: vi.fn().mockReturnValue({
+          eq: vi.fn().mockRejectedValue(new Error("DB error")),
+        }),
+      });
+
+      await expect(getMessageVolumeByDay("user123", 7)).rejects.toThrow(
+        "Failed to get message volume"
+      );
+    });
+  });
+
+  describe("getTopQuestions - Full Tests", () => {
+    it("should identify and count top questions", async () => {
+      const mockFrom = vi.fn();
+      vi.mocked(supabaseAdmin.from).mockReturnValue(mockFrom as any);
+
+      mockFrom.mockReturnValueOnce({
+        select: vi.fn().mockReturnValue({
+          eq: vi.fn().mockReturnValue({
+            order: vi.fn().mockReturnValue({
+              limit: vi.fn().mockResolvedValue({
+                data: [
+                  {
+                    messages: [
+                      { role: "user", content: "what is your return policy?", timestamp: "2024-01-01T10:00:00Z" },
+                      { role: "user", content: "what is your return policy?", timestamp: "2024-01-02T10:00:00Z" },
+                      { role: "user", content: "how do i contact support?", timestamp: "2024-01-03T10:00:00Z" },
+                    ],
+                  },
+                ],
+              }),
+            }),
+          }),
+        }),
+      });
+
+      const result = await getTopQuestions("chatbot123", 10);
+
+      expect(result).toHaveLength(2);
+      expect(result[0].question).toBe("what is your return policy?");
+      expect(result[0].count).toBe(2);
+      expect(result[1].count).toBe(1);
+    });
+
+    it("should filter out short messages", async () => {
+      const mockFrom = vi.fn();
+      vi.mocked(supabaseAdmin.from).mockReturnValue(mockFrom as any);
+
+      mockFrom.mockReturnValueOnce({
+        select: vi.fn().mockReturnValue({
+          eq: vi.fn().mockReturnValue({
+            order: vi.fn().mockReturnValue({
+              limit: vi.fn().mockResolvedValue({
+                data: [
+                  {
+                    messages: [
+                      { role: "user", content: "Hi", timestamp: "2024-01-01T10:00:00Z" },
+                      { role: "user", content: "this is a longer question that should be included", timestamp: "2024-01-02T10:00:00Z" },
+                    ],
+                  },
+                ],
+              }),
+            }),
+          }),
+        }),
+      });
+
+      const result = await getTopQuestions("chatbot123", 10);
+
+      expect(result).toHaveLength(1);
+      expect(result[0].question).toContain("longer question");
+    });
+
+    it("should truncate long questions", async () => {
+      const mockFrom = vi.fn();
+      vi.mocked(supabaseAdmin.from).mockReturnValue(mockFrom as any);
+
+      const longQuestion = "a".repeat(150);
+
+      mockFrom.mockReturnValueOnce({
+        select: vi.fn().mockReturnValue({
+          eq: vi.fn().mockReturnValue({
+            order: vi.fn().mockReturnValue({
+              limit: vi.fn().mockResolvedValue({
+                data: [
+                  {
+                    messages: [{ role: "user", content: longQuestion, timestamp: "2024-01-01T10:00:00Z" }],
+                  },
+                ],
+              }),
+            }),
+          }),
+        }),
+      });
+
+      const result = await getTopQuestions("chatbot123", 10);
+
+      expect(result[0].question.length).toBeLessThanOrEqual(103); // 100 + "..."
+    });
+
+    it("should handle errors", async () => {
+      const mockFrom = vi.fn();
+      vi.mocked(supabaseAdmin.from).mockReturnValue(mockFrom as any);
+
+      mockFrom.mockReturnValueOnce({
+        select: vi.fn().mockReturnValue({
+          eq: vi.fn().mockReturnValue({
+            order: vi.fn().mockReturnValue({
+              limit: vi.fn().mockRejectedValue(new Error("DB error")),
+            }),
+          }),
+        }),
+      });
+
+      await expect(getTopQuestions("chatbot123", 10)).rejects.toThrow("Failed to get top questions");
+    });
+  });
+
+  describe("getAverageResponseTime - Full Tests", () => {
+    it("should calculate average response time correctly", async () => {
+      const mockFrom = vi.fn();
+      vi.mocked(supabaseAdmin.from).mockReturnValue(mockFrom as any);
+
+      mockFrom.mockReturnValueOnce({
+        select: vi.fn().mockReturnValue({
+          eq: vi.fn().mockReturnValue({
+            order: vi.fn().mockReturnValue({
+              limit: vi.fn().mockResolvedValue({
+                data: [
+                  {
+                    messages: [
+                      { role: "user", content: "Hi", timestamp: "2024-01-01T10:00:00Z" },
+                      { role: "assistant", content: "Hello", timestamp: "2024-01-01T10:00:02Z" },
+                    ],
+                  },
+                ],
+              }),
+            }),
+          }),
+        }),
+      });
+
+      const result = await getAverageResponseTime("chatbot123");
+
+      expect(result).toBe(2000);
+    });
+
+    it("should return null when no conversations", async () => {
+      const mockFrom = vi.fn();
+      vi.mocked(supabaseAdmin.from).mockReturnValue(mockFrom as any);
+
+      mockFrom.mockReturnValueOnce({
+        select: vi.fn().mockReturnValue({
+          eq: vi.fn().mockReturnValue({
+            order: vi.fn().mockReturnValue({
+              limit: vi.fn().mockResolvedValue({ data: [] }),
+            }),
+          }),
+        }),
+      });
+
+      const result = await getAverageResponseTime("chatbot123");
+
+      expect(result).toBeNull();
+    });
+
+    it("should handle errors", async () => {
+      const mockFrom = vi.fn();
+      vi.mocked(supabaseAdmin.from).mockReturnValue(mockFrom as any);
+
+      mockFrom.mockReturnValueOnce({
+        select: vi.fn().mockReturnValue({
+          eq: vi.fn().mockReturnValue({
+            order: vi.fn().mockReturnValue({
+              limit: vi.fn().mockRejectedValue(new Error("DB error")),
+            }),
+          }),
+        }),
+      });
+
+      await expect(getAverageResponseTime("chatbot123")).rejects.toThrow(
+        "Failed to get average response time"
+      );
+    });
+  });
+
+  describe("getChatbotAnalytics - Full Tests", () => {
+    it("should calculate chatbot analytics correctly", async () => {
+      const mockFrom = vi.fn();
+      vi.mocked(supabaseAdmin.from).mockReturnValue(mockFrom as any);
+
+      mockFrom.mockReturnValueOnce({
+        select: vi.fn().mockReturnValue({
+          eq: vi.fn().mockResolvedValue({
+            data: [
+              {
+                messages: [
+                  { role: "user", content: "Hi", timestamp: "2024-01-01T10:00:00Z" },
+                  { role: "assistant", content: "Hello", timestamp: "2024-01-01T10:00:01Z" },
+                ],
+              },
+              {
+                messages: [
+                  { role: "user", content: "Bye", timestamp: "2024-01-01T11:00:00Z" },
+                  { role: "assistant", content: "Goodbye", timestamp: "2024-01-01T11:00:02Z" },
+                ],
+              },
+            ],
+            count: 2,
+          }),
+        }),
+      });
+
+      const result = await getChatbotAnalytics("chatbot123");
+
+      expect(result).toEqual({
+        chatbotId: "chatbot123",
+        totalConversations: 2,
+        totalMessages: 4,
+        avgMessagesPerConversation: 2,
+        avgResponseTime: 1500,
+      });
+    });
+
+    it("should handle zero conversations", async () => {
+      const mockFrom = vi.fn();
+      vi.mocked(supabaseAdmin.from).mockReturnValue(mockFrom as any);
+
+      mockFrom.mockReturnValueOnce({
+        select: vi.fn().mockReturnValue({
+          eq: vi.fn().mockResolvedValue({ data: [], count: 0 }),
+        }),
+      });
+
+      const result = await getChatbotAnalytics("chatbot123");
+
+      expect(result.totalConversations).toBe(0);
+      expect(result.avgMessagesPerConversation).toBe(0);
+      expect(result.avgResponseTime).toBeNull();
+    });
+
+    it("should handle errors", async () => {
+      const mockFrom = vi.fn();
+      vi.mocked(supabaseAdmin.from).mockReturnValue(mockFrom as any);
+
+      mockFrom.mockReturnValueOnce({
+        select: vi.fn().mockReturnValue({
+          eq: vi.fn().mockRejectedValue(new Error("DB error")),
+        }),
+      });
+
+      await expect(getChatbotAnalytics("chatbot123")).rejects.toThrow(
+        "Failed to get chatbot analytics"
+      );
+    });
+  });
+
+  describe("getSentimentBreakdown - Full Tests", () => {
+    it("should calculate sentiment breakdown correctly", async () => {
+      const mockFrom = vi.fn();
+      vi.mocked(supabaseAdmin.from).mockReturnValue(mockFrom as any);
+
+      mockFrom.mockReturnValueOnce({
+        select: vi.fn().mockReturnValue({
+          eq: vi.fn().mockResolvedValue({
+            data: [
+              {
+                messages: [
+                  { role: "user", content: "Great!", sentiment: "positive" },
+                  { role: "user", content: "Okay", sentiment: "neutral" },
+                  { role: "user", content: "Bad", sentiment: "negative" },
+                  { role: "user", content: "Awesome!", sentiment: "positive" },
+                ],
+              },
+            ],
+          }),
+        }),
+      });
+
+      const result = await getSentimentBreakdown("chatbot123");
+
+      expect(result).toEqual({
+        positive: 2,
+        neutral: 1,
+        negative: 1,
+        total: 4,
+        positiveRate: 50,
+        negativeRate: 25,
+      });
+    });
+
+    it("should return null rates when no sentiment data", async () => {
+      const mockFrom = vi.fn();
+      vi.mocked(supabaseAdmin.from).mockReturnValue(mockFrom as any);
+
+      mockFrom.mockReturnValueOnce({
+        select: vi.fn().mockReturnValue({
+          eq: vi.fn().mockResolvedValue({ data: [] }),
+        }),
+      });
+
+      const result = await getSentimentBreakdown("chatbot123");
+
+      expect(result.positiveRate).toBeNull();
+      expect(result.negativeRate).toBeNull();
+    });
+
+    it("should handle errors", async () => {
+      const mockFrom = vi.fn();
+      vi.mocked(supabaseAdmin.from).mockReturnValue(mockFrom as any);
+
+      mockFrom.mockReturnValueOnce({
+        select: vi.fn().mockReturnValue({
+          eq: vi.fn().mockRejectedValue(new Error("DB error")),
+        }),
+      });
+
+      await expect(getSentimentBreakdown("chatbot123")).rejects.toThrow(
+        "Failed to get sentiment breakdown"
+      );
+    });
+  });
+
+  describe("getSatisfactionMetrics - Full Tests", () => {
+    it("should calculate satisfaction metrics correctly", async () => {
+      const mockFrom = vi.fn();
+      vi.mocked(supabaseAdmin.from).mockReturnValue(mockFrom as any);
+
+      mockFrom.mockReturnValueOnce({
+        select: vi.fn().mockReturnValue({
+          eq: vi.fn().mockResolvedValue({
+            data: [
+              { rating: "positive" },
+              { rating: "positive" },
+              { rating: "positive" },
+              { rating: "negative" },
+            ],
+            error: null,
+          }),
+        }),
+      });
+
+      const result = await getSatisfactionMetrics("chatbot123");
+
+      expect(result).toEqual({
+        positive: 3,
+        negative: 1,
+        total: 4,
+        satisfactionRate: 75,
+      });
+    });
+
+    it("should handle no feedback", async () => {
+      const mockFrom = vi.fn();
+      vi.mocked(supabaseAdmin.from).mockReturnValue(mockFrom as any);
+
+      mockFrom.mockReturnValueOnce({
+        select: vi.fn().mockReturnValue({
+          eq: vi.fn().mockResolvedValue({ data: [], error: null }),
+        }),
+      });
+
+      const result = await getSatisfactionMetrics("chatbot123");
+
+      expect(result.satisfactionRate).toBeNull();
+    });
+
+    it("should handle database errors", async () => {
+      const mockFrom = vi.fn();
+      vi.mocked(supabaseAdmin.from).mockReturnValue(mockFrom as any);
+
+      mockFrom.mockReturnValueOnce({
+        select: vi.fn().mockReturnValue({
+          eq: vi.fn().mockResolvedValue({
+            data: null,
+            error: new Error("DB error"),
+          }),
+        }),
+      });
+
+      await expect(getSatisfactionMetrics("chatbot123")).rejects.toThrow("Failed to get feedback");
+    });
+  });
+
+  describe("getSentimentTrends - Full Tests", () => {
+    it("should calculate sentiment trends by day", async () => {
+      const mockFrom = vi.fn();
+      vi.mocked(supabaseAdmin.from).mockReturnValue(mockFrom as any);
+
+      const today = new Date().toISOString().split("T")[0];
+
+      mockFrom.mockReturnValueOnce({
+        select: vi.fn().mockReturnValue({
+          eq: vi.fn().mockReturnValue({
+            gte: vi.fn().mockResolvedValue({
+              data: [
+                {
+                  messages: [
+                    { role: "user", content: "Great!", sentiment: "positive" },
+                    { role: "user", content: "Okay", sentiment: "neutral" },
+                  ],
+                  created_at: `${today}T10:00:00Z`,
+                },
+              ],
+            }),
+          }),
+        }),
+      });
+
+      const result = await getSentimentTrends("chatbot123", 7);
+
+      expect(result).toHaveLength(7);
+      const todayData = result.find((r) => r.date === today);
+      expect(todayData?.positive).toBe(1);
+      expect(todayData?.neutral).toBe(1);
+    });
+
+    it("should handle errors", async () => {
+      const mockFrom = vi.fn();
+      vi.mocked(supabaseAdmin.from).mockReturnValue(mockFrom as any);
+
+      mockFrom.mockReturnValueOnce({
+        select: vi.fn().mockReturnValue({
+          eq: vi.fn().mockReturnValue({
+            gte: vi.fn().mockRejectedValue(new Error("DB error")),
+          }),
+        }),
+      });
+
+      await expect(getSentimentTrends("chatbot123", 7)).rejects.toThrow(
+        "Failed to get sentiment trends"
+      );
+    });
+  });
+
+  describe("getConversationRate - Full Tests", () => {
+    it("should calculate conversion rate correctly", async () => {
+      const mockFrom = vi.fn();
+      vi.mocked(supabaseAdmin.from).mockReturnValue(mockFrom as any);
+
+      mockFrom.mockReturnValueOnce({
+        select: vi.fn().mockReturnValue({
+          eq: vi.fn().mockReturnValue({
+            gte: vi.fn().mockResolvedValue({
+              data: [
+                { event_type: "view" },
+                { event_type: "view" },
+                { event_type: "open" },
+                { event_type: "first_message" },
+              ],
+            }),
+          }),
+        }),
+      });
+
+      const result = await getConversationRate("chatbot123", 30);
+
+      expect(result).toEqual({
+        widgetViews: 2,
+        widgetOpens: 1,
+        conversationsStarted: 1,
+        conversionRate: 50,
+        openRate: 50,
+      });
+    });
+
+    it("should handle no widget analytics gracefully", async () => {
+      const mockFrom = vi.fn();
+      vi.mocked(supabaseAdmin.from).mockReturnValue(mockFrom as any);
+
+      mockFrom.mockReturnValueOnce({
+        select: vi.fn().mockReturnValue({
+          eq: vi.fn().mockReturnValue({
+            gte: vi.fn().mockResolvedValue({ data: [] }),
+          }),
+        }),
+      });
+
+      const result = await getConversationRate("chatbot123", 30);
+
+      expect(result.conversionRate).toBe(0);
+      expect(result.openRate).toBe(0);
+    });
+
+    it("should handle errors gracefully with empty metrics", async () => {
+      const mockFrom = vi.fn();
+      vi.mocked(supabaseAdmin.from).mockReturnValue(mockFrom as any);
+
+      mockFrom.mockReturnValueOnce({
+        select: vi.fn().mockReturnValue({
+          eq: vi.fn().mockReturnValue({
+            gte: vi.fn().mockRejectedValue(new Error("DB error")),
+          }),
+        }),
+      });
+
+      const result = await getConversationRate("chatbot123", 30);
+
+      expect(result).toEqual({
+        widgetViews: 0,
+        widgetOpens: 0,
+        conversationsStarted: 0,
+        conversionRate: 0,
+        openRate: 0,
+      });
+    });
+  });
+
+  describe("getResponseTimeTrends - Full Tests", () => {
+    it("should calculate response time trends by day", async () => {
+      const mockFrom = vi.fn();
+      vi.mocked(supabaseAdmin.from).mockReturnValue(mockFrom as any);
+
+      const today = new Date().toISOString().split("T")[0];
+
+      mockFrom.mockReturnValueOnce({
+        select: vi.fn().mockReturnValue({
+          eq: vi.fn().mockReturnValue({
+            gte: vi.fn().mockResolvedValue({
+              data: [
+                {
+                  messages: [
+                    { role: "user", content: "Hi", timestamp: `${today}T10:00:00Z` },
+                    { role: "assistant", content: "Hello", timestamp: `${today}T10:00:02Z` },
+                  ],
+                  created_at: `${today}T10:00:00Z`,
+                },
+              ],
+            }),
+          }),
+        }),
+      });
+
+      const result = await getResponseTimeTrends("chatbot123", 7);
+
+      expect(result).toHaveLength(7);
+      const todayData = result.find((r) => r.date === today);
+      expect(todayData?.avgResponseTimeMs).toBe(2000);
+      expect(todayData?.messageCount).toBe(1);
+    });
+
+    it("should handle errors", async () => {
+      const mockFrom = vi.fn();
+      vi.mocked(supabaseAdmin.from).mockReturnValue(mockFrom as any);
+
+      mockFrom.mockReturnValueOnce({
+        select: vi.fn().mockReturnValue({
+          eq: vi.fn().mockReturnValue({
+            gte: vi.fn().mockRejectedValue(new Error("DB error")),
+          }),
+        }),
+      });
+
+      await expect(getResponseTimeTrends("chatbot123", 7)).rejects.toThrow(
+        "Failed to get response time trends"
+      );
+    });
+  });
+
+  describe("compareChatbots - Full Tests", () => {
+    it("should compare multiple chatbots", async () => {
+      const mockFrom = vi.fn();
+      vi.mocked(supabaseAdmin.from).mockReturnValue(mockFrom as any);
+
+      // Mock chatbots list
+      mockFrom.mockReturnValueOnce({
+        select: vi.fn().mockReturnValue({
+          eq: vi.fn().mockReturnValue({
+            eq: vi.fn().mockResolvedValue({
+              data: [
+                { id: "chatbot1", name: "Bot 1", website_url: "http://example.com", status: "ready" },
+              ],
+            }),
+          }),
+        }),
+      });
+
+      // Mock getChatbotAnalytics
+      mockFrom.mockReturnValueOnce({
+        select: vi.fn().mockReturnValue({
+          eq: vi.fn().mockResolvedValue({
+            data: [{ messages: [{ role: "user" }] }],
+            count: 1,
+          }),
+        }),
+      });
+
+      // Mock getSatisfactionMetrics
+      mockFrom.mockReturnValueOnce({
+        select: vi.fn().mockReturnValue({
+          eq: vi.fn().mockResolvedValue({
+            data: [{ rating: "positive" }],
+            error: null,
+          }),
+        }),
+      });
+
+      // Mock getConversationRate
+      mockFrom.mockReturnValueOnce({
+        select: vi.fn().mockReturnValue({
+          eq: vi.fn().mockReturnValue({
+            gte: vi.fn().mockResolvedValue({
+              data: [{ event_type: "view" }, { event_type: "first_message" }],
+            }),
+          }),
+        }),
+      });
+
+      const result = await compareChatbots("user123");
+
+      expect(result).toHaveLength(1);
+      expect(result[0]).toHaveProperty("chatbotId");
+      expect(result[0]).toHaveProperty("chatbotName");
+      expect(result[0]).toHaveProperty("totalMessages");
+    });
+
+    it("should return empty array when no chatbots", async () => {
+      const mockFrom = vi.fn();
+      vi.mocked(supabaseAdmin.from).mockReturnValue(mockFrom as any);
+
+      mockFrom.mockReturnValueOnce({
+        select: vi.fn().mockReturnValue({
+          eq: vi.fn().mockReturnValue({
+            eq: vi.fn().mockResolvedValue({ data: [] }),
+          }),
+        }),
+      });
+
+      const result = await compareChatbots("user123");
+
+      expect(result).toEqual([]);
+    });
+
+    it("should handle errors", async () => {
+      const mockFrom = vi.fn();
+      vi.mocked(supabaseAdmin.from).mockReturnValue(mockFrom as any);
+
+      mockFrom.mockReturnValueOnce({
+        select: vi.fn().mockReturnValue({
+          eq: vi.fn().mockReturnValue({
+            eq: vi.fn().mockRejectedValue(new Error("DB error")),
+          }),
+        }),
+      });
+
+      await expect(compareChatbots("user123")).rejects.toThrow("Failed to compare chatbots");
+    });
+  });
+
+  describe("exportAnalytics - Full Tests", () => {
+    it("should export analytics as JSON", async () => {
+      const mockFrom = vi.fn();
+      vi.mocked(supabaseAdmin.from).mockReturnValue(mockFrom as any);
+
+      // Mock chatbot details
+      mockFrom.mockReturnValueOnce({
+        select: vi.fn().mockReturnValue({
+          eq: vi.fn().mockReturnValue({
+            single: vi.fn().mockResolvedValue({
+              data: {
+                id: "chatbot123",
+                name: "Test Bot",
+                website_url: "http://example.com",
+                created_at: "2024-01-01T00:00:00Z",
+              },
+              error: null,
+            }),
+          }),
+        }),
+      });
+
+      // Mock getChatbotAnalytics
+      mockFrom.mockReturnValueOnce({
+        select: vi.fn().mockReturnValue({
+          eq: vi.fn().mockResolvedValue({
+            data: [{ messages: [] }],
+            count: 1,
+          }),
+        }),
+      });
+
+      // Mock getSatisfactionMetrics
+      mockFrom.mockReturnValueOnce({
+        select: vi.fn().mockReturnValue({
+          eq: vi.fn().mockResolvedValue({
+            data: [],
+            error: null,
+          }),
+        }),
+      });
+
+      // Mock getConversationRate
+      mockFrom.mockReturnValueOnce({
+        select: vi.fn().mockReturnValue({
+          eq: vi.fn().mockReturnValue({
+            gte: vi.fn().mockResolvedValue({ data: [] }),
+          }),
+        }),
+      });
+
+      // Mock conversations
+      mockFrom.mockReturnValueOnce({
+        select: vi.fn().mockReturnValue({
+          eq: vi.fn().mockReturnValue({
+            gte: vi.fn().mockReturnValue({
+              lte: vi.fn().mockReturnValue({
+                order: vi.fn().mockResolvedValue({
+                  data: [
+                    {
+                      id: "conv1",
+                      session_id: "session1",
+                      messages: [],
+                      created_at: "2024-01-01T00:00:00Z",
+                    },
+                  ],
+                }),
+              }),
+            }),
+          }),
+        }),
+      });
+
+      // Mock feedback
+      mockFrom.mockReturnValueOnce({
+        select: vi.fn().mockReturnValue({
+          in: vi.fn().mockResolvedValue({
+            data: [{ conversation_id: "conv1", rating: "positive" }],
+          }),
+        }),
+      });
+
+      const result = await exportAnalytics("chatbot123", "json");
+
+      expect(result).toHaveProperty("chatbot");
+      expect(result).toHaveProperty("summary");
+      expect(result).toHaveProperty("conversations");
+      expect(result).toHaveProperty("dateRange");
+    });
+
+    it("should export analytics as CSV", async () => {
+      const mockFrom = vi.fn();
+      vi.mocked(supabaseAdmin.from).mockReturnValue(mockFrom as any);
+
+      // Mock chatbot details
+      mockFrom.mockReturnValueOnce({
+        select: vi.fn().mockReturnValue({
+          eq: vi.fn().mockReturnValue({
+            single: vi.fn().mockResolvedValue({
+              data: {
+                id: "chatbot123",
+                name: "Test Bot",
+                website_url: "http://example.com",
+                created_at: "2024-01-01T00:00:00Z",
+              },
+              error: null,
+            }),
+          }),
+        }),
+      });
+
+      // Mock getChatbotAnalytics
+      mockFrom.mockReturnValueOnce({
+        select: vi.fn().mockReturnValue({
+          eq: vi.fn().mockResolvedValue({
+            data: [],
+            count: 0,
+          }),
+        }),
+      });
+
+      // Mock getSatisfactionMetrics
+      mockFrom.mockReturnValueOnce({
+        select: vi.fn().mockReturnValue({
+          eq: vi.fn().mockResolvedValue({
+            data: [],
+            error: null,
+          }),
+        }),
+      });
+
+      // Mock getConversationRate
+      mockFrom.mockReturnValueOnce({
+        select: vi.fn().mockReturnValue({
+          eq: vi.fn().mockReturnValue({
+            gte: vi.fn().mockResolvedValue({ data: [] }),
+          }),
+        }),
+      });
+
+      const result = await exportAnalytics("chatbot123", "csv");
+
+      expect(typeof result).toBe("string");
+      expect(result).toContain("Chatbot Analytics Export");
+      expect(result).toContain("Test Bot");
+    });
+
+    it("should handle chatbot not found", async () => {
+      const mockFrom = vi.fn();
+      vi.mocked(supabaseAdmin.from).mockReturnValue(mockFrom as any);
+
+      mockFrom.mockReturnValueOnce({
+        select: vi.fn().mockReturnValue({
+          eq: vi.fn().mockReturnValue({
+            single: vi.fn().mockResolvedValue({
+              data: null,
+              error: new Error("Not found"),
+            }),
+          }),
+        }),
+      });
+
+      await expect(exportAnalytics("chatbot123", "json")).rejects.toThrow("Chatbot not found");
+    });
+  });
+
+  describe("trackWidgetEvent - Full Tests", () => {
+    it("should track widget event successfully", async () => {
+      const mockFrom = vi.fn();
+      vi.mocked(supabaseAdmin.from).mockReturnValue(mockFrom as any);
+
+      const mockInsert = vi.fn().mockResolvedValue({ data: {}, error: null });
+      mockFrom.mockReturnValueOnce({
+        insert: mockInsert,
+      });
+
+      await trackWidgetEvent("chatbot123", "view", "session123", { page: "/home" });
+
+      expect(mockFrom).toHaveBeenCalledWith("widget_analytics");
+      expect(mockInsert).toHaveBeenCalledWith({
+        chatbot_id: "chatbot123",
+        event_type: "view",
+        session_id: "session123",
+        metadata: { page: "/home" },
+      });
+    });
+
+    it("should not throw on error (graceful degradation)", async () => {
+      const mockFrom = vi.fn();
+      vi.mocked(supabaseAdmin.from).mockReturnValue(mockFrom as any);
+
+      mockFrom.mockReturnValueOnce({
+        insert: vi.fn().mockRejectedValue(new Error("DB error")),
+      });
+
+      await expect(trackWidgetEvent("chatbot123", "view")).resolves.not.toThrow();
+      expect(vi.mocked(logger.error)).toHaveBeenCalled();
+    });
+  });
+
+  describe("getWidgetAnalyticsSummary - Full Tests", () => {
+    it("should calculate widget analytics summary", async () => {
+      const mockFrom = vi.fn();
+      vi.mocked(supabaseAdmin.from).mockReturnValue(mockFrom as any);
+
+      const today = new Date().toISOString().split("T")[0];
+
+      mockFrom.mockReturnValueOnce({
+        select: vi.fn().mockReturnValue({
+          eq: vi.fn().mockReturnValue({
+            gte: vi.fn().mockResolvedValue({
+              data: [
+                { event_type: "view", timestamp: `${today}T10:00:00Z` },
+                { event_type: "open", timestamp: `${today}T10:00:01Z` },
+                { event_type: "message", timestamp: `${today}T10:00:02Z` },
+              ],
+            }),
+          }),
+        }),
+      });
+
+      const result = await getWidgetAnalyticsSummary("chatbot123", 7);
+
+      expect(result.totalViews).toBe(1);
+      expect(result.totalOpens).toBe(1);
+      expect(result.totalMessages).toBe(1);
+      expect(result.dailyViews).toHaveLength(7);
+    });
+
+    it("should handle errors gracefully", async () => {
+      const mockFrom = vi.fn();
+      vi.mocked(supabaseAdmin.from).mockReturnValue(mockFrom as any);
+
+      mockFrom.mockReturnValueOnce({
+        select: vi.fn().mockReturnValue({
+          eq: vi.fn().mockReturnValue({
+            gte: vi.fn().mockRejectedValue(new Error("DB error")),
+          }),
+        }),
+      });
+
+      const result = await getWidgetAnalyticsSummary("chatbot123", 7);
+
+      expect(result).toEqual({
+        dailyViews: [],
+        totalViews: 0,
+        totalOpens: 0,
+        totalMessages: 0,
+      });
+    });
+  });
+
+  describe("Cache Invalidation Functions", () => {
+    it("should invalidate user analytics cache", async () => {
+      await invalidateAnalyticsCache("user123");
+
+      expect(vi.mocked(deleteCachePattern)).toHaveBeenCalledWith("analytics:*:user123:*");
+      expect(vi.mocked(deleteCachePattern)).toHaveBeenCalledWith("analytics:dashboard:user123");
+    });
+
+    it("should invalidate chatbot analytics cache", async () => {
+      await invalidateChatbotAnalyticsCache("chatbot123");
+
+      expect(vi.mocked(deleteCachePattern)).toHaveBeenCalledWith("analytics:*:chatbot123:*");
+      expect(vi.mocked(deleteCachePattern)).toHaveBeenCalledWith("analytics:chatbot:chatbot123");
+    });
+
+    it("should handle cache invalidation errors gracefully", async () => {
+      vi.mocked(deleteCachePattern).mockRejectedValueOnce(new Error("Redis error"));
+
+      await expect(invalidateAnalyticsCache("user123")).resolves.not.toThrow();
+      expect(vi.mocked(logger.error)).toHaveBeenCalled();
+    });
+  });
+
+  describe("Edge Cases and Data Validation", () => {
+    it("should handle null/undefined messages arrays", async () => {
+      const mockFrom = vi.fn();
+      vi.mocked(supabaseAdmin.from).mockReturnValue(mockFrom as any);
+
+      mockFrom.mockReturnValueOnce({
+        select: vi.fn().mockReturnValue({
+          eq: vi.fn().mockResolvedValue({
+            data: [{ messages: null }],
+            count: 1,
+          }),
+        }),
+      });
+
+      const result = await getChatbotAnalytics("chatbot123");
+
+      expect(result.totalMessages).toBe(0);
+    });
+
+    it("should handle conversations with no assistant responses", async () => {
+      const mockFrom = vi.fn();
+      vi.mocked(supabaseAdmin.from).mockReturnValue(mockFrom as any);
+
+      mockFrom.mockReturnValueOnce({
+        select: vi.fn().mockReturnValue({
+          eq: vi.fn().mockReturnValue({
+            order: vi.fn().mockReturnValue({
+              limit: vi.fn().mockResolvedValue({
+                data: [
+                  {
+                    messages: [
+                      { role: "user", content: "Hi", timestamp: "2024-01-01T10:00:00Z" },
+                      { role: "user", content: "Hello?", timestamp: "2024-01-01T10:00:05Z" },
+                    ],
+                  },
+                ],
+              }),
+            }),
+          }),
+        }),
+      });
+
+      const result = await getAverageResponseTime("chatbot123");
+
+      expect(result).toBeNull();
+    });
+
+    it("should handle very large question counts gracefully", async () => {
+      const mockFrom = vi.fn();
+      vi.mocked(supabaseAdmin.from).mockReturnValue(mockFrom as any);
+
+      const messages = Array(200).fill(null).map((_, i) => ({
+        role: "user",
+        content: `question number ${i + 1} which is long enough`,
+        timestamp: `2024-01-01T10:${String(i).padStart(2, "0")}:00Z`,
+      }));
+
+      mockFrom.mockReturnValueOnce({
+        select: vi.fn().mockReturnValue({
+          eq: vi.fn().mockReturnValue({
+            order: vi.fn().mockReturnValue({
+              limit: vi.fn().mockResolvedValue({
+                data: [{ messages }],
+              }),
+            }),
+          }),
+        }),
+      });
+
+      const result = await getTopQuestions("chatbot123", 10);
+
+      expect(result.length).toBeLessThanOrEqual(10);
+    });
+
+    it("should handle zero division in conversion rates", async () => {
+      const mockFrom = vi.fn();
+      vi.mocked(supabaseAdmin.from).mockReturnValue(mockFrom as any);
+
+      mockFrom.mockReturnValueOnce({
+        select: vi.fn().mockReturnValue({
+          eq: vi.fn().mockReturnValue({
+            gte: vi.fn().mockResolvedValue({ data: [] }),
+          }),
+        }),
+      });
+
+      const result = await getConversationRate("chatbot123", 30);
+
+      expect(result.conversionRate).toBe(0);
+      expect(result.openRate).toBe(0);
+    });
+  });
+});
