@@ -2,6 +2,14 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Communication Preferences
+
+**Language**: Communicate with the user in Mongolian (Монгол хэл).
+
+## Git Commit Guidelines
+
+**IMPORTANT**: When creating git commits, DO NOT include "Co-Authored-By: Claude" or any similar attribution text in commit messages. Keep commit messages clean and professional without AI attribution.
+
 ## Build & Development Commands
 
 ```bash
