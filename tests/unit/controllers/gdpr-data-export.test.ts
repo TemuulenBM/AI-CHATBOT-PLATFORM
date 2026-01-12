@@ -100,7 +100,7 @@ describe("GDPR Data Export Controller", () => {
       vi.mocked(supabaseAdmin.from).mockReturnValue(builder as any);
 
       const req = createMockRequest({
-        auth: { userId: "user123" },
+        user: { userId: "user123", email: "test@example.com" },
       } as any);
       const res = createMockResponse();
 
@@ -135,7 +135,7 @@ describe("GDPR Data Export Controller", () => {
       vi.mocked(supabaseAdmin.from).mockReturnValue(builder as any);
 
       const req = createMockRequest({
-        auth: { userId: "user123" },
+        user: { userId: "user123", email: "test@example.com" },
       } as any);
       const res = createMockResponse();
 
@@ -182,7 +182,7 @@ describe("GDPR Data Export Controller", () => {
       vi.mocked(supabaseAdmin.from).mockReturnValue(builder as any);
 
       const req = createMockRequest({
-        auth: { userId: "user123" },
+        user: { userId: "user123", email: "test@example.com" },
       } as any);
       const res = createMockResponse();
 
@@ -202,7 +202,7 @@ describe("GDPR Data Export Controller", () => {
       vi.mocked(supabaseAdmin.from).mockReturnValue(builder as any);
 
       const req = createMockRequest({
-        auth: { userId: "user123" },
+        user: { userId: "user123", email: "test@example.com" },
       } as any);
       const res = createMockResponse();
 
@@ -250,7 +250,7 @@ describe("GDPR Data Export Controller", () => {
       vi.mocked(addJob).mockResolvedValue(undefined as any);
 
       const req = createMockRequest({
-        auth: { userId: "user123" },
+        user: { userId: "user123", email: "test@example.com" },
         body: { format: "json" },
       } as any);
       const res = createMockResponse();
@@ -295,7 +295,7 @@ describe("GDPR Data Export Controller", () => {
       vi.mocked(supabaseAdmin.from).mockReturnValue(builder as any);
 
       const req = createMockRequest({
-        auth: { userId: "user123" },
+        user: { userId: "user123", email: "test@example.com" },
         body: { format: "json" },
       } as any);
       const res = createMockResponse();
@@ -340,7 +340,7 @@ describe("GDPR Data Export Controller", () => {
       });
 
       const req = createMockRequest({
-        auth: { userId: "user123" },
+        user: { userId: "user123", email: "test@example.com" },
         body: {},
       } as any);
       const res = createMockResponse();
@@ -361,7 +361,7 @@ describe("GDPR Data Export Controller", () => {
       vi.mocked(supabaseAdmin.from).mockReturnValue(builder as any);
 
       const req = createMockRequest({
-        auth: { userId: "user123" },
+        user: { userId: "user123", email: "test@example.com" },
         body: { format: "json" },
       } as any);
       const res = createMockResponse();
@@ -398,7 +398,7 @@ describe("GDPR Data Export Controller", () => {
       vi.mocked(supabaseAdmin.from).mockReturnValue(builder as any);
 
       const req = createMockRequest({
-        auth: { userId: "user123" },
+        user: { userId: "user123", email: "test@example.com" },
         params: { requestId: "export123" },
       } as any);
       const res = createMockResponse();
@@ -437,7 +437,7 @@ describe("GDPR Data Export Controller", () => {
       vi.mocked(supabaseAdmin.from).mockReturnValue(builder as any);
 
       const req = createMockRequest({
-        auth: { userId: "user123" },
+        user: { userId: "user123", email: "test@example.com" },
         params: { requestId: "nonexistent" },
       } as any);
       const res = createMockResponse();
@@ -472,7 +472,7 @@ describe("GDPR Data Export Controller", () => {
       vi.mocked(supabaseAdmin.from).mockReturnValue(builder as any);
 
       const req = createMockRequest({
-        auth: { userId: "user123" },
+        user: { userId: "user123", email: "test@example.com" },
         params: { requestId: "export123" },
       } as any);
       const res = createMockResponse();
@@ -493,7 +493,7 @@ describe("GDPR Data Export Controller", () => {
       vi.mocked(supabaseAdmin.from).mockReturnValue(builder as any);
 
       const req = createMockRequest({
-        auth: { userId: "user123" },
+        user: { userId: "user123", email: "test@example.com" },
         params: { requestId: "export123" },
       } as any);
       const res = createMockResponse();
@@ -532,7 +532,7 @@ describe("GDPR Data Export Controller", () => {
       vi.mocked(createReadStream).mockReturnValue(mockStream as any);
 
       const req = createMockRequest({
-        auth: { userId: "user123" },
+        user: { userId: "user123", email: "test@example.com" },
         params: { requestId: "export123" },
       } as any);
       const res = createMockResponse();
@@ -572,7 +572,7 @@ describe("GDPR Data Export Controller", () => {
       vi.mocked(supabaseAdmin.from).mockReturnValue(builder as any);
 
       const req = createMockRequest({
-        auth: { userId: "user123" },
+        user: { userId: "user123", email: "test@example.com" },
         params: { requestId: "nonexistent" },
       } as any);
       const res = createMockResponse();
@@ -603,7 +603,7 @@ describe("GDPR Data Export Controller", () => {
       vi.mocked(supabaseAdmin.from).mockReturnValue(builder as any);
 
       const req = createMockRequest({
-        auth: { userId: "user123" },
+        user: { userId: "user123", email: "test@example.com" },
         params: { requestId: "export123" },
       } as any);
       const res = createMockResponse();
@@ -636,7 +636,7 @@ describe("GDPR Data Export Controller", () => {
       vi.mocked(supabaseAdmin.from).mockReturnValue(builder as any);
 
       const req = createMockRequest({
-        auth: { userId: "user123" },
+        user: { userId: "user123", email: "test@example.com" },
         params: { requestId: "export123" },
       } as any);
       const res = createMockResponse();
@@ -668,7 +668,7 @@ describe("GDPR Data Export Controller", () => {
       vi.mocked(existsSync).mockReturnValue(false);
 
       const req = createMockRequest({
-        auth: { userId: "user123" },
+        user: { userId: "user123", email: "test@example.com" },
         params: { requestId: "export123" },
       } as any);
       const res = createMockResponse();
@@ -689,7 +689,7 @@ describe("GDPR Data Export Controller", () => {
       vi.mocked(supabaseAdmin.from).mockReturnValue(builder as any);
 
       const req = createMockRequest({
-        auth: { userId: "user123" },
+        user: { userId: "user123", email: "test@example.com" },
         params: { requestId: "export123" },
       } as any);
       const res = createMockResponse();

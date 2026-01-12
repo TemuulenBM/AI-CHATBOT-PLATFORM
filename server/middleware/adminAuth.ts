@@ -53,7 +53,7 @@ export async function loadAdminStatus(
       await setCache(cacheKey, isAdmin, 300);
     }
 
-    req.isAdmin = isAdmin;
+    req.isAdmin = isAdmin ?? undefined;
     next();
   } catch (error) {
     logger.error("Error in loadAdminStatus middleware", { error });

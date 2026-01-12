@@ -90,7 +90,7 @@ describe("GDPR Consent Controller", () => {
       });
 
       const req = createMockRequest({
-        auth: { userId: "user123" },
+        user: { userId: "user123", email: "test@example.com" },
         body: {
           essential: true,
           analytics: true,
@@ -282,7 +282,7 @@ describe("GDPR Consent Controller", () => {
       vi.mocked(supabaseAdmin.from).mockReturnValue(builder as any);
 
       const req = createMockRequest({
-        auth: { userId: "user123" },
+        user: { userId: "user123", email: "test@example.com" },
       } as any);
       const res = createMockResponse();
 
@@ -356,7 +356,7 @@ describe("GDPR Consent Controller", () => {
       vi.mocked(supabaseAdmin.from).mockReturnValue(builder as any);
 
       const req = createMockRequest({
-        auth: { userId: "user123" },
+        user: { userId: "user123", email: "test@example.com" },
       } as any);
       const res = createMockResponse();
 
@@ -380,7 +380,7 @@ describe("GDPR Consent Controller", () => {
       vi.mocked(supabaseAdmin.from).mockReturnValue(builder as any);
 
       const req = createMockRequest({
-        auth: { userId: "user123" },
+        user: { userId: "user123", email: "test@example.com" },
       } as any);
       const res = createMockResponse();
 
@@ -402,7 +402,7 @@ describe("GDPR Consent Controller", () => {
       vi.mocked(supabaseAdmin.from).mockReturnValue(builder as any);
 
       const req = createMockRequest({
-        auth: { userId: "user123" },
+        user: { userId: "user123", email: "test@example.com" },
         body: {
           consentType: "analytics",
         },
@@ -434,7 +434,7 @@ describe("GDPR Consent Controller", () => {
 
     it("should validate consent type", async () => {
       const req = createMockRequest({
-        auth: { userId: "user123" },
+        user: { userId: "user123", email: "test@example.com" },
         body: {
           consentType: "invalid",
         },
@@ -449,7 +449,7 @@ describe("GDPR Consent Controller", () => {
 
     it("should not allow withdrawing essential consent", async () => {
       const req = createMockRequest({
-        auth: { userId: "user123" },
+        user: { userId: "user123", email: "test@example.com" },
         body: {
           consentType: "essential",
         },
@@ -471,7 +471,7 @@ describe("GDPR Consent Controller", () => {
       vi.mocked(supabaseAdmin.from).mockReturnValue(builder as any);
 
       const req = createMockRequest({
-        auth: { userId: "user123" },
+        user: { userId: "user123", email: "test@example.com" },
         body: {
           consentType: "marketing",
         },
@@ -517,7 +517,7 @@ describe("GDPR Consent Controller", () => {
       vi.mocked(supabaseAdmin.from).mockReturnValue(builder as any);
 
       const req = createMockRequest({
-        auth: { userId: "user123" },
+        user: { userId: "user123", email: "test@example.com" },
       } as any);
       const res = createMockResponse();
 
@@ -551,7 +551,7 @@ describe("GDPR Consent Controller", () => {
       vi.mocked(supabaseAdmin.from).mockReturnValue(builder as any);
 
       const req = createMockRequest({
-        auth: { userId: "user123" },
+        user: { userId: "user123", email: "test@example.com" },
       } as any);
       const res = createMockResponse();
 
@@ -571,7 +571,7 @@ describe("GDPR Consent Controller", () => {
       vi.mocked(supabaseAdmin.from).mockReturnValue(builder as any);
 
       const req = createMockRequest({
-        auth: { userId: "user123" },
+        user: { userId: "user123", email: "test@example.com" },
       } as any);
       const res = createMockResponse();
 

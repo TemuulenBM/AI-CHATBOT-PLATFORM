@@ -98,7 +98,7 @@ describe("GDPR Account Deletion Controller", () => {
       vi.mocked(supabaseAdmin.from).mockReturnValue(builder as any);
 
       const req = createMockRequest({
-        auth: { userId: "user123" },
+        user: { userId: "user123", email: "test@example.com" },
       } as any);
       const res = createMockResponse();
 
@@ -133,7 +133,7 @@ describe("GDPR Account Deletion Controller", () => {
       vi.mocked(supabaseAdmin.from).mockReturnValue(builder as any);
 
       const req = createMockRequest({
-        auth: { userId: "user123" },
+        user: { userId: "user123", email: "test@example.com" },
       } as any);
       const res = createMockResponse();
 
@@ -153,7 +153,7 @@ describe("GDPR Account Deletion Controller", () => {
       vi.mocked(supabaseAdmin.from).mockReturnValue(builder as any);
 
       const req = createMockRequest({
-        auth: { userId: "user123" },
+        user: { userId: "user123", email: "test@example.com" },
       } as any);
       const res = createMockResponse();
 
@@ -190,7 +190,7 @@ describe("GDPR Account Deletion Controller", () => {
       vi.mocked(supabaseAdmin.from).mockReturnValue(builder as any);
 
       const req = createMockRequest({
-        auth: { userId: "user123" },
+        user: { userId: "user123", email: "test@example.com" },
       } as any);
       const res = createMockResponse();
 
@@ -227,7 +227,7 @@ describe("GDPR Account Deletion Controller", () => {
       vi.mocked(supabaseAdmin.from).mockReturnValue(builder as any);
 
       const req = createMockRequest({
-        auth: { userId: "user123" },
+        user: { userId: "user123", email: "test@example.com" },
       } as any);
       const res = createMockResponse();
 
@@ -249,7 +249,7 @@ describe("GDPR Account Deletion Controller", () => {
       vi.mocked(supabaseAdmin.from).mockReturnValue(builder as any);
 
       const req = createMockRequest({
-        auth: { userId: "user123" },
+        user: { userId: "user123", email: "test@example.com" },
       } as any);
       const res = createMockResponse();
 
@@ -303,7 +303,7 @@ describe("GDPR Account Deletion Controller", () => {
       });
 
       const req = createMockRequest({
-        auth: { userId: "user123" },
+        user: { userId: "user123", email: "test@example.com" },
         body: {
           confirmEmail: "user@example.com",
           reason: "No longer needed",
@@ -346,7 +346,7 @@ describe("GDPR Account Deletion Controller", () => {
       vi.mocked(supabaseAdmin.from).mockReturnValue(builder as any);
 
       const req = createMockRequest({
-        auth: { userId: "user123" },
+        user: { userId: "user123", email: "test@example.com" },
         body: {
           confirmEmail: "user@example.com",
         },
@@ -372,7 +372,7 @@ describe("GDPR Account Deletion Controller", () => {
       vi.mocked(supabaseAdmin.from).mockReturnValue(builder as any);
 
       const req = createMockRequest({
-        auth: { userId: "user123" },
+        user: { userId: "user123", email: "test@example.com" },
         body: {
           confirmEmail: "wrong@example.com",
         },
@@ -425,7 +425,7 @@ describe("GDPR Account Deletion Controller", () => {
       });
 
       const req = createMockRequest({
-        auth: { userId: "user123" },
+        user: { userId: "user123", email: "test@example.com" },
         body: {
           confirmEmail: "user@example.com",
         },
@@ -465,7 +465,7 @@ describe("GDPR Account Deletion Controller", () => {
       });
 
       const req = createMockRequest({
-        auth: { userId: "user123" },
+        user: { userId: "user123", email: "test@example.com" },
         body: {
           confirmEmail: "user@example.com",
         },
@@ -516,7 +516,7 @@ describe("GDPR Account Deletion Controller", () => {
       });
 
       const req = createMockRequest({
-        auth: { userId: "user123" },
+        user: { userId: "user123", email: "test@example.com" },
         body: {
           confirmEmail: "user@example.com",
           reason: "Moving to competitor",
@@ -531,7 +531,7 @@ describe("GDPR Account Deletion Controller", () => {
 
     it("should validate email format", async () => {
       const req = createMockRequest({
-        auth: { userId: "user123" },
+        user: { userId: "user123", email: "test@example.com" },
         body: {
           confirmEmail: "invalid-email",
         },
@@ -554,7 +554,7 @@ describe("GDPR Account Deletion Controller", () => {
       vi.mocked(supabaseAdmin.from).mockReturnValue(builder as any);
 
       const req = createMockRequest({
-        auth: { userId: "user123" },
+        user: { userId: "user123", email: "test@example.com" },
         body: {
           confirmEmail: "user@example.com",
         },
@@ -599,7 +599,7 @@ describe("GDPR Account Deletion Controller", () => {
       });
 
       const req = createMockRequest({
-        auth: { userId: "user123" },
+        user: { userId: "user123", email: "test@example.com" },
         params: { requestId: "req123" },
       } as any);
       const res = createMockResponse();
@@ -637,7 +637,7 @@ describe("GDPR Account Deletion Controller", () => {
       vi.mocked(supabaseAdmin.from).mockReturnValue(builder as any);
 
       const req = createMockRequest({
-        auth: { userId: "user123" },
+        user: { userId: "user123", email: "test@example.com" },
         params: { requestId: "nonexistent" },
       } as any);
       const res = createMockResponse();
@@ -665,7 +665,7 @@ describe("GDPR Account Deletion Controller", () => {
       vi.mocked(supabaseAdmin.from).mockReturnValue(builder as any);
 
       const req = createMockRequest({
-        auth: { userId: "user123" },
+        user: { userId: "user123", email: "test@example.com" },
         params: { requestId: "req123" },
       } as any);
       const res = createMockResponse();
@@ -695,7 +695,7 @@ describe("GDPR Account Deletion Controller", () => {
       vi.mocked(supabaseAdmin.from).mockReturnValue(builder as any);
 
       const req = createMockRequest({
-        auth: { userId: "user123" },
+        user: { userId: "user123", email: "test@example.com" },
         params: { requestId: "req123" },
       } as any);
       const res = createMockResponse();
@@ -716,7 +716,7 @@ describe("GDPR Account Deletion Controller", () => {
       vi.mocked(supabaseAdmin.from).mockReturnValue(builder as any);
 
       const req = createMockRequest({
-        auth: { userId: "user123" },
+        user: { userId: "user123", email: "test@example.com" },
         params: { requestId: "req123" },
       } as any);
       const res = createMockResponse();

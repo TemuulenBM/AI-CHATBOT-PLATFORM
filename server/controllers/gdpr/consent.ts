@@ -5,7 +5,8 @@
  * GDPR Articles 6 (Lawful Basis), 7 (Consent), 13-14 (Information to be provided)
  */
 
-import { Request, Response } from 'express';
+import { Response } from 'express';
+import { AuthenticatedRequest } from '../../middleware/clerkAuth';
 import { supabaseAdmin } from '../../utils/supabase';
 import { z } from 'zod';
 import logger from '../../utils/logger';
@@ -26,9 +27,9 @@ const withdrawSchema = z.object({
  * POST /api/gdpr/consent
  * Record user consent preferences
  */
-export const recordConsent = async (req: Request, res: Response) => {
+export const recordConsent = async (req: AuthenticatedRequest, res: Response) => {
   try {
-    const userId = (req as any).auth?.userId;
+    const userId = req.user?.userId;
     const { essential, analytics, marketing, anonymousId } = consentSchema.parse(req.body);
 
     const ipAddress = req.ip || req.socket.remoteAddress;
@@ -89,9 +90,9 @@ export const recordConsent = async (req: Request, res: Response) => {
  * GET /api/gdpr/consent
  * Get current consent status
  */
-export const getConsentStatus = async (req: Request, res: Response) => {
+export const getConsentStatus = async (req: AuthenticatedRequest, res: Response) => {
   try {
-    const userId = (req as any).auth?.userId;
+    const userId = req.user?.userId;
     const anonymousId = req.query.anonymousId as string;
 
     if (!userId && !anonymousId) {
@@ -138,9 +139,9 @@ export const getConsentStatus = async (req: Request, res: Response) => {
  * DELETE /api/gdpr/consent
  * Withdraw consent for a specific category
  */
-export const withdrawConsent = async (req: Request, res: Response) => {
+export const withdrawConsent = async (req: AuthenticatedRequest, res: Response) => {
   try {
-    const userId = (req as any).auth?.userId;
+    const userId = req.user?.userId;
     if (!userId) {
       return res.status(401).json({ error: 'Authentication required' });
     }
@@ -170,9 +171,9 @@ export const withdrawConsent = async (req: Request, res: Response) => {
  * GET /api/gdpr/consent/history
  * Get consent history for current user
  */
-export const getConsentHistory = async (req: Request, res: Response) => {
+export const getConsentHistory = async (req: AuthenticatedRequest, res: Response) => {
   try {
-    const userId = (req as any).auth?.userId;
+    const userId = req.user?.userId;
     if (!userId) {
       return res.status(401).json({ error: 'Authentication required' });
     }

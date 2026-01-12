@@ -5,7 +5,8 @@
  * GDPR Articles 15 (Right of Access) & 20 (Data Portability)
  */
 
-import { Request, Response } from 'express';
+import { Response } from 'express';
+import { AuthenticatedRequest } from '../../middleware/clerkAuth';
 import { supabaseAdmin } from '../../utils/supabase';
 import { z } from 'zod';
 import logger from '../../utils/logger';
@@ -20,9 +21,9 @@ const requestExportSchema = z.object({
  * GET /api/gdpr/data-export
  * List all data export requests for current user
  */
-export const listExportRequests = async (req: Request, res: Response) => {
+export const listExportRequests = async (req: AuthenticatedRequest, res: Response) => {
   try {
-    const userId = (req as any).auth?.userId;
+    const userId = req.user?.userId;
     if (!userId) {
       return res.status(401).json({ error: 'Authentication required' });
     }
@@ -58,9 +59,9 @@ export const listExportRequests = async (req: Request, res: Response) => {
  * Request a data export (Subject Access Request)
  * Rate limit: 1 request per 24 hours
  */
-export const requestDataExport = async (req: Request, res: Response) => {
+export const requestDataExport = async (req: AuthenticatedRequest, res: Response) => {
   try {
-    const userId = (req as any).auth?.userId;
+    const userId = req.user?.userId;
     if (!userId) {
       return res.status(401).json({ error: 'Authentication required' });
     }
@@ -119,9 +120,9 @@ export const requestDataExport = async (req: Request, res: Response) => {
  * GET /api/gdpr/data-export/:requestId/status
  * Check the status of a data export request
  */
-export const getExportStatus = async (req: Request, res: Response) => {
+export const getExportStatus = async (req: AuthenticatedRequest, res: Response) => {
   try {
-    const userId = (req as any).auth?.userId;
+    const userId = req.user?.userId;
     if (!userId) {
       return res.status(401).json({ error: 'Authentication required' });
     }
@@ -163,9 +164,9 @@ export const getExportStatus = async (req: Request, res: Response) => {
  * Download completed data export
  * Link expires 7 days after export completion
  */
-export const downloadExport = async (req: Request, res: Response) => {
+export const downloadExport = async (req: AuthenticatedRequest, res: Response) => {
   try {
-    const userId = (req as any).auth?.userId;
+    const userId = req.user?.userId;
     if (!userId) {
       return res.status(401).json({ error: 'Authentication required' });
     }

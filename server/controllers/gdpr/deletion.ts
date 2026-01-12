@@ -5,7 +5,8 @@
  * GDPR Article 17: Right to Erasure ("Right to be Forgotten")
  */
 
-import { Request, Response } from 'express';
+import { Response } from 'express';
+import { AuthenticatedRequest } from '../../middleware/clerkAuth';
 import { supabaseAdmin } from '../../utils/supabase';
 import { z } from 'zod';
 import logger from '../../utils/logger';
@@ -20,9 +21,9 @@ const requestDeletionSchema = z.object({
  * GET /api/gdpr/delete-account
  * List all deletion requests for current user
  */
-export const listDeletionRequests = async (req: Request, res: Response) => {
+export const listDeletionRequests = async (req: AuthenticatedRequest, res: Response) => {
   try {
-    const userId = (req as any).auth?.userId;
+    const userId = req.user?.userId;
     if (!userId) {
       return res.status(401).json({ error: 'Authentication required' });
     }
@@ -54,9 +55,9 @@ export const listDeletionRequests = async (req: Request, res: Response) => {
  * GET /api/gdpr/delete-account/status
  * Get current deletion request status
  */
-export const getDeletionStatus = async (req: Request, res: Response) => {
+export const getDeletionStatus = async (req: AuthenticatedRequest, res: Response) => {
   try {
-    const userId = (req as any).auth?.userId;
+    const userId = req.user?.userId;
     if (!userId) {
       return res.status(401).json({ error: 'Authentication required' });
     }
@@ -96,9 +97,9 @@ export const getDeletionStatus = async (req: Request, res: Response) => {
  * POST /api/gdpr/delete-account
  * Request account deletion with 30-day grace period
  */
-export const requestAccountDeletion = async (req: Request, res: Response) => {
+export const requestAccountDeletion = async (req: AuthenticatedRequest, res: Response) => {
   try {
-    const userId = (req as any).auth?.userId;
+    const userId = req.user?.userId;
     if (!userId) {
       return res.status(401).json({ error: 'Authentication required' });
     }
@@ -180,9 +181,9 @@ export const requestAccountDeletion = async (req: Request, res: Response) => {
  * DELETE /api/gdpr/delete-account/:requestId
  * Cancel a pending deletion request (within grace period)
  */
-export const cancelDeletionRequest = async (req: Request, res: Response) => {
+export const cancelDeletionRequest = async (req: AuthenticatedRequest, res: Response) => {
   try {
-    const userId = (req as any).auth?.userId;
+    const userId = req.user?.userId;
     if (!userId) {
       return res.status(401).json({ error: 'Authentication required' });
     }

@@ -200,6 +200,7 @@ describe("Clerk Webhook Handler - Direct Import", () => {
         id: "user_test123",
         email: "test@example.com",
         password_hash: null,
+        is_admin: false,
       });
       expect(statusMock).toHaveBeenCalledWith(200);
     });
@@ -360,7 +361,10 @@ describe("Clerk Webhook Handler - Direct Import", () => {
       );
 
       expect(supabaseAdmin.from).toHaveBeenCalledWith("users");
-      expect(updateMock).toHaveBeenCalledWith({ email: "newemail@example.com" });
+      expect(updateMock).toHaveBeenCalledWith({
+        email: "newemail@example.com",
+        is_admin: false
+      });
       expect(statusMock).toHaveBeenCalledWith(200);
     });
 
