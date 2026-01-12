@@ -1,7 +1,7 @@
 import { Request, Response, NextFunction } from "express";
-import { supabaseAdmin, ConversationMessage } from "../utils/supabase";
-import { AuthenticatedRequest, checkAndIncrementUsage } from "../middleware/clerkAuth";
-import { NotFoundError, ValidationError } from "../utils/errors";
+import { supabaseAdmin, ConversationMessage, ChatbotSettings } from "../utils/supabase";
+import { AuthenticatedRequest, checkAndIncrementUsage, decrementUsage } from "../middleware/clerkAuth";
+import { NotFoundError, ValidationError, AuthorizationError } from "../utils/errors";
 import { ChatMessageInput } from "../middleware/validation";
 import { aiService, requiresMaxCompletionTokens } from "../services/ai";
 import { analyzeSentiment } from "../services/sentiment";
@@ -25,6 +25,9 @@ export async function sendMessage(
   res: Response,
   next: NextFunction
 ): Promise<void> {
+  // Declare chatbot outside try block for error handling rollback
+  let chatbot: { id: string; user_id: string; name: string; website_url: string; settings: ChatbotSettings; status: string } | null = null;
+
   try {
     const { chatbotId, sessionId, message } = req.body as ChatMessageInput;
 
@@ -39,7 +42,8 @@ export async function sendMessage(
       query.eq("status", "ready");
     }
 
-    const { data: chatbot, error: chatbotError } = await query.single();
+    const { data: chatbotData, error: chatbotError } = await query.single();
+    chatbot = chatbotData;
 
     if (chatbotError || !chatbot) {
       throw new NotFoundError("Chatbot");
@@ -134,6 +138,26 @@ export async function sendMessage(
       }
     });
   } catch (error) {
+    // Rollback message usage on failure before response
+    // BUT NOT if the error is from checkAndIncrementUsage (limit exceeded)
+    // If limit exceeded, usage was never incremented, so no rollback needed
+    // Only rollback if we successfully got chatbot info (meaning increment happened)
+    const isUsageLimitError = error instanceof AuthorizationError;
+    if (chatbot?.user_id && !isUsageLimitError) {
+      try {
+        await decrementUsage(chatbot.user_id, "message");
+        logger.info("Message usage rolled back due to error", {
+          chatbotId: chatbot.id,
+          userId: chatbot.user_id,
+          error: error instanceof Error ? error.message : "Unknown error",
+        });
+      } catch (rollbackError) {
+        logger.error("Failed to rollback message usage", {
+          error: rollbackError,
+          userId: chatbot.user_id,
+        });
+      }
+    }
     next(error);
   }
 }
@@ -143,6 +167,11 @@ export async function streamMessage(
   res: Response,
   next: NextFunction
 ): Promise<void> {
+  // Declare chatbot outside try block for error handling rollback
+  let chatbot: { id: string; user_id: string; name: string; website_url: string; settings: ChatbotSettings; status: string } | null = null;
+  // Store user_id for rollback in case chatbot becomes null
+  let userIdForRollback: string | null = null;
+
   try {
     const { chatbotId, sessionId, message } = req.body as ChatMessageInput;
 
@@ -157,11 +186,15 @@ export async function streamMessage(
       query.eq("status", "ready");
     }
 
-    const { data: chatbot, error: chatbotError } = await query.single();
+    const { data: chatbotData, error: chatbotError } = await query.single();
+    chatbot = chatbotData;
 
     if (chatbotError || !chatbot) {
       throw new NotFoundError("Chatbot");
     }
+
+    // Store user_id for potential rollback
+    userIdForRollback = chatbot.user_id;
 
     // ATOMIC: Check usage limit and increment in single transaction (prevents race conditions)
     await checkAndIncrementUsage(chatbot.user_id, "message");
@@ -197,24 +230,50 @@ export async function streamMessage(
         chatbot.name
       )) {
         fullResponse += chunk;
-        res.write(`data: ${JSON.stringify({ type: "chunk", content: chunk })}\n\n`);
+        try {
+          res.write(`data: ${JSON.stringify({ type: "chunk", content: chunk })}\n\n`);
+        } catch (writeError) {
+          // If write fails during streaming, throw to outer catch
+          throw writeError;
+        }
       }
 
       // Send completion event with sources
-      res.write(
-        `data: ${JSON.stringify({
-          type: "done",
-          sources: context.sources,
-        })}\n\n`
-      );
+      try {
+        res.write(
+          `data: ${JSON.stringify({
+            type: "done",
+            sources: context.sources,
+          })}\n\n`
+        );
+      } catch (writeError) {
+        // If write fails, throw to outer catch
+        throw writeError;
+      }
     } catch (streamError) {
-      res.write(
-        `data: ${JSON.stringify({
-          type: "error",
-          message: "Failed to generate response",
-        })}\n\n`
-      );
+      // NO rollback here - streaming already started (headers sent)
+      // User received partial response, service was delivered
+      // This follows industry standard (OpenAI, AWS) and prevents abuse via network disconnect
+
+      // Try to write error event, but handle write failures gracefully
+      try {
+        res.write(
+          `data: ${JSON.stringify({
+            type: "error",
+            message: "Failed to generate response",
+          })}\n\n`
+        );
+      } catch (writeError) {
+        // If we can't write the error, just log it
+        logger.error("Failed to write error event during streaming", {
+          error: writeError,
+          originalError: streamError,
+          chatbotId
+        });
+      }
       logger.error("Stream error", { error: streamError, chatbotId });
+      // Re-throw to outer catch for rollback handling
+      throw streamError;
     }
 
     res.end();
@@ -278,15 +337,48 @@ export async function streamMessage(
       }
     });
   } catch (error) {
+    // Rollback usage ONLY if:
+    // 1. Streaming hasn't started (headers not sent)
+    // 2. The error is NOT an AuthorizationError from checkAndIncrementUsage (limit exceeded)
+    //    - If limit exceeded, usage was never incremented, so no rollback needed
+    // If headers sent = streaming started = service delivered = no rollback
+    // This follows industry standard (OpenAI, AWS) and prevents abuse
+    const isUsageLimitError = error instanceof AuthorizationError;
+    if (!res.headersSent && userIdForRollback && !isUsageLimitError) {
+      try {
+        await decrementUsage(userIdForRollback, "message");
+        logger.info("Message usage rolled back - streaming not started", {
+          chatbotId: chatbot?.id,
+          userId: userIdForRollback,
+          error: error instanceof Error ? error.message : "Unknown error",
+        });
+      } catch (rollbackError) {
+        logger.error("Failed to rollback message usage", {
+          error: rollbackError,
+          userId: userIdForRollback,
+        });
+      }
+    }
+
     // For SSE, we need to handle errors differently if headers are already sent
     if (res.headersSent) {
-      res.write(
-        `data: ${JSON.stringify({
-          type: "error",
-          message: error instanceof Error ? error.message : "Unknown error",
-        })}\n\n`
-      );
-      res.end();
+      try {
+        res.write(
+          `data: ${JSON.stringify({
+            type: "error",
+            message: error instanceof Error ? error.message : "Unknown error",
+          })}\n\n`
+        );
+        res.end();
+      } catch (writeError) {
+        // If write fails, just end the response
+        try {
+          res.end();
+        } catch {
+          // Ignore errors when ending
+        }
+        logger.error("Failed to write error event", { error: writeError });
+      }
     } else {
       next(error);
     }
