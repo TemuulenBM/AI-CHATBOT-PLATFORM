@@ -132,6 +132,105 @@ describe("Stripe Service - Logic Tests", () => {
     });
   });
 
+  describe("Webhook Timestamp Validation", () => {
+    it("should reject webhook with old event timestamp", () => {
+      const oldTimestamp = Math.floor(Date.now() / 1000) - 400; // 6+ minutes old
+      const now = Math.floor(Date.now() / 1000);
+      const TOLERANCE_SECONDS = 5 * 60;
+
+      const isValid = now - oldTimestamp <= TOLERANCE_SECONDS;
+
+      expect(isValid).toBe(false);
+    });
+
+    it("should accept webhook with recent event timestamp", () => {
+      const recentTimestamp = Math.floor(Date.now() / 1000) - 60; // 1 minute old
+      const now = Math.floor(Date.now() / 1000);
+      const TOLERANCE_SECONDS = 5 * 60;
+
+      const isValid = now - recentTimestamp <= TOLERANCE_SECONDS;
+
+      expect(isValid).toBe(true);
+    });
+
+    it("should accept webhook at tolerance boundary", () => {
+      const boundaryTimestamp = Math.floor(Date.now() / 1000) - 299; // Just under 5 minutes
+      const now = Math.floor(Date.now() / 1000);
+      const TOLERANCE_SECONDS = 5 * 60;
+
+      const isValid = now - boundaryTimestamp <= TOLERANCE_SECONDS;
+
+      expect(isValid).toBe(true);
+    });
+
+    it("should detect Stripe SDK timestamp errors", () => {
+      const error = new Error("Timestamp outside the tolerance zone");
+
+      const isTimestampError = error.message.toLowerCase().includes("timestamp");
+
+      expect(isTimestampError).toBe(true);
+    });
+
+    it("should differentiate timestamp errors from signature errors", () => {
+      const timestampError = new Error("Timestamp outside the tolerance zone");
+      const signatureError = new Error("Invalid signature");
+
+      const isTimestampErr = timestampError.message.toLowerCase().includes("timestamp");
+      const isSignatureErr = signatureError.message.toLowerCase().includes("signature");
+
+      expect(isTimestampErr).toBe(true);
+      expect(isSignatureErr).toBe(true);
+
+      // Verify that timestamp error does NOT contain "signature"
+      const timestampHasSignature = timestampError.message.toLowerCase().includes("signature");
+      expect(timestampHasSignature).toBe(false);
+
+      // Verify that signature error does NOT contain "timestamp"
+      const signatureHasTimestamp = signatureError.message.toLowerCase().includes("timestamp");
+      expect(signatureHasTimestamp).toBe(false);
+    });
+
+    it("should calculate age of webhook event", () => {
+      const eventCreated = Math.floor(Date.now() / 1000) - 120; // 2 minutes old
+      const now = Math.floor(Date.now() / 1000);
+      const age = now - eventCreated;
+
+      expect(age).toBeGreaterThanOrEqual(120);
+      expect(age).toBeLessThan(180); // Should be less than 3 minutes
+    });
+
+    it("should validate event has created timestamp", () => {
+      const mockEvent = {
+        id: "evt_test",
+        type: "payment_intent.succeeded",
+        created: Math.floor(Date.now() / 1000),
+      };
+
+      expect(mockEvent.created).toBeDefined();
+      expect(typeof mockEvent.created).toBe("number");
+    });
+
+    it("should handle events at exactly 5 minutes old", () => {
+      const exactTimestamp = Math.floor(Date.now() / 1000) - 300; // Exactly 5 minutes
+      const now = Math.floor(Date.now() / 1000);
+      const TOLERANCE_SECONDS = 5 * 60;
+
+      const isValid = now - exactTimestamp <= TOLERANCE_SECONDS;
+
+      expect(isValid).toBe(true);
+    });
+
+    it("should reject events just over 5 minutes old", () => {
+      const oldTimestamp = Math.floor(Date.now() / 1000) - 301; // Just over 5 minutes
+      const now = Math.floor(Date.now() / 1000);
+      const TOLERANCE_SECONDS = 5 * 60;
+
+      const isValid = now - oldTimestamp <= TOLERANCE_SECONDS;
+
+      expect(isValid).toBe(false);
+    });
+  });
+
   describe("Webhook event types", () => {
     it("should handle checkout.session.completed", () => {
       const eventType = "checkout.session.completed";

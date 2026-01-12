@@ -155,10 +155,40 @@ export class StripeService {
     let event: Stripe.Event;
 
     try {
+      // Stripe SDK does timestamp validation internally (300s tolerance)
       event = getStripe().webhooks.constructEvent(body, signature, webhookSecret);
     } catch (error) {
+      // Stripe SDK throws on:
+      // - Invalid signature
+      // - Timestamp too old (>5 minutes)
+      // - Timestamp in future
+
+      if (error instanceof Error) {
+        if (error.message.includes("timestamp")) {
+          logger.warn("Stripe webhook timestamp validation failed", {
+            error: error.message,
+          });
+          throw new ValidationError("Webhook timestamp invalid or expired");
+        }
+      }
+
       logger.error("Webhook signature verification failed", { error });
       throw new ValidationError("Invalid webhook signature");
+    }
+
+    // Additional explicit check for extra safety
+    const created = event.created; // Unix timestamp
+    const now = Math.floor(Date.now() / 1000);
+    const TOLERANCE_SECONDS = 5 * 60; // 5 minutes
+
+    if (now - created > TOLERANCE_SECONDS) {
+      logger.warn("Stripe webhook event timestamp too old", {
+        eventId: event.id,
+        created,
+        now,
+        age: now - created,
+      });
+      throw new ValidationError("Webhook event timestamp too old");
     }
 
     // CRITICAL FIX: Check for duplicate webhook events (idempotency)
