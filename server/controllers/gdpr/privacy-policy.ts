@@ -90,7 +90,7 @@ export const getPrivacyPolicyByVersion = async (req: Request, res: Response) => 
 /**
  * POST /api/gdpr/privacy-policy
  * Create new privacy policy version
- * TODO: Add admin authorization
+ * Requires admin authorization
  */
 export const createVersion = async (req: Request, res: Response) => {
   try {
@@ -142,7 +142,7 @@ export const createVersion = async (req: Request, res: Response) => {
 /**
  * PATCH /api/gdpr/privacy-policy/:version
  * Update privacy policy version (only before effective date)
- * TODO: Add admin authorization
+ * Requires admin authorization
  */
 export const updateVersion = async (req: Request, res: Response) => {
   try {

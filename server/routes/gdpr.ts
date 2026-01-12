@@ -11,6 +11,7 @@
 
 import express from 'express';
 import { clerkAuthMiddleware, optionalClerkAuthMiddleware } from '../middleware/clerkAuth';
+import { loadAdminStatus, requireAdmin } from '../middleware/adminAuth';
 
 // Import controllers
 import * as consentController from '../controllers/gdpr/consent';
@@ -80,16 +81,16 @@ router.get('/privacy-policy/:version', privacyPolicyController.getPrivacyPolicyB
 /**
  * POST /api/gdpr/privacy-policy
  * Create new privacy policy version
- * Admin only (TODO: Add admin middleware)
+ * Admin only
  */
-router.post('/privacy-policy', clerkAuthMiddleware, privacyPolicyController.createVersion);
+router.post('/privacy-policy', clerkAuthMiddleware, loadAdminStatus, requireAdmin, privacyPolicyController.createVersion);
 
 /**
  * PATCH /api/gdpr/privacy-policy/:version
  * Update privacy policy version (only before effective date)
- * Admin only (TODO: Add admin middleware)
+ * Admin only
  */
-router.patch('/privacy-policy/:version', clerkAuthMiddleware, privacyPolicyController.updateVersion);
+router.patch('/privacy-policy/:version', clerkAuthMiddleware, loadAdminStatus, requireAdmin, privacyPolicyController.updateVersion);
 
 // ============================================
 // DATA SUBJECT RIGHTS ROUTES (Phase 2)

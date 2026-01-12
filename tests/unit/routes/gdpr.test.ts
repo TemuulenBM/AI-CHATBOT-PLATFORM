@@ -41,6 +41,19 @@ vi.mock("../../../server/middleware/clerkAuth", () => ({
   optionalClerkAuthMiddleware: vi.fn((req: any, res: any, next: any) => next()),
 }));
 
+vi.mock("../../../server/middleware/adminAuth", () => ({
+  loadAdminStatus: vi.fn((req: any, res: any, next: any) => {
+    req.isAdmin = true; // Mock as admin for unit tests
+    next();
+  }),
+  requireAdmin: vi.fn((req: any, res: any, next: any) => {
+    if (!req.isAdmin) {
+      return res.status(403).json({ error: "Admin access required" });
+    }
+    next();
+  }),
+}));
+
 describe("GDPR Routes", () => {
   let app: express.Application;
 
