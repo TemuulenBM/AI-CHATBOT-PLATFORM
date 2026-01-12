@@ -5,6 +5,7 @@ import { embeddingService } from "../services/embedding";
 import { supabaseAdmin } from "../utils/supabase";
 import logger from "../utils/logger";
 import EmailService from "../services/email";
+import { alertCritical, incrementCounter } from "../utils/monitoring";
 
 // Parse Redis URL for BullMQ connection (supports Upstash with TLS)
 function getRedisConnection() {
@@ -53,21 +54,35 @@ export const scrapeQueue = new Queue("scrape", { connection });
 // Embedding Queue
 export const embeddingQueue = new Queue("embedding", { connection });
 
-// Suppress quota exceeded errors from queues
-let quotaErrorLoggedForQueues = false;
-const handleQueueError = (err: Error) => {
+// Handle queue errors with proper alerting
+const handleQueueError = (err: Error, queueName: string) => {
   if (err.message && err.message.includes("max requests limit exceeded")) {
-    if (!quotaErrorLoggedForQueues) {
-      logger.warn("Redis quota limit reached - job queues may be degraded");
-      quotaErrorLoggedForQueues = true;
-    }
+    // Send critical alert with rate-limiting built-in (60s cooldown)
+    alertCritical(
+      "redis_connection_lost",
+      "Redis quota limit exceeded - job queues degraded",
+      {
+        queueName,
+        error: err.message,
+        timestamp: new Date().toISOString(),
+        impact: "Background jobs (scraping, embeddings) may fail",
+        action: "Check Upstash quota and upgrade if needed",
+      }
+    );
+
+    // Track metric for monitoring dashboard
+    incrementCounter("redis.quota_exceeded", 1);
+
+    // Gracefully degrade - don't crash the queue
     return;
   }
-  logger.error("Queue error", { error: err.message });
+
+  // Other errors
+  logger.error("Queue error", { queueName, error: err.message });
 };
 
-scrapeQueue.on("error", handleQueueError);
-embeddingQueue.on("error", handleQueueError);
+scrapeQueue.on("error", (err) => handleQueueError(err, "scrapeQueue"));
+embeddingQueue.on("error", (err) => handleQueueError(err, "embeddingQueue"));
 
 interface ScrapeJobData {
   chatbotId: string;
@@ -276,20 +291,33 @@ export const embeddingWorker = new Worker<EmbeddingJobData>(
 );
 
 // Error handlers for workers
-let quotaErrorLoggedForWorkers = false;
-const handleWorkerError = (err: Error) => {
+const handleWorkerError = (err: Error, workerName: string) => {
   if (err.message && err.message.includes("max requests limit exceeded")) {
-    if (!quotaErrorLoggedForWorkers) {
-      logger.warn("Redis quota limit reached - workers may be degraded");
-      quotaErrorLoggedForWorkers = true;
-    }
+    // Send critical alert with rate-limiting built-in (60s cooldown)
+    alertCritical(
+      "redis_connection_lost",
+      "Redis quota limit exceeded - workers degraded",
+      {
+        workerName,
+        error: err.message,
+        timestamp: new Date().toISOString(),
+        impact: "Background workers (scraping, embeddings) may fail",
+        action: "Check Upstash quota and upgrade if needed",
+      }
+    );
+
+    // Track metric for monitoring dashboard
+    incrementCounter("redis.quota_exceeded", 1);
+
+    // Gracefully degrade - don't crash the worker
     return;
   }
-  logger.error("Worker error", { error: err.message });
+
+  logger.error("Worker error", { workerName, error: err.message });
 };
 
-scrapeWorker.on("error", handleWorkerError);
-embeddingWorker.on("error", handleWorkerError);
+scrapeWorker.on("error", (err) => handleWorkerError(err, "scrapeWorker"));
+embeddingWorker.on("error", (err) => handleWorkerError(err, "embeddingWorker"));
 
 // Event handlers
 scrapeWorker.on("completed", (job) => {
@@ -311,17 +339,17 @@ embeddingWorker.on("failed", (job, err) => {
 // Scheduled Re-scraping Queue
 export const scheduledRescrapeQueue = new Queue("scheduled-rescrape", { connection });
 
-scheduledRescrapeQueue.on("error", handleQueueError);
+scheduledRescrapeQueue.on("error", (err) => handleQueueError(err, "scheduledRescrapeQueue"));
 
 // GDPR Data Export Queue
 export const dataExportQueue = new Queue("data-export", { connection });
 
-dataExportQueue.on("error", handleQueueError);
+dataExportQueue.on("error", (err) => handleQueueError(err, "dataExportQueue"));
 
 // GDPR Account Deletion Queue
 export const accountDeletionQueue = new Queue("account-deletion", { connection });
 
-accountDeletionQueue.on("error", handleQueueError);
+accountDeletionQueue.on("error", (err) => handleQueueError(err, "accountDeletionQueue"));
 
 interface ScheduledRescrapeJobData {
   // Empty data - job fetches chatbots that need re-scraping
@@ -465,7 +493,7 @@ export async function initScheduledRescrape(): Promise<void> {
 }
 
 // Error handler for scheduled rescrape worker
-scheduledRescrapeWorker.on("error", handleWorkerError);
+scheduledRescrapeWorker.on("error", (err) => handleWorkerError(err, "scheduledRescrapeWorker"));
 
 // Event handlers for scheduled rescrape
 scheduledRescrapeWorker.on("completed", (job) => {

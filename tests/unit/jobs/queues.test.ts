@@ -1,5 +1,14 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
+// Mock monitoring functions before any imports
+const mockAlertCritical = vi.fn();
+const mockIncrementCounter = vi.fn();
+
+vi.mock("../../server/utils/monitoring", () => ({
+  alertCritical: mockAlertCritical,
+  incrementCounter: mockIncrementCounter,
+}));
+
 // Test pure functions and logic patterns from queues module
 // Without importing the actual module which creates Redis connections
 
@@ -366,6 +375,187 @@ describe("Queue Jobs - Logic Tests", () => {
       expect(updatePayload.last_scraped_at).toBeDefined();
       expect(updatePayload.updated_at).toBeDefined();
       expect(updatePayload.last_scraped_at).toBe(updatePayload.updated_at);
+    });
+  });
+
+  describe("Queue Error Alerting", () => {
+    // Replicate handleQueueError logic for testing
+    function handleQueueError(err: Error, queueName: string) {
+      if (err.message && err.message.includes("max requests limit exceeded")) {
+        mockAlertCritical(
+          "redis_connection_lost",
+          "Redis quota limit exceeded - job queues degraded",
+          {
+            queueName,
+            error: err.message,
+            timestamp: expect.any(String),
+            impact: "Background jobs (scraping, embeddings) may fail",
+            action: "Check Upstash quota and upgrade if needed",
+          }
+        );
+        mockIncrementCounter("redis.quota_exceeded", 1);
+        return;
+      }
+    }
+
+    beforeEach(() => {
+      mockAlertCritical.mockClear();
+      mockIncrementCounter.mockClear();
+    });
+
+    it("should send critical alert when Redis quota exceeded", () => {
+      const error = new Error("max requests limit exceeded");
+
+      handleQueueError(error, "scrapeQueue");
+
+      expect(mockAlertCritical).toHaveBeenCalledWith(
+        "redis_connection_lost",
+        expect.stringContaining("Redis quota limit exceeded"),
+        expect.objectContaining({
+          queueName: "scrapeQueue",
+          error: error.message,
+        })
+      );
+    });
+
+    it("should increment quota exceeded metric", () => {
+      const error = new Error("max requests limit exceeded");
+
+      handleQueueError(error, "scrapeQueue");
+
+      expect(mockIncrementCounter).toHaveBeenCalledWith("redis.quota_exceeded", 1);
+    });
+
+    it("should include actionable context in alert", () => {
+      const error = new Error("max requests limit exceeded");
+
+      handleQueueError(error, "embeddingQueue");
+
+      expect(mockAlertCritical).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.any(String),
+        expect.objectContaining({
+          queueName: "embeddingQueue",
+          impact: expect.stringContaining("Background jobs"),
+          action: expect.stringContaining("Check Upstash quota"),
+        })
+      );
+    });
+
+    it("should include timestamp in alert context", () => {
+      const error = new Error("max requests limit exceeded");
+
+      handleQueueError(error, "scheduledRescrapeQueue");
+
+      expect(mockAlertCritical).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.any(String),
+        expect.objectContaining({
+          timestamp: expect.any(String),
+        })
+      );
+    });
+
+    it("should gracefully degrade on quota error (not throw)", () => {
+      const error = new Error("max requests limit exceeded");
+
+      expect(() => {
+        handleQueueError(error, "scrapeQueue");
+      }).not.toThrow();
+    });
+
+    it("should handle different queue names correctly", () => {
+      const error = new Error("max requests limit exceeded");
+      const queueNames = ["scrapeQueue", "embeddingQueue", "scheduledRescrapeQueue"];
+
+      queueNames.forEach((queueName) => {
+        mockAlertCritical.mockClear();
+        handleQueueError(error, queueName);
+
+        expect(mockAlertCritical).toHaveBeenCalledWith(
+          expect.any(String),
+          expect.any(String),
+          expect.objectContaining({
+            queueName,
+          })
+        );
+      });
+    });
+
+    it("should not alert for non-quota errors", () => {
+      const error = new Error("Some other error");
+
+      handleQueueError(error, "scrapeQueue");
+
+      expect(mockAlertCritical).not.toHaveBeenCalled();
+      expect(mockIncrementCounter).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("Worker Error Alerting", () => {
+    // Replicate handleWorkerError logic for testing
+    function handleWorkerError(err: Error, workerName: string) {
+      if (err.message && err.message.includes("max requests limit exceeded")) {
+        mockAlertCritical(
+          "redis_connection_lost",
+          "Redis quota limit exceeded - workers degraded",
+          {
+            workerName,
+            error: err.message,
+            timestamp: expect.any(String),
+            impact: "Background workers (scraping, embeddings) may fail",
+            action: "Check Upstash quota and upgrade if needed",
+          }
+        );
+        mockIncrementCounter("redis.quota_exceeded", 1);
+        return;
+      }
+    }
+
+    beforeEach(() => {
+      mockAlertCritical.mockClear();
+      mockIncrementCounter.mockClear();
+    });
+
+    it("should send critical alert for worker quota errors", () => {
+      const error = new Error("max requests limit exceeded");
+
+      handleWorkerError(error, "scrapeWorker");
+
+      expect(mockAlertCritical).toHaveBeenCalledWith(
+        "redis_connection_lost",
+        expect.stringContaining("workers degraded"),
+        expect.objectContaining({
+          workerName: "scrapeWorker",
+          error: error.message,
+        })
+      );
+    });
+
+    it("should increment metric for worker quota errors", () => {
+      const error = new Error("max requests limit exceeded");
+
+      handleWorkerError(error, "embeddingWorker");
+
+      expect(mockIncrementCounter).toHaveBeenCalledWith("redis.quota_exceeded", 1);
+    });
+
+    it("should handle different worker names correctly", () => {
+      const error = new Error("max requests limit exceeded");
+      const workerNames = ["scrapeWorker", "embeddingWorker", "scheduledRescrapeWorker"];
+
+      workerNames.forEach((workerName) => {
+        mockAlertCritical.mockClear();
+        handleWorkerError(error, workerName);
+
+        expect(mockAlertCritical).toHaveBeenCalledWith(
+          expect.any(String),
+          expect.any(String),
+          expect.objectContaining({
+            workerName,
+          })
+        );
+      });
     });
   });
 });

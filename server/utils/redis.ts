@@ -1,5 +1,6 @@
 import Redis, { RedisOptions } from "ioredis";
 import logger from "./logger";
+import { alertCritical, incrementCounter } from "./monitoring";
 
 const redisUrl = (() => {
   const url = process.env.REDIS_URL;
@@ -51,9 +52,6 @@ function parseRedisUrl(url: string): RedisOptions {
 
 export const redis = new Redis(parseRedisUrl(redisUrl));
 
-// Track if quota error has been logged to avoid spam
-let quotaErrorLogged = false;
-
 redis.on("connect", () => {
   logger.info("Redis connected");
 });
@@ -64,19 +62,34 @@ redis.on("error", (error: NodeJS.ErrnoException) => {
     return;
   }
 
-  // Silently ignore Redis quota/rate limit errors (common in free tiers)
+  // Handle Redis quota/rate limit errors with proper alerting
   if (error.message && (
     error.message.includes("max requests limit exceeded") ||
     error.message.includes("quota exceeded") ||
     error.message.includes("rate limit")
   )) {
-    // Only log once per session to avoid spam
-    if (!quotaErrorLogged) {
-      logger.warn("Redis quota limit reached - some features may be degraded", {
-        message: error.message
-      });
-      quotaErrorLogged = true;
-    }
+    // Send critical alert with rate-limiting built-in (60s cooldown)
+    alertCritical(
+      "redis_connection_lost",
+      "Redis quota limit exceeded - features degraded",
+      {
+        errorMessage: error.message,
+        errorCode: error.code,
+        timestamp: new Date().toISOString(),
+        affectedFeatures: [
+          "Rate limiting",
+          "Caching",
+          "Job queues",
+          "Session storage"
+        ],
+        action: "Check Upstash Redis quota and upgrade plan if needed",
+      }
+    );
+
+    // Track metric for monitoring dashboard
+    incrementCounter("redis.quota_exceeded", 1);
+
+    // Gracefully degrade
     return;
   }
 
