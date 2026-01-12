@@ -336,5 +336,144 @@ describe("PaddleService", () => {
       expect(result).toEqual({ received: true });
       // Should not attempt to insert duplicate event
     });
+
+    it("should handle subscription.updated event", async () => {
+      const event = {
+        event_id: "evt_update123",
+        event_type: "subscription.updated",
+        occurred_at: new Date().toISOString(),
+        data: {
+          id: "sub_test123",
+          status: "active",
+          customer_id: "ctm_test123",
+          items: [{ price_id: "pri_growth123", quantity: 1 }],
+          custom_data: { userId: "user123", plan: "growth" },
+        },
+      };
+
+      const body = Buffer.from(JSON.stringify(event));
+      const hmac = crypto.createHmac("sha256", process.env.PADDLE_WEBHOOK_SECRET!);
+      hmac.update(body);
+      const signature = `ts=1234567890;h1=${hmac.digest("hex")}`;
+
+      const mockFrom = vi.fn((table) => {
+        if (table === "webhook_events") {
+          return {
+            select: vi.fn().mockReturnThis(),
+            insert: vi.fn().mockResolvedValue({ error: null }),
+            eq: vi.fn().mockReturnThis(),
+            single: vi.fn().mockResolvedValue({ data: null, error: { code: "PGRST116" } }),
+          };
+        }
+        return {
+          select: vi.fn().mockReturnThis(),
+          update: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+          single: vi.fn().mockResolvedValue({ data: null, error: null }),
+        };
+      });
+      (supabaseAdmin.from as ReturnType<typeof vi.fn>).mockImplementation(mockFrom);
+
+      const result = await paddleService.handleWebhook(body, signature);
+
+      expect(result).toEqual({ received: true });
+    });
+
+    it("should handle subscription.canceled event", async () => {
+      const event = {
+        event_id: "evt_cancel123",
+        event_type: "subscription.canceled",
+        occurred_at: new Date().toISOString(),
+        data: {
+          id: "sub_test123",
+          status: "canceled",
+          customer_id: "ctm_test123",
+          custom_data: { userId: "user123" },
+        },
+      };
+
+      const body = Buffer.from(JSON.stringify(event));
+      const hmac = crypto.createHmac("sha256", process.env.PADDLE_WEBHOOK_SECRET!);
+      hmac.update(body);
+      const signature = `ts=1234567890;h1=${hmac.digest("hex")}`;
+
+      const mockFrom = vi.fn((table) => {
+        if (table === "webhook_events") {
+          return {
+            select: vi.fn().mockReturnThis(),
+            insert: vi.fn().mockResolvedValue({ error: null }),
+            eq: vi.fn().mockReturnThis(),
+            single: vi.fn().mockResolvedValue({ data: null, error: { code: "PGRST116" } }),
+          };
+        }
+        return {
+          select: vi.fn().mockReturnThis(),
+          update: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+          single: vi.fn().mockResolvedValue({ data: null, error: null }),
+        };
+      });
+      (supabaseAdmin.from as ReturnType<typeof vi.fn>).mockImplementation(mockFrom);
+
+      const result = await paddleService.handleWebhook(body, signature);
+
+      expect(result).toEqual({ received: true });
+    });
+  });
+
+  describe("createPortalSession", () => {
+    it("should create portal session successfully", async () => {
+      mockAxios.mockResolvedValue({
+        data: {
+          data: {
+            urls: {
+              general: {
+                overview: "https://portal.paddle.com/session/abc123",
+              },
+            },
+          },
+        },
+      });
+
+      const mockFrom = vi.fn(() => ({
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        single: vi.fn().mockResolvedValue({
+          data: {
+            paddle_customer_id: "ctm_test123",
+            paddle_subscription_id: "sub_test123",
+            plan: "starter",
+          },
+          error: null,
+        }),
+      }));
+      (supabaseAdmin.from as ReturnType<typeof vi.fn>).mockImplementation(mockFrom);
+
+      const result = await paddleService.createPortalSession("user123", "https://example.com/return");
+
+      expect(result).toBe("https://portal.paddle.com/session/abc123");
+      expect(mockAxios).toHaveBeenCalledWith(
+        expect.objectContaining({
+          method: "POST",
+          url: expect.stringContaining("/customers/ctm_test123/portal-sessions"),
+        })
+      );
+    });
+
+    it("should throw error when no subscription found", async () => {
+      const mockFrom = vi.fn(() => ({
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        single: vi.fn().mockResolvedValue({
+          data: null,
+          error: { code: "PGRST116" },
+        }),
+      }));
+      (supabaseAdmin.from as ReturnType<typeof vi.fn>).mockImplementation(mockFrom);
+
+      await expect(
+        paddleService.createPortalSession("user123", "https://example.com/return")
+      ).rejects.toThrow("No active subscription found");
+    });
   });
 });

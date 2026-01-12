@@ -97,11 +97,16 @@ export const createVersion = async (req: Request, res: Response) => {
     const { version, content, effectiveDate } = createVersionSchema.parse(req.body);
 
     // Check if version already exists
-    const { data: existing } = await supabaseAdmin
+    const { data: existing, error: existingError } = await supabaseAdmin
       .from('privacy_policy_versions')
       .select('id')
       .eq('version', version)
       .single();
+
+    // PGRST116 means no rows found, which is fine - we can create new version
+    if (existingError && existingError.code !== 'PGRST116') {
+      throw existingError;
+    }
 
     if (existing) {
       return res.status(400).json({ error: 'Version already exists' });
@@ -150,11 +155,20 @@ export const updateVersion = async (req: Request, res: Response) => {
     const { content, effectiveDate } = updateVersionSchema.parse(req.body);
 
     // Get existing version
-    const { data: existing } = await supabaseAdmin
+    const { data: existing, error: existingError } = await supabaseAdmin
       .from('privacy_policy_versions')
       .select('id, effective_date, is_active')
       .eq('version', version)
       .single();
+
+    // PGRST116 means no rows found
+    if (existingError && existingError.code === 'PGRST116') {
+      return res.status(404).json({ error: 'Version not found' });
+    }
+
+    if (existingError) {
+      throw existingError;
+    }
 
     if (!existing) {
       return res.status(404).json({ error: 'Version not found' });
