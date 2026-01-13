@@ -1,5 +1,5 @@
 import { Request, Response, NextFunction } from "express";
-import { supabaseAdmin, ChatbotSettings } from "../utils/supabase";
+import { supabaseAdmin, ChatbotSettings, getUserPlanLimits } from "../utils/supabase";
 import { AuthenticatedRequest, checkAndIncrementUsage, decrementUsage } from "../middleware/clerkAuth";
 import { NotFoundError, AuthorizationError } from "../utils/errors";
 import { CreateChatbotInput, UpdateChatbotInput, ScrapeScheduleInput } from "../middleware/validation";
@@ -45,13 +45,16 @@ export async function createChatbot(
       throw new Error("Failed to create chatbot");
     }
 
-    // Queue scraping job
+    // Get user's plan limits
+    const { limits } = await getUserPlanLimits(req.user.userId);
+
+    // Queue scraping job with plan-based page limit
     await scrapeQueue.add(
       "scrape-website",
       {
         chatbotId: chatbot.id,
         websiteUrl,
-        maxPages: 50,
+        maxPages: limits.pages_per_crawl,
       },
       {
         attempts: 3,
@@ -61,6 +64,12 @@ export async function createChatbot(
         },
       }
     );
+
+    logger.info("Scraping queued with plan-based limit", {
+      chatbotId: chatbot.id,
+      userId: req.user.userId,
+      maxPages: limits.pages_per_crawl,
+    });
 
     logger.info("Chatbot created", { chatbotId: chatbot.id, userId: req.user.userId });
 

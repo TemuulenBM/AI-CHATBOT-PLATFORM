@@ -34,6 +34,15 @@ vi.mock("../../../server/utils/supabase", () => ({
   supabaseAdmin: {
     from: vi.fn(),
   },
+  getUserPlanLimits: vi.fn().mockResolvedValue({
+    plan: "free",
+    limits: {
+      chatbots: 1,
+      messages: 100,
+      pages_per_crawl: 50,
+      price: 0,
+    },
+  }),
 }));
 
 vi.mock("../../../server/middleware/clerkAuth", () => ({
@@ -91,7 +100,7 @@ vi.mock("../../../server/utils/logger", () => ({
   },
 }));
 
-import { supabaseAdmin } from "../../../server/utils/supabase";
+import { supabaseAdmin, getUserPlanLimits } from "../../../server/utils/supabase";
 import { getCache } from "../../../server/utils/redis";
 import * as analyticsService from "../../../server/services/analytics";
 
@@ -229,6 +238,15 @@ describe("Chatbots Controller", () => {
       });
 
       vi.mocked(supabaseAdmin.from).mockReturnValue(builder as any);
+      vi.mocked(getUserPlanLimits).mockResolvedValue({
+        plan: "free",
+        limits: {
+          chatbots: 1,
+          messages: 100,
+          pages_per_crawl: 50,
+          price: 0,
+        },
+      });
 
       const req = createMockRequest({
         body: {
@@ -309,6 +327,15 @@ describe("Chatbots Controller", () => {
       });
 
       vi.mocked(supabaseAdmin.from).mockReturnValue(builder as any);
+      vi.mocked(getUserPlanLimits).mockResolvedValue({
+        plan: "free",
+        limits: {
+          chatbots: 1,
+          messages: 100,
+          pages_per_crawl: 50,
+          price: 0,
+        },
+      });
       const { scrapeQueue } = await import("../../../server/jobs/queues");
       vi.mocked(scrapeQueue.add).mockResolvedValue({ id: "job-123" } as any);
 

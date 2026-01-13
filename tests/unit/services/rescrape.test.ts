@@ -6,6 +6,15 @@ vi.mock("../../../server/utils/supabase", () => ({
   supabaseAdmin: {
     from: vi.fn(),
   },
+  getUserPlanLimits: vi.fn().mockResolvedValue({
+    plan: "free",
+    limits: {
+      chatbots: 1,
+      messages: 100,
+      pages_per_crawl: 50,
+      price: 0,
+    },
+  }),
 }));
 
 vi.mock("../../../server/jobs/queues", () => ({
@@ -28,7 +37,7 @@ vi.mock("../../../server/utils/logger", () => ({
   },
 }));
 
-import { supabaseAdmin } from "../../../server/utils/supabase";
+import { supabaseAdmin, getUserPlanLimits } from "../../../server/utils/supabase";
 import { scrapeQueue } from "../../../server/jobs/queues";
 import { deleteCache, deleteCachePattern } from "../../../server/utils/redis";
 import logger from "../../../server/utils/logger";
@@ -77,6 +86,15 @@ describe("Rescrape Service", () => {
         });
 
       vi.mocked(scrapeQueue.add).mockResolvedValue(mockJob as any);
+      vi.mocked(getUserPlanLimits).mockResolvedValue({
+        plan: "free",
+        limits: {
+          chatbots: 1,
+          messages: 100,
+          pages_per_crawl: 50,
+          price: 0,
+        },
+      });
 
       const result = await rescrapeService.triggerRescrape("chatbot-123", "manual");
 
@@ -137,6 +155,16 @@ describe("Rescrape Service", () => {
             error: { message: "Insert failed" },
           }),
         });
+
+      vi.mocked(getUserPlanLimits).mockResolvedValue({
+        plan: "free",
+        limits: {
+          chatbots: 1,
+          messages: 100,
+          pages_per_crawl: 50,
+          price: 0,
+        },
+      });
 
       await expect(rescrapeService.triggerRescrape("chatbot-123")).rejects.toThrow(
         "Failed to initiate re-scraping"

@@ -13,6 +13,8 @@ import { Switch } from "@/components/ui/switch";
 import { useChatbotStore, ScrapeFrequency, ScrapeHistoryResponse } from "@/store/chatbot-store";
 import { useAuth } from "@clerk/clerk-react";
 import { useToast } from "@/hooks/use-toast";
+import { useScrapeStatus } from "@/hooks/useScrapeStatus";
+import { ScrapeProgressCard } from "@/components/dashboard/ScrapeProgressCard";
 import {
   ArrowLeft,
   Bot,
@@ -119,10 +121,14 @@ export default function ChatbotSettings() {
   const [hasChanges, setHasChanges] = useState(false);
 
   // Re-scraping state
-  const [scrapeHistory, setScrapeHistory] = useState<ScrapeHistoryResponse | null>(null);
   const [autoScrapeEnabled, setAutoScrapeEnabled] = useState(false);
   const [scrapeFrequency, setScrapeFrequency] = useState<ScrapeFrequency>("manual");
   const [showRescrapeDialog, setShowRescrapeDialog] = useState(false);
+
+  // Use scrape status hook for polling
+  const { status: scrapeStatus, refetch: refetchScrapeStatus } = useScrapeStatus(id, {
+    autoRefresh: true,
+  });
 
   // Auth check
   useEffect(() => {
@@ -142,12 +148,11 @@ export default function ChatbotSettings() {
     };
   }, [id, isSignedIn]);
 
-  // Fetch scrape history
+  // Load scrape schedule settings from backend
   const loadScrapeHistory = useCallback(async () => {
     if (id) {
       const history = await fetchScrapeHistory(id);
       if (history) {
-        setScrapeHistory(history);
         setAutoScrapeEnabled(history.autoScrapeEnabled);
         setScrapeFrequency(history.scrapeFrequency);
       }
@@ -261,8 +266,11 @@ export default function ChatbotSettings() {
         title: "Re-scraping started",
         description: "Your chatbot is being updated. This may take a few minutes.",
       });
-      // Refresh history after a short delay
-      setTimeout(() => loadScrapeHistory(), 2000);
+      // Refresh scrape status after a short delay
+      setTimeout(() => {
+        loadScrapeHistory();
+        refetchScrapeStatus();
+      }, 2000);
     } else {
       toast({
         title: "Error",
@@ -293,11 +301,7 @@ export default function ChatbotSettings() {
       });
       loadScrapeHistory();
     } else {
-      // Revert on failure
-      if (scrapeHistory) {
-        setAutoScrapeEnabled(scrapeHistory.autoScrapeEnabled);
-        setScrapeFrequency(scrapeHistory.scrapeFrequency);
-      }
+      // Revert on failure - keep current state
       toast({
         title: "Error",
         description: "Failed to update schedule",
@@ -474,7 +478,7 @@ export default function ChatbotSettings() {
                         <span className="text-xs">Last Trained</span>
                       </div>
                       <p className="font-medium">
-                        {formatRelativeTime(scrapeHistory?.lastScrapedAt || null)}
+                        {formatRelativeTime(currentChatbot?.last_scraped_at || null)}
                       </p>
                     </div>
                     <div className="p-4 rounded-lg bg-background/50 border border-white/5">
@@ -549,49 +553,32 @@ export default function ChatbotSettings() {
                       </div>
                     )}
 
-                    {autoScrapeEnabled && scrapeHistory?.nextScheduledScrape && (
+                    {autoScrapeEnabled && scrapeStatus?.next_scheduled_scrape && (
                       <div className="flex items-center gap-2 text-sm text-muted-foreground">
                         <Calendar className="h-4 w-4" />
-                        <span>Next scheduled: {formatFutureDate(scrapeHistory.nextScheduledScrape)}</span>
+                        <span>Next scheduled: {formatFutureDate(scrapeStatus.next_scheduled_scrape)}</span>
                       </div>
                     )}
                   </div>
 
-                  {/* Recent Scrape History */}
-                  {scrapeHistory?.history && scrapeHistory.history.length > 0 && (
-                    <div className="space-y-3 pt-4 border-t border-white/5">
-                      <Label>Recent History</Label>
-                      <div className="space-y-2">
-                        {scrapeHistory.history.slice(0, 3).map((entry) => (
-                          <div
-                            key={entry.id}
-                            className="flex items-center justify-between p-3 rounded-lg bg-background/50 border border-white/5"
-                          >
-                            <div className="flex items-center gap-3">
-                              {entry.status === "completed" ? (
-                                <CheckCircle2 className="h-4 w-4 text-green-400" />
-                              ) : entry.status === "failed" ? (
-                                <XCircle className="h-4 w-4 text-red-400" />
-                              ) : (
-                                <Loader2 className="h-4 w-4 animate-spin text-yellow-400" />
-                              )}
-                              <div>
-                                <p className="text-sm font-medium capitalize">{entry.triggered_by} scrape</p>
-                                <p className="text-xs text-muted-foreground">
-                                  {entry.status === "completed"
-                                    ? `${entry.pages_scraped} pages, ${entry.embeddings_created} embeddings`
-                                    : entry.status === "failed"
-                                    ? entry.error_message || "Failed"
-                                    : "In progress..."}
-                                </p>
-                              </div>
-                            </div>
-                            <span className="text-xs text-muted-foreground">
-                              {formatRelativeTime(entry.started_at)}
-                            </span>
-                          </div>
-                        ))}
-                      </div>
+                  {/* Scrape Progress Card */}
+                  {scrapeStatus && id && (
+                    <div className="pt-4 border-t border-white/5">
+                      <ScrapeProgressCard
+                        chatbotId={id}
+                        history={scrapeStatus.history}
+                        lastScrapedAt={currentChatbot?.last_scraped_at || null}
+                        nextScheduledScrape={scrapeStatus.next_scheduled_scrape}
+                        onManualRescrape={() => setShowRescrapeDialog(true)}
+                        isRescraping={isRescraping}
+                      />
+                    </div>
+                  )}
+
+                  {/* Fallback: Loading state (if no scrapeStatus yet) */}
+                  {!scrapeStatus && (
+                    <div className="pt-4 border-t border-white/5">
+                      <p className="text-sm text-muted-foreground">Loading scrape history...</p>
                     </div>
                   )}
                 </div>

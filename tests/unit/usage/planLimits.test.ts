@@ -14,6 +14,7 @@ describe("PLAN_LIMITS", () => {
       expect(PLAN_LIMITS.free).toEqual({
         chatbots: 1,
         messages: 100,
+        pages_per_crawl: 50,
         price: 0,
       });
     });
@@ -22,6 +23,7 @@ describe("PLAN_LIMITS", () => {
       expect(PLAN_LIMITS.starter).toEqual({
         chatbots: 3,
         messages: 2000,
+        pages_per_crawl: 200,
         price: 4900,
       });
     });
@@ -30,6 +32,7 @@ describe("PLAN_LIMITS", () => {
       expect(PLAN_LIMITS.growth).toEqual({
         chatbots: 10,
         messages: 10000,
+        pages_per_crawl: 500,
         price: 9900,
       });
     });
@@ -38,6 +41,7 @@ describe("PLAN_LIMITS", () => {
       expect(PLAN_LIMITS.business).toEqual({
         chatbots: 999,
         messages: 50000,
+        pages_per_crawl: 2000,
         price: 29900,
       });
     });

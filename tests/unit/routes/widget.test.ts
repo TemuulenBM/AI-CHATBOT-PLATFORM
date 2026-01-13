@@ -1,10 +1,19 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import express from "express";
+import request from "supertest";
 import crypto from "crypto";
+import * as fs from "fs";
+import * as path from "path";
+import * as esbuild from "esbuild";
 
-// Mock modules before importing the route
+// Mock modules before importing
 vi.mock("fs", () => ({
   existsSync: vi.fn(),
   readFileSync: vi.fn(),
+}));
+
+vi.mock("path", () => ({
+  join: vi.fn((...args) => args.join("/")),
 }));
 
 vi.mock("esbuild", () => ({
@@ -21,303 +30,725 @@ vi.mock("../../../server/utils/logger", () => ({
 }));
 
 vi.mock("../../../server/controllers/chatbots", () => ({
-  getChatbotPublic: vi.fn(),
+  getChatbotPublic: vi.fn((req: any, res: any, next: any) => {
+    res.json({ id: req.params.id, name: "Test Chatbot" });
+  }),
 }));
 
-describe("Widget Routes - Unit Tests", () => {
-  const originalEnv = { ...process.env };
+vi.mock("../../../server/services/widget-analytics", () => ({
+  trackEvents: vi.fn().mockResolvedValue(undefined),
+  trackEvent: vi.fn().mockResolvedValue(undefined),
+}));
 
-  beforeEach(() => {
+import logger from "../../../server/utils/logger";
+import { getChatbotPublic } from "../../../server/controllers/chatbots";
+import * as widgetAnalytics from "../../../server/services/widget-analytics";
+
+describe("Widget Routes", () => {
+  let app: express.Application;
+  let widgetRoutes: any;
+  const originalEnv = { ...process.env };
+  const originalCwd = process.cwd;
+
+  beforeEach(async () => {
     vi.clearAllMocks();
+    vi.resetModules(); // Reset modules to clear cache between tests
     process.env.NODE_ENV = "test";
     process.env.APP_URL = "https://testapp.com";
+    delete process.env.WIDGET_POWERED_BY_URL;
+
+    // Import routes after resetting modules
+    const widgetModule = await import("../../../server/routes/widget");
+    widgetRoutes = widgetModule.default;
+
+    app = express();
+    app.use(express.json());
+    app.use("/", widgetRoutes);
   });
 
   afterEach(() => {
+    vi.useRealTimers();
     process.env = { ...originalEnv };
+    process.cwd = originalCwd;
   });
 
-  describe("getBrandingUrl logic", () => {
-    it("should use WIDGET_POWERED_BY_URL when set", () => {
-      process.env.WIDGET_POWERED_BY_URL = "https://custom-branding.com";
-      process.env.APP_URL = "https://app.com";
+  describe("GET /widget.js", () => {
+    it("should serve widget script from cache when available", async () => {
+      const mockScript = "console.log('widget');";
+      const mockIntegrity = `sha384-${crypto.createHash("sha384").update(mockScript).digest("base64")}`;
 
-      const brandingUrl = process.env.WIDGET_POWERED_BY_URL || process.env.APP_URL || "https://chatai.com";
-      expect(brandingUrl).toBe("https://custom-branding.com");
+      // Mock cache by setting up file system to return prebuilt
+      vi.mocked(fs.existsSync).mockReturnValue(true);
+      vi.mocked(fs.readFileSync).mockReturnValue(mockScript);
+
+      const response = await request(app).get("/widget.js");
+
+      expect(response.status).toBe(200);
+      expect(response.headers["content-type"]).toBe("application/javascript; charset=utf-8");
+      expect(response.headers["cache-control"]).toBe("public, max-age=3600");
+      expect(response.headers["x-content-type-options"]).toBe("nosniff");
+      expect(response.headers["x-script-integrity"]).toBe(mockIntegrity);
+      expect(response.text).toBe(mockScript);
     });
 
-    it("should fallback to APP_URL when WIDGET_POWERED_BY_URL not set", () => {
-      delete process.env.WIDGET_POWERED_BY_URL;
-      process.env.APP_URL = "https://app.com";
+    it("should serve widget script from prebuilt path", async () => {
+      const mockScript = "console.log('prebuilt widget');";
+      const mockIntegrity = `sha384-${crypto.createHash("sha384").update(mockScript).digest("base64")}`;
 
-      const brandingUrl = process.env.WIDGET_POWERED_BY_URL || process.env.APP_URL || "https://chatai.com";
-      expect(brandingUrl).toBe("https://app.com");
+      vi.mocked(fs.existsSync).mockImplementation((filePath: any) => {
+        return String(filePath).includes("dist/widget/widget.js");
+      });
+      vi.mocked(fs.readFileSync).mockReturnValue(mockScript);
+
+      const response = await request(app).get("/widget.js");
+
+      expect(response.status).toBe(200);
+      expect(response.text).toBe(mockScript);
+      expect(response.headers["x-script-integrity"]).toBe(mockIntegrity);
     });
 
-    it("should fallback to default when neither is set", () => {
-      delete process.env.WIDGET_POWERED_BY_URL;
-      delete process.env.APP_URL;
+    it("should build widget from source path in development", async () => {
+      const mockScript = "console.log('built widget');";
+      const mockIntegrity = `sha384-${crypto.createHash("sha384").update(mockScript).digest("base64")}`;
 
-      const brandingUrl = process.env.WIDGET_POWERED_BY_URL || process.env.APP_URL || "https://chatai.com";
-      expect(brandingUrl).toBe("https://chatai.com");
-    });
-  });
+      vi.mocked(fs.existsSync).mockImplementation((filePath: any) => {
+        return String(filePath).includes("widget/src/index.ts");
+      });
 
-  describe("generateIntegrity logic", () => {
-    it("should generate valid SHA-384 integrity hash", () => {
-      const content = "console.log('test');";
-      const hash = crypto.createHash("sha384").update(content).digest("base64");
-      const integrity = `sha384-${hash}`;
+      vi.mocked(esbuild.build).mockResolvedValue({
+        outputFiles: [{ text: mockScript }],
+        warnings: [],
+        errors: [],
+      } as any);
 
-      expect(integrity).toMatch(/^sha384-[A-Za-z0-9+/]+=*$/);
-    });
+      const response = await request(app).get("/widget.js");
 
-    it("should generate different hashes for different content", () => {
-      const content1 = "console.log('test1');";
-      const content2 = "console.log('test2');";
-
-      const hash1 = crypto.createHash("sha384").update(content1).digest("base64");
-      const hash2 = crypto.createHash("sha384").update(content2).digest("base64");
-
-      expect(hash1).not.toBe(hash2);
+      expect(response.status).toBe(200);
+      expect(response.text).toBe(mockScript);
+      expect(response.headers["x-script-integrity"]).toBe(mockIntegrity);
+      expect(esbuild.build).toHaveBeenCalled();
     });
 
-    it("should generate same hash for same content", () => {
-      const content = "console.log('test');";
+    it("should build widget from legacy path when source not found", async () => {
+      const mockScript = "console.log('legacy widget');";
+      const mockIntegrity = `sha384-${crypto.createHash("sha384").update(mockScript).digest("base64")}`;
 
-      const hash1 = crypto.createHash("sha384").update(content).digest("base64");
-      const hash2 = crypto.createHash("sha384").update(content).digest("base64");
+      vi.mocked(fs.existsSync).mockImplementation((filePath: any) => {
+        return String(filePath).includes("widget/chatbot-widget.ts");
+      });
 
-      expect(hash1).toBe(hash2);
-    });
-  });
+      vi.mocked(esbuild.build).mockResolvedValue({
+        outputFiles: [{ text: mockScript }],
+        warnings: [],
+        errors: [],
+      } as any);
 
-  describe("Cache TTL logic", () => {
-    it("should use 1 hour cache in production", () => {
-      process.env.NODE_ENV = "production";
-      const CACHE_TTL = process.env.NODE_ENV === "production" ? 3600 * 1000 : 60 * 1000;
+      const response = await request(app).get("/widget.js");
 
-      expect(CACHE_TTL).toBe(3600 * 1000); // 1 hour in ms
-    });
-
-    it("should use 1 minute cache in development", () => {
-      process.env.NODE_ENV = "development";
-      const CACHE_TTL = process.env.NODE_ENV === "production" ? 3600 * 1000 : 60 * 1000;
-
-      expect(CACHE_TTL).toBe(60 * 1000); // 1 minute in ms
+      expect(response.status).toBe(200);
+      expect(response.text).toBe(mockScript);
+      expect(response.headers["x-script-integrity"]).toBe(mockIntegrity);
     });
 
-    it("should use 1 minute cache in test", () => {
-      process.env.NODE_ENV = "test";
-      const CACHE_TTL = process.env.NODE_ENV === "production" ? 3600 * 1000 : 60 * 1000;
+    it("should replace branding URL placeholder in script", async () => {
+      const mockScript = "const url = '__WIDGET_POWERED_BY_URL__';";
+      const brandingUrl = "https://custom.com";
 
-      expect(CACHE_TTL).toBe(60 * 1000);
-    });
-  });
+      process.env.WIDGET_POWERED_BY_URL = brandingUrl;
 
-  describe("Widget cache structure", () => {
-    interface WidgetCache {
-      content: string;
-      integrity: string;
-      timestamp: number;
-    }
+      vi.mocked(fs.existsSync).mockReturnValue(true);
+      vi.mocked(fs.readFileSync).mockReturnValue(mockScript);
 
-    it("should have correct structure", () => {
-      const cache: WidgetCache = {
-        content: "// widget code",
-        integrity: "sha384-abc123",
-        timestamp: Date.now(),
-      };
+      const response = await request(app).get("/widget.js");
 
-      expect(cache).toHaveProperty("content");
-      expect(cache).toHaveProperty("integrity");
-      expect(cache).toHaveProperty("timestamp");
-      expect(typeof cache.content).toBe("string");
-      expect(typeof cache.integrity).toBe("string");
-      expect(typeof cache.timestamp).toBe("number");
+      expect(response.status).toBe(200);
+      expect(response.text).toContain(brandingUrl);
+      expect(response.text).not.toContain("__WIDGET_POWERED_BY_URL__");
     });
 
-    it("should check cache expiration correctly", () => {
-      const CACHE_TTL = 60 * 1000; // 1 minute
-      const now = Date.now();
+    it("should handle errors and return 500", async () => {
+      vi.mocked(fs.existsSync).mockReturnValue(false);
 
-      const validCache: WidgetCache = {
-        content: "code",
-        integrity: "sha384-xyz",
-        timestamp: now - 30000, // 30 seconds ago
-      };
+      const response = await request(app).get("/widget.js");
 
-      const expiredCache: WidgetCache = {
-        content: "code",
-        integrity: "sha384-xyz",
-        timestamp: now - 120000, // 2 minutes ago
-      };
-
-      expect(now - validCache.timestamp < CACHE_TTL).toBe(true);
-      expect(now - expiredCache.timestamp < CACHE_TTL).toBe(false);
-    });
-  });
-
-  describe("Content-Type headers", () => {
-    it("should use correct content type for JavaScript", () => {
-      const contentType = "application/javascript; charset=utf-8";
-      expect(contentType).toBe("application/javascript; charset=utf-8");
+      expect(response.status).toBe(500);
+      expect(response.text).toBe("// Widget failed to load");
+      expect(logger.error).toHaveBeenCalledWith(
+        "Failed to serve widget",
+        expect.objectContaining({
+          error: expect.any(Error),
+          path: "/widget.js",
+        })
+      );
     });
 
-    it("should use nosniff header", () => {
-      const header = "nosniff";
-      expect(header).toBe("nosniff");
+    it("should use cache when within TTL", async () => {
+      const mockScript = "console.log('cached');";
+      vi.mocked(fs.existsSync).mockReturnValue(true);
+      vi.mocked(fs.readFileSync).mockReturnValue(mockScript);
+
+      // First request
+      await request(app).get("/widget.js");
+
+      // Second request should use cache (no new file reads)
+      vi.mocked(fs.existsSync).mockClear();
+      vi.mocked(fs.readFileSync).mockClear();
+
+      const response = await request(app).get("/widget.js");
+
+      expect(response.status).toBe(200);
+      expect(response.text).toBe(mockScript);
     });
   });
 
-  describe("Cache-Control headers", () => {
-    it("should use 1 hour cache for widget.js", () => {
-      const cacheControl = "public, max-age=3600";
-      expect(cacheControl).toContain("max-age=3600");
+  describe("GET /widget/loader.js", () => {
+    it("should serve loader script from prebuilt path", async () => {
+      const mockScript = "console.log('loader');";
+      const mockIntegrity = `sha384-${crypto.createHash("sha384").update(mockScript).digest("base64")}`;
+
+      vi.mocked(fs.existsSync).mockImplementation((filePath: any) => {
+        return String(filePath).includes("dist/widget/loader.js");
+      });
+      vi.mocked(fs.readFileSync).mockReturnValue(mockScript);
+
+      const response = await request(app).get("/widget/loader.js");
+
+      expect(response.status).toBe(200);
+      expect(response.headers["content-type"]).toBe("application/javascript; charset=utf-8");
+      expect(response.headers["cache-control"]).toBe("public, max-age=86400");
+      expect(response.headers["x-script-integrity"]).toBe(mockIntegrity);
+      expect(response.text).toBe(mockScript);
     });
 
-    it("should use 24 hour cache for loader.js", () => {
-      const cacheControl = "public, max-age=86400";
-      expect(cacheControl).toContain("max-age=86400");
+    it("should build loader from source path", async () => {
+      const mockScript = "console.log('built loader');";
+      const mockIntegrity = `sha384-${crypto.createHash("sha384").update(mockScript).digest("base64")}`;
+
+      vi.mocked(fs.existsSync).mockImplementation((filePath: any) => {
+        return String(filePath).includes("widget/src/loader.ts");
+      });
+
+      vi.mocked(esbuild.build).mockResolvedValue({
+        outputFiles: [{ text: mockScript }],
+        warnings: [],
+        errors: [],
+      } as any);
+
+      const response = await request(app).get("/widget/loader.js");
+
+      expect(response.status).toBe(200);
+      expect(response.text).toBe(mockScript);
+      expect(response.headers["x-script-integrity"]).toBe(mockIntegrity);
+      expect(esbuild.build).toHaveBeenCalledWith(
+        expect.objectContaining({
+          minify: true,
+        })
+      );
+    });
+
+    it("should handle errors and return 500", async () => {
+      vi.mocked(fs.existsSync).mockReturnValue(false);
+
+      const response = await request(app).get("/widget/loader.js");
+
+      expect(response.status).toBe(500);
+      expect(response.text).toBe("// Loader failed to load");
+      expect(logger.error).toHaveBeenCalledWith(
+        "Failed to serve loader",
+        expect.objectContaining({
+          error: expect.any(Error),
+          path: "/widget/loader.js",
+        })
+      );
+    });
+
+    it("should use cache when within TTL", async () => {
+      const mockScript = "console.log('cached loader');";
+      vi.mocked(fs.existsSync).mockReturnValue(true);
+      vi.mocked(fs.readFileSync).mockReturnValue(mockScript);
+
+      await request(app).get("/widget/loader.js");
+
+      vi.mocked(fs.existsSync).mockClear();
+      vi.mocked(fs.readFileSync).mockClear();
+
+      const response = await request(app).get("/widget/loader.js");
+
+      expect(response.status).toBe(200);
+      expect(response.text).toBe(mockScript);
     });
   });
 
-  describe("Widget manifest structure", () => {
-    it("should have correct manifest structure", () => {
-      const manifest = {
+  describe("GET /widget/widget.js", () => {
+    it("should serve widget script", async () => {
+      const mockScript = "console.log('widget alt path');";
+      vi.mocked(fs.existsSync).mockReturnValue(true);
+      vi.mocked(fs.readFileSync).mockReturnValue(mockScript);
+
+      const response = await request(app).get("/widget/widget.js");
+
+      expect(response.status).toBe(200);
+      expect(response.text).toBe(mockScript);
+      expect(response.headers["cache-control"]).toBe("public, max-age=3600");
+    });
+
+    it("should handle errors and return 500", async () => {
+      vi.mocked(fs.existsSync).mockReturnValue(false);
+
+      const response = await request(app).get("/widget/widget.js");
+
+      expect(response.status).toBe(500);
+      expect(response.text).toBe("// Widget failed to load");
+      expect(logger.error).toHaveBeenCalledWith(
+        "Failed to serve widget",
+        expect.objectContaining({
+          error: expect.any(Error),
+          path: "/widget/widget.js",
+        })
+      );
+    });
+  });
+
+  describe("GET /widget/manifest.json", () => {
+    it("should serve manifest from file when exists", async () => {
+      const mockManifest = {
         version: "2.0.0",
         files: {
-          "widget.js": {
-            integrity: "sha384-abc",
-            size: 1000,
-          },
-          "loader.js": {
-            integrity: "sha384-def",
-            size: 500,
-          },
+          "widget.js": { integrity: "sha384-abc", size: 1000 },
+          "loader.js": { integrity: "sha384-def", size: 500 },
         },
       };
 
-      expect(manifest.version).toBe("2.0.0");
-      expect(manifest.files["widget.js"]).toBeDefined();
-      expect(manifest.files["loader.js"]).toBeDefined();
-      expect(manifest.files["widget.js"].integrity).toMatch(/^sha384-/);
+      vi.mocked(fs.existsSync).mockImplementation((filePath: any) => {
+        return String(filePath).includes("dist/widget/manifest.json");
+      });
+      vi.mocked(fs.readFileSync).mockReturnValue(JSON.stringify(mockManifest));
+
+      const response = await request(app).get("/widget/manifest.json");
+
+      expect(response.status).toBe(200);
+      expect(response.body).toEqual(mockManifest);
+    });
+
+    it("should generate manifest on-the-fly when file not found", async () => {
+      const widgetScript = "console.log('widget');";
+      const loaderScript = "console.log('loader');";
+      const widgetIntegrity = `sha384-${crypto.createHash("sha384").update(widgetScript).digest("base64")}`;
+      const loaderIntegrity = `sha384-${crypto.createHash("sha384").update(loaderScript).digest("base64")}`;
+
+      vi.mocked(fs.existsSync).mockImplementation((filePath: any) => {
+        const pathStr = String(filePath);
+        if (pathStr.includes("manifest.json")) return false;
+        if (pathStr.includes("widget.js")) return true;
+        if (pathStr.includes("loader.js")) return true;
+        return false;
+      });
+
+      vi.mocked(fs.readFileSync).mockImplementation((filePath: any) => {
+        const pathStr = String(filePath);
+        if (pathStr.includes("widget.js")) return widgetScript;
+        if (pathStr.includes("loader.js")) return loaderScript;
+        return "";
+      });
+
+      const response = await request(app).get("/widget/manifest.json");
+
+      expect(response.status).toBe(200);
+      expect(response.body.version).toBe("2.0.0");
+      expect(response.body.files["widget.js"].integrity).toBe(widgetIntegrity);
+      expect(response.body.files["loader.js"].integrity).toBe(loaderIntegrity);
+      expect(response.body.files["widget.js"].size).toBe(Buffer.byteLength(widgetScript));
+      expect(response.body.files["loader.js"].size).toBe(Buffer.byteLength(loaderScript));
+    });
+
+    it("should handle errors and return 500", async () => {
+      vi.mocked(fs.existsSync).mockReturnValue(false);
+
+      const response = await request(app).get("/widget/manifest.json");
+
+      expect(response.status).toBe(500);
+      expect(response.body.error).toBe("Failed to load manifest");
+      expect(logger.error).toHaveBeenCalledWith(
+        "Failed to serve manifest",
+        expect.objectContaining({
+          error: expect.any(Error),
+          path: "/widget/manifest.json",
+        })
+      );
     });
   });
 
-  describe("Preview redirect logic", () => {
-    it("should build redirect URL with chatbot ID", () => {
-      const chatbotId = "test-chatbot-123";
-      const redirectUrl = `/widget/demo?id=${chatbotId}`;
+  describe("GET /widget/preview", () => {
+    it("should redirect to demo page with chatbot ID", async () => {
+      const response = await request(app)
+        .get("/widget/preview")
+        .query({ id: "chatbot-123" });
 
-      expect(redirectUrl).toBe("/widget/demo?id=test-chatbot-123");
+      expect(response.status).toBe(302);
+      expect(response.headers.location).toBe("/widget/demo?id=chatbot-123");
     });
 
-    it("should use default ID when not provided", () => {
-      const chatbotId = undefined || "demo-chatbot-id";
-      const redirectUrl = `/widget/demo?id=${chatbotId}`;
+    it("should use default ID when not provided", async () => {
+      const response = await request(app).get("/widget/preview");
 
-      expect(redirectUrl).toBe("/widget/demo?id=demo-chatbot-id");
-    });
-  });
-
-  describe("Analytics event handling", () => {
-    it("should handle analytics event structure", () => {
-      const analyticsEvent = {
-        chatbotId: "chatbot123",
-        sessionId: "session456",
-        events: [
-          { type: "widget_open", timestamp: Date.now() },
-          { type: "message_sent", timestamp: Date.now() },
-        ],
-      };
-
-      expect(analyticsEvent.chatbotId).toBeDefined();
-      expect(analyticsEvent.sessionId).toBeDefined();
-      expect(Array.isArray(analyticsEvent.events)).toBe(true);
-      expect(analyticsEvent.events.length).toBe(2);
+      expect(response.status).toBe(302);
+      expect(response.headers.location).toBe("/widget/demo?id=demo-chatbot-id");
     });
   });
 
-  describe("Error report handling", () => {
-    it("should handle error report structure", () => {
+  describe("GET /widget/:id", () => {
+    it("should skip getChatbotPublic for demo route", async () => {
+      const response = await request(app).get("/widget/demo");
+
+      // Should not call getChatbotPublic, should fall through (404 or handled by other middleware)
+      expect(getChatbotPublic).not.toHaveBeenCalled();
+    });
+
+    it("should call getChatbotPublic for regular IDs", async () => {
+      const response = await request(app).get("/widget/chatbot-123");
+
+      expect(response.status).toBe(200);
+      expect(response.body.id).toBe("chatbot-123");
+      expect(getChatbotPublic).toHaveBeenCalled();
+    });
+  });
+
+  describe("POST /widget/analytics", () => {
+    it("should process analytics events successfully", async () => {
+      const events = [
+        { event_name: "widget_opened", event_category: "engagement" },
+        { event_name: "message_sent", event_category: "engagement" },
+      ];
+
+      const response = await request(app)
+        .post("/widget/analytics")
+        .send({
+          chatbotId: "chatbot-123",
+          sessionId: "session-456",
+          events,
+        });
+
+      expect(response.status).toBe(204);
+      expect(widgetAnalytics.trackEvents).toHaveBeenCalledWith("chatbot-123", "session-456", events);
+      expect(logger.debug).toHaveBeenCalledWith(
+        "Widget analytics received",
+        expect.objectContaining({
+          chatbotId: "chatbot-123",
+          sessionId: "session-456",
+          eventCount: 2,
+        })
+      );
+    });
+
+    it("should return 400 when chatbotId is missing", async () => {
+      const response = await request(app)
+        .post("/widget/analytics")
+        .send({
+          sessionId: "session-456",
+          events: [],
+        });
+
+      expect(response.status).toBe(400);
+      expect(response.body.error).toContain("Missing required fields");
+      expect(widgetAnalytics.trackEvents).not.toHaveBeenCalled();
+    });
+
+    it("should return 400 when sessionId is missing", async () => {
+      const response = await request(app)
+        .post("/widget/analytics")
+        .send({
+          chatbotId: "chatbot-123",
+          events: [],
+        });
+
+      expect(response.status).toBe(400);
+      expect(response.body.error).toContain("Missing required fields");
+    });
+
+    it("should return 400 when events is not an array", async () => {
+      const response = await request(app)
+        .post("/widget/analytics")
+        .send({
+          chatbotId: "chatbot-123",
+          sessionId: "session-456",
+          events: "not-an-array",
+        });
+
+      expect(response.status).toBe(400);
+      expect(response.body.error).toContain("Missing required fields");
+    });
+
+    it("should handle errors and return 500", async () => {
+      vi.mocked(widgetAnalytics.trackEvents).mockRejectedValue(new Error("Service error"));
+
+      const response = await request(app)
+        .post("/widget/analytics")
+        .send({
+          chatbotId: "chatbot-123",
+          sessionId: "session-456",
+          events: [{ event_name: "test" }],
+        });
+
+      expect(response.status).toBe(500);
+      expect(response.body.error).toBe("Failed to process analytics");
+      expect(logger.error).toHaveBeenCalledWith(
+        "Failed to process analytics",
+        expect.objectContaining({
+          error: expect.any(Error),
+          chatbotId: "chatbot-123",
+        })
+      );
+    });
+  });
+
+  describe("POST /widget/errors", () => {
+    it("should process error reports successfully", async () => {
       const errorReport = {
-        chatbotId: "chatbot123",
-        sessionId: "session456",
+        chatbotId: "chatbot-123",
+        sessionId: "session-456",
         error: {
           message: "Something went wrong",
           stack: "Error: Something went wrong\n    at widget.js:100",
           widgetVersion: "2.0.0",
-          userAgent: "Mozilla/5.0...",
+          userAgent: "Mozilla/5.0",
         },
       };
 
-      expect(errorReport.error.message).toBeDefined();
-      expect(errorReport.error.widgetVersion).toBe("2.0.0");
+      const response = await request(app)
+        .post("/widget/errors")
+        .send(errorReport);
+
+      expect(response.status).toBe(204);
+      expect(logger.error).toHaveBeenCalledWith(
+        "Widget error reported",
+        expect.objectContaining({
+          category: "widget_error",
+          chatbotId: "chatbot-123",
+          sessionId: "session-456",
+          message: "Something went wrong",
+          stack: expect.stringContaining("Error: Something went wrong"),
+          widgetVersion: "2.0.0",
+          userAgent: "Mozilla/5.0",
+        })
+      );
+      expect(widgetAnalytics.trackEvent).toHaveBeenCalledWith(
+        "chatbot-123",
+        "session-456",
+        expect.objectContaining({
+          event_name: "widget_error",
+          event_category: "error",
+          properties: expect.objectContaining({
+            error_message: "Something went wrong",
+            widget_version: "2.0.0",
+            user_agent: "Mozilla/5.0",
+          }),
+        })
+      );
+    });
+
+    it("should limit stack trace size to 500 characters", async () => {
+      const longStack = "Error: Test\n" + "    at line 1\n".repeat(100);
+      const errorReport = {
+        chatbotId: "chatbot-123",
+        sessionId: "session-456",
+        error: {
+          message: "Test error",
+          stack: longStack,
+        },
+      };
+
+      await request(app)
+        .post("/widget/errors")
+        .send(errorReport);
+
+      expect(widgetAnalytics.trackEvent).toHaveBeenCalledWith(
+        "chatbot-123",
+        "session-456",
+        expect.objectContaining({
+          properties: expect.objectContaining({
+            error_stack: expect.any(String),
+          }),
+        })
+      );
+
+      // Verify the stack was actually truncated
+      const callArgs = vi.mocked(widgetAnalytics.trackEvent).mock.calls[0];
+      const properties = callArgs[2]?.properties;
+      expect(properties).toBeDefined();
+      expect(typeof properties?.error_stack === "string" ? properties.error_stack.length : 0).toBeLessThanOrEqual(500);
+    });
+
+    it("should handle missing error fields gracefully", async () => {
+      const errorReport = {
+        chatbotId: "chatbot-123",
+        sessionId: "session-456",
+        error: {},
+      };
+
+      const response = await request(app)
+        .post("/widget/errors")
+        .send(errorReport);
+
+      expect(response.status).toBe(204);
+      expect(logger.error).toHaveBeenCalled();
+      expect(widgetAnalytics.trackEvent).toHaveBeenCalled();
+    });
+
+    it("should handle errors and return 500", async () => {
+      vi.mocked(widgetAnalytics.trackEvent).mockRejectedValue(new Error("Service error"));
+
+      const response = await request(app)
+        .post("/widget/errors")
+        .send({
+          chatbotId: "chatbot-123",
+          sessionId: "session-456",
+          error: { message: "Test error" },
+        });
+
+      expect(response.status).toBe(500);
+      expect(response.body.error).toBe("Failed to process error");
+      expect(logger.error).toHaveBeenCalledWith(
+        "Failed to process error report",
+        expect.objectContaining({
+          error: expect.any(Error),
+          chatbotId: "chatbot-123",
+        })
+      );
     });
   });
 
-  describe("Route ID handling", () => {
-    it("should skip getChatbotPublic for demo route", () => {
-      const id = "demo";
-      const shouldSkip = id === "demo";
+  describe("getBrandingUrl function", () => {
+    it("should use WIDGET_POWERED_BY_URL when set", async () => {
+      process.env.WIDGET_POWERED_BY_URL = "https://custom-branding.com";
+      process.env.APP_URL = "https://app.com";
 
-      expect(shouldSkip).toBe(true);
+      const mockScript = "const url = '__WIDGET_POWERED_BY_URL__';";
+      vi.mocked(fs.existsSync).mockReturnValue(true);
+      vi.mocked(fs.readFileSync).mockReturnValue(mockScript);
+
+      const response = await request(app).get("/widget.js");
+
+      expect(response.text).toContain("https://custom-branding.com");
+      expect(response.text).not.toContain("https://app.com");
     });
 
-    it("should call getChatbotPublic for regular IDs", () => {
-      const id = "abc123";
-      const shouldSkip = id === "demo";
+    it("should fallback to APP_URL when WIDGET_POWERED_BY_URL not set", async () => {
+      delete process.env.WIDGET_POWERED_BY_URL;
+      process.env.APP_URL = "https://app.com";
 
-      expect(shouldSkip).toBe(false);
+      const mockScript = "const url = '__WIDGET_POWERED_BY_URL__';";
+      vi.mocked(fs.existsSync).mockReturnValue(true);
+      vi.mocked(fs.readFileSync).mockReturnValue(mockScript);
+
+      const response = await request(app).get("/widget.js");
+
+      expect(response.text).toContain("https://app.com");
+    });
+
+    it("should fallback to default when neither is set", async () => {
+      delete process.env.WIDGET_POWERED_BY_URL;
+      delete process.env.APP_URL;
+
+      const mockScript = "const url = '__WIDGET_POWERED_BY_URL__';";
+      vi.mocked(fs.existsSync).mockReturnValue(true);
+      vi.mocked(fs.readFileSync).mockReturnValue(mockScript);
+
+      const response = await request(app).get("/widget.js");
+
+      expect(response.text).toContain("https://chatai.com");
+    });
+  });
+
+  describe("Cache behavior", () => {
+    it("should use different TTL in production", async () => {
+      process.env.NODE_ENV = "production";
+      const mockScript = "console.log('test');";
+      vi.mocked(fs.existsSync).mockReturnValue(true);
+      vi.mocked(fs.readFileSync).mockReturnValue(mockScript);
+
+      // First request
+      await request(app).get("/widget.js");
+
+      // Advance time beyond dev TTL but within prod TTL
+      vi.useFakeTimers();
+      vi.advanceTimersByTime(2 * 60 * 1000); // 2 minutes
+
+      // Should still use cache in production
+      vi.mocked(fs.existsSync).mockClear();
+      vi.mocked(fs.readFileSync).mockClear();
+
+      const response = await request(app).get("/widget.js");
+
+      expect(response.status).toBe(200);
+      expect(response.text).toBe(mockScript);
+
+      vi.useRealTimers();
+    });
+
+    it("should expire cache after TTL in development", async () => {
+      process.env.NODE_ENV = "development";
+      const mockScript = "console.log('test');";
+      vi.mocked(fs.existsSync).mockReturnValue(true);
+      vi.mocked(fs.readFileSync).mockReturnValue(mockScript);
+
+      // First request
+      await request(app).get("/widget.js");
+
+      // Advance time beyond dev TTL
+      vi.useFakeTimers();
+      vi.advanceTimersByTime(2 * 60 * 1000); // 2 minutes
+
+      // Should rebuild (read file again)
+      const response = await request(app).get("/widget.js");
+
+      expect(response.status).toBe(200);
+      expect(fs.readFileSync).toHaveBeenCalled();
+
+      vi.useRealTimers();
     });
   });
 
   describe("esbuild configuration", () => {
-    it("should have correct build options for production", () => {
+    it("should minify in production", async () => {
       process.env.NODE_ENV = "production";
+      vi.mocked(fs.existsSync).mockImplementation((filePath: any) => {
+        return String(filePath).includes("widget/src/index.ts");
+      });
 
-      const options = {
-        bundle: true,
-        minify: process.env.NODE_ENV === "production",
-        sourcemap: false,
-        target: ["es2018"],
-        format: "iife" as const,
-        write: false,
-      };
+      vi.mocked(esbuild.build).mockResolvedValue({
+        outputFiles: [{ text: "minified code" }],
+        warnings: [],
+        errors: [],
+      } as any);
 
-      expect(options.minify).toBe(true);
-      expect(options.sourcemap).toBe(false);
-      expect(options.format).toBe("iife");
+      await request(app).get("/widget.js");
+
+      expect(esbuild.build).toHaveBeenCalledWith(
+        expect.objectContaining({
+          minify: true,
+        })
+      );
     });
 
-    it("should not minify in development", () => {
+    it("should not minify in development", async () => {
       process.env.NODE_ENV = "development";
+      vi.mocked(fs.existsSync).mockImplementation((filePath: any) => {
+        return String(filePath).includes("widget/src/index.ts");
+      });
 
-      const options = {
-        minify: process.env.NODE_ENV === "production",
-      };
+      vi.mocked(esbuild.build).mockResolvedValue({
+        outputFiles: [{ text: "unminified code" }],
+        warnings: [],
+        errors: [],
+      } as any);
 
-      expect(options.minify).toBe(false);
-    });
-  });
+      await request(app).get("/widget.js");
 
-  describe("Branding URL replacement", () => {
-    it("should replace placeholder with branding URL", () => {
-      const script = "const url = '__WIDGET_POWERED_BY_URL__';";
-      const brandingUrl = "https://example.com";
-      const result = script.replace(/__WIDGET_POWERED_BY_URL__/g, brandingUrl);
-
-      expect(result).toBe("const url = 'https://example.com';");
-    });
-
-    it("should replace multiple occurrences", () => {
-      const script = "const a = '__WIDGET_POWERED_BY_URL__'; const b = '__WIDGET_POWERED_BY_URL__';";
-      const brandingUrl = "https://example.com";
-      const result = script.replace(/__WIDGET_POWERED_BY_URL__/g, brandingUrl);
-
-      expect(result).not.toContain("__WIDGET_POWERED_BY_URL__");
-      expect(result.match(/https:\/\/example\.com/g)?.length).toBe(2);
+      expect(esbuild.build).toHaveBeenCalledWith(
+        expect.objectContaining({
+          minify: false,
+        })
+      );
     });
   });
 });

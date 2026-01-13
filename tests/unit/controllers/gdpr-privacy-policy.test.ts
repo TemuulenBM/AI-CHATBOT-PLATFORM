@@ -7,6 +7,8 @@ import {
   createVersion,
   updateVersion,
 } from "../../../server/controllers/gdpr/privacy-policy";
+import { AdminAuthenticatedRequest } from "../../../server/middleware/adminAuth";
+import { ClerkUser } from "../../../server/middleware/clerkAuth";
 
 // Mock Supabase
 vi.mock("../../../server/utils/supabase", () => ({
@@ -17,14 +19,29 @@ vi.mock("../../../server/utils/supabase", () => ({
 
 import { supabaseAdmin } from "../../../server/utils/supabase";
 
+// Mock logger
+vi.mock("../../../server/utils/logger", () => ({
+  default: {
+    info: vi.fn(),
+    error: vi.fn(),
+    warn: vi.fn(),
+    debug: vi.fn(),
+  },
+}));
+
 // Helper factories
-function createMockRequest(overrides: Partial<Request> = {}): Request {
+function createMockRequest(overrides: Partial<AdminAuthenticatedRequest> = {}): AdminAuthenticatedRequest {
   return {
     body: {},
     params: {},
     query: {},
+    isAdmin: true, // Default to admin for tests
+    user: {
+      userId: "test-user-id",
+      email: "test@example.com",
+    } as ClerkUser,
     ...overrides,
-  } as unknown as Request;
+  } as unknown as AdminAuthenticatedRequest;
 }
 
 function createMockResponse(): Response & { _json: any; _status: number } {
@@ -500,7 +517,7 @@ describe("GDPR Privacy Policy Controller", () => {
         eq: vi.fn().mockReturnThis(),
         single: vi.fn().mockResolvedValue({
           data: null,
-          error: null,
+          error: { code: 'PGRST116', message: 'No rows found' },
         }),
       };
 

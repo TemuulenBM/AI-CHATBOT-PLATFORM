@@ -1,7 +1,13 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { PLAN_LIMITS } from "../../../server/utils/supabase";
 
 // Mock logger
+const mockLogger = {
+  info: vi.fn(),
+  warn: vi.fn(),
+  error: vi.fn(),
+};
+
 vi.mock("../../../server/utils/logger", () => ({
   default: {
     info: vi.fn(),
@@ -10,9 +16,47 @@ vi.mock("../../../server/utils/logger", () => ({
   },
 }));
 
+// Mock @supabase/supabase-js
+vi.mock("@supabase/supabase-js", () => {
+  const mockSupabaseClient = {
+    from: vi.fn(() => ({
+      select: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockReturnThis(),
+      limit: vi.fn().mockReturnThis(),
+      single: vi.fn(),
+    })),
+  };
+  return {
+    createClient: vi.fn(() => mockSupabaseClient),
+    __mockClient: mockSupabaseClient,
+  };
+});
+
+// Mock redis
+const mockRedis = {
+  get: vi.fn(),
+  setex: vi.fn(),
+};
+
+vi.mock("../../../server/utils/redis", () => ({
+  redis: mockRedis,
+}));
+
 describe("Supabase Utilities", () => {
+  let originalEnv: NodeJS.ProcessEnv;
+
   beforeEach(() => {
+    originalEnv = { ...process.env };
     vi.clearAllMocks();
+    // Set default env vars
+    process.env.SUPABASE_URL = "https://test.supabase.co";
+    process.env.SUPABASE_SERVICE_KEY = "test-service-key";
+    process.env.NODE_ENV = "test";
+  });
+
+  afterEach(() => {
+    process.env = originalEnv;
+    vi.resetModules();
   });
 
   // Skip actual database health checks - they require complex mocking
@@ -431,8 +475,336 @@ describe("Supabase Utilities", () => {
 
       validRadii.forEach(r => {
         expect(r).toBeGreaterThanOrEqual(0);
-        expect(r).toBeLessThanOrEqual(24);
-      });
+      expect(r).toBeLessThanOrEqual(24);
     });
   });
+
+  describe("Environment variable validation", () => {
+    it("should throw error in production when credentials are missing", async () => {
+      delete process.env.SUPABASE_URL;
+      delete process.env.SUPABASE_SERVICE_KEY;
+      process.env.NODE_ENV = "production";
+      vi.resetModules();
+
+      // Import should throw error in production
+      await expect(async () => {
+        await import("../../../server/utils/supabase");
+      }).rejects.toThrow("FATAL: SUPABASE_URL and SUPABASE_SERVICE_KEY environment variables are required in production");
+    });
+
+    it("should log warning in non-production when credentials are missing", async () => {
+      delete process.env.SUPABASE_URL;
+      delete process.env.SUPABASE_SERVICE_KEY;
+      process.env.NODE_ENV = "development";
+      vi.resetModules();
+
+      await import("../../../server/utils/supabase");
+
+      const logger = await import("../../../server/utils/logger");
+      expect(logger.default.warn).toHaveBeenCalledWith(
+        "Supabase credentials not configured. Some features will be unavailable."
+      );
+    });
+  });
+
+  describe("checkDatabaseHealth", () => {
+    it("should return healthy when query succeeds", async () => {
+      const supabaseModule = await import("@supabase/supabase-js");
+      const mockClient = (supabaseModule as any).__mockClient;
+      
+      const mockFrom = vi.fn(() => ({
+        select: vi.fn().mockReturnThis(),
+        limit: vi.fn().mockReturnThis(),
+        single: vi.fn().mockResolvedValue({
+          data: { id: "test-id" },
+          error: null,
+        }),
+      }));
+      mockClient.from = mockFrom;
+
+      const { checkDatabaseHealth } = await import("../../../server/utils/supabase");
+      const result = await checkDatabaseHealth();
+
+      expect(result.healthy).toBe(true);
+      expect(result.latency).toBeDefined();
+      expect(result.error).toBeUndefined();
+    });
+
+    it("should return healthy when error is PGRST116 (no rows)", async () => {
+      const supabaseModule = await import("@supabase/supabase-js");
+      const mockClient = (supabaseModule as any).__mockClient;
+      
+      const mockFrom = vi.fn(() => ({
+        select: vi.fn().mockReturnThis(),
+        limit: vi.fn().mockReturnThis(),
+        single: vi.fn().mockResolvedValue({
+          data: null,
+          error: { code: "PGRST116", message: "No rows returned" },
+        }),
+      }));
+      mockClient.from = mockFrom;
+
+      const { checkDatabaseHealth } = await import("../../../server/utils/supabase");
+      const result = await checkDatabaseHealth();
+
+      expect(result.healthy).toBe(true);
+      expect(result.latency).toBeDefined();
+      expect(result.error).toBeUndefined();
+    });
+
+    it("should return unhealthy when error is not PGRST116", async () => {
+      const supabaseModule = await import("@supabase/supabase-js");
+      const mockClient = (supabaseModule as any).__mockClient;
+      
+      const mockFrom = vi.fn(() => ({
+        select: vi.fn().mockReturnThis(),
+        limit: vi.fn().mockReturnThis(),
+        single: vi.fn().mockResolvedValue({
+          data: null,
+          error: { code: "PGRST500", message: "Database connection failed" },
+        }),
+      }));
+      mockClient.from = mockFrom;
+
+      const { checkDatabaseHealth } = await import("../../../server/utils/supabase");
+      const result = await checkDatabaseHealth();
+
+      expect(result.healthy).toBe(false);
+      expect(result.latency).toBeDefined();
+      expect(result.error).toBe("Database connection failed");
+      const logger = await import("../../../server/utils/logger");
+      expect(logger.default.error).toHaveBeenCalledWith(
+        "Database health check failed",
+        { error: "Database connection failed" }
+      );
+    });
+
+    it("should handle exceptions during health check", async () => {
+      const supabaseModule = await import("@supabase/supabase-js");
+      const mockClient = (supabaseModule as any).__mockClient;
+      
+      const mockFrom = vi.fn(() => ({
+        select: vi.fn().mockReturnThis(),
+        limit: vi.fn().mockReturnThis(),
+        single: vi.fn().mockRejectedValue(new Error("Network error")),
+      }));
+      mockClient.from = mockFrom;
+
+      const { checkDatabaseHealth } = await import("../../../server/utils/supabase");
+      const result = await checkDatabaseHealth();
+
+      expect(result.healthy).toBe(false);
+      expect(result.latency).toBeDefined();
+      expect(result.error).toBe("Network error");
+      const logger = await import("../../../server/utils/logger");
+      expect(logger.default.error).toHaveBeenCalledWith(
+        "Database health check exception",
+        { error: "Network error" }
+      );
+    });
+
+    it("should handle non-Error exceptions during health check", async () => {
+      const supabaseModule = await import("@supabase/supabase-js");
+      const mockClient = (supabaseModule as any).__mockClient;
+      
+      const mockFrom = vi.fn(() => ({
+        select: vi.fn().mockReturnThis(),
+        limit: vi.fn().mockReturnThis(),
+        single: vi.fn().mockRejectedValue("String error"), // Not an Error instance
+      }));
+      mockClient.from = mockFrom;
+
+      const { checkDatabaseHealth } = await import("../../../server/utils/supabase");
+      const result = await checkDatabaseHealth();
+
+      expect(result.healthy).toBe(false);
+      expect(result.latency).toBeDefined();
+      expect(result.error).toBe("Unknown error");
+      const logger = await import("../../../server/utils/logger");
+      expect(logger.default.error).toHaveBeenCalledWith(
+        "Database health check exception",
+        { error: "Unknown error" }
+      );
+    });
+  });
+
+  describe("getUserPlanLimits", () => {
+    beforeEach(() => {
+      vi.clearAllMocks();
+      mockRedis.get.mockReset();
+      mockRedis.setex.mockReset();
+    });
+
+    it("should return cached plan from Redis", async () => {
+      mockRedis.get.mockResolvedValue(JSON.stringify({ plan: "starter" }));
+
+      const { getUserPlanLimits } = await import("../../../server/utils/supabase");
+      const result = await getUserPlanLimits("user123");
+
+      expect(result.plan).toBe("starter");
+      expect(result.limits).toEqual(PLAN_LIMITS.starter);
+      expect(mockRedis.get).toHaveBeenCalledWith("user:user123:plan");
+    });
+
+    it("should fetch from database when cache miss", async () => {
+      mockRedis.get.mockResolvedValue(null);
+      
+      const supabaseModule = await import("@supabase/supabase-js");
+      const mockClient = (supabaseModule as any).__mockClient;
+      
+      const mockFrom = vi.fn(() => ({
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        single: vi.fn().mockResolvedValue({
+          data: { plan: "growth" },
+          error: null,
+        }),
+      }));
+      mockClient.from = mockFrom;
+
+      const { getUserPlanLimits } = await import("../../../server/utils/supabase");
+      const result = await getUserPlanLimits("user123");
+
+      expect(result.plan).toBe("growth");
+      expect(result.limits).toEqual(PLAN_LIMITS.growth);
+      expect(mockRedis.setex).toHaveBeenCalledWith(
+        "user:user123:plan",
+        300,
+        JSON.stringify({ plan: "growth" })
+      );
+    });
+
+    it("should default to free plan when subscription not found", async () => {
+      mockRedis.get.mockResolvedValue(null);
+      
+      const supabaseModule = await import("@supabase/supabase-js");
+      const mockClient = (supabaseModule as any).__mockClient;
+      
+      const mockFrom = vi.fn(() => ({
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        single: vi.fn().mockResolvedValue({
+          data: null,
+          error: { code: "PGRST116", message: "No rows returned" },
+        }),
+      }));
+      mockClient.from = mockFrom;
+
+      const { getUserPlanLimits } = await import("../../../server/utils/supabase");
+      const result = await getUserPlanLimits("user123");
+
+      expect(result.plan).toBe("free");
+      expect(result.limits).toEqual(PLAN_LIMITS.free);
+      const logger = await import("../../../server/utils/logger");
+      expect(logger.default.info).toHaveBeenCalledWith(
+        "No subscription found for user, defaulting to free plan",
+        { userId: "user123" }
+      );
+    });
+
+    it("should handle database query error", async () => {
+      mockRedis.get.mockResolvedValue(null);
+      
+      const supabaseModule = await import("@supabase/supabase-js");
+      const mockClient = (supabaseModule as any).__mockClient;
+      
+      const mockFrom = vi.fn(() => ({
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        single: vi.fn().mockResolvedValue({
+          data: null,
+          error: { code: "PGRST500", message: "Database error" },
+        }),
+      }));
+      mockClient.from = mockFrom;
+
+      const { getUserPlanLimits } = await import("../../../server/utils/supabase");
+      const result = await getUserPlanLimits("user123");
+
+      expect(result.plan).toBe("free");
+      expect(result.limits).toEqual(PLAN_LIMITS.free);
+    });
+
+    it("should handle Redis import failure", async () => {
+      // Make redis module throw on import to test line 285
+      vi.doMock("../../../server/utils/redis", () => {
+        throw new Error("Redis module not found");
+      });
+
+      const supabaseModule = await import("@supabase/supabase-js");
+      const mockClient = (supabaseModule as any).__mockClient;
+      
+      const mockFrom = vi.fn(() => ({
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        single: vi.fn().mockResolvedValue({
+          data: { plan: "business" },
+          error: null,
+        }),
+      }));
+      mockClient.from = mockFrom;
+
+      vi.resetModules();
+      const { getUserPlanLimits } = await import("../../../server/utils/supabase");
+      const result = await getUserPlanLimits("user123");
+
+      expect(result.plan).toBe("business");
+      expect(result.limits).toEqual(PLAN_LIMITS.business);
+      
+      const logger = await import("../../../server/utils/logger");
+      expect(logger.default.warn).toHaveBeenCalledWith(
+        "Redis not available, fetching subscription directly from DB"
+      );
+
+      // Restore mock
+      vi.doUnmock("../../../server/utils/redis");
+      vi.doMock("../../../server/utils/redis", () => ({
+        redis: mockRedis,
+      }));
+    });
+
+    it("should handle errors and default to free plan", async () => {
+      mockRedis.get.mockRejectedValue(new Error("Redis error"));
+
+      const { getUserPlanLimits } = await import("../../../server/utils/supabase");
+      const result = await getUserPlanLimits("user123");
+
+      expect(result.plan).toBe("free");
+      expect(result.limits).toEqual(PLAN_LIMITS.free);
+      const logger = await import("../../../server/utils/logger");
+      expect(logger.default.error).toHaveBeenCalledWith(
+        "Error fetching user plan limits",
+        expect.objectContaining({ userId: "user123" })
+      );
+    });
+
+    it("should handle all plan types", async () => {
+      mockRedis.get.mockResolvedValue(null);
+      
+      const plans: Array<"free" | "starter" | "growth" | "business"> = ["free", "starter", "growth", "business"];
+
+      const supabaseModule = await import("@supabase/supabase-js");
+      const mockClient = (supabaseModule as any).__mockClient;
+
+      for (const plan of plans) {
+        const mockFrom = vi.fn(() => ({
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+          single: vi.fn().mockResolvedValue({
+            data: { plan },
+            error: null,
+          }),
+        }));
+        mockClient.from = mockFrom;
+
+        vi.resetModules();
+        const { getUserPlanLimits } = await import("../../../server/utils/supabase");
+        const result = await getUserPlanLimits("user123");
+
+        expect(result.plan).toBe(plan);
+        expect(result.limits).toEqual(PLAN_LIMITS[plan]);
+      }
+    });
+  });
+});
 });

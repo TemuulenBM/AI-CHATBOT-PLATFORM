@@ -242,25 +242,84 @@ export const PLAN_LIMITS = {
   free: {
     chatbots: 1,
     messages: 100,
+    pages_per_crawl: 50,
     price: 0,
   },
   starter: {
     chatbots: 3,
     messages: 2000,
+    pages_per_crawl: 200,
     price: 4900, // $49/month in cents
   },
   growth: {
     chatbots: 10,
     messages: 10000,
+    pages_per_crawl: 500,
     price: 9900, // $99/month in cents
   },
   business: {
     chatbots: 999, // unlimited
     messages: 50000,
+    pages_per_crawl: 2000,
     price: 29900, // $299/month in cents
   },
 } as const;
 
 export type PlanType = keyof typeof PLAN_LIMITS;
+
+/**
+ * Get user's plan limits with caching
+ * Uses Redis cache with 5-minute TTL for performance
+ */
+export async function getUserPlanLimits(userId: string): Promise<{
+  plan: PlanType;
+  limits: typeof PLAN_LIMITS[PlanType];
+}> {
+  try {
+    // Try to get from Redis cache first
+    let redis;
+    try {
+      const redisModule = await import("./redis");
+      redis = redisModule.redis;
+    } catch (err) {
+      logger.warn("Redis not available, fetching subscription directly from DB");
+    }
+
+    const cacheKey = `user:${userId}:plan`;
+
+    if (redis) {
+      const cached = await redis.get(cacheKey);
+      if (cached) {
+        const { plan } = JSON.parse(cached) as { plan: PlanType };
+        return { plan, limits: PLAN_LIMITS[plan] };
+      }
+    }
+
+    // Fetch from database
+    const { data: subscription, error } = await supabaseAdmin
+      .from("subscriptions")
+      .select("plan")
+      .eq("user_id", userId)
+      .single();
+
+    if (error || !subscription) {
+      logger.info("No subscription found for user, defaulting to free plan", { userId });
+      return { plan: "free", limits: PLAN_LIMITS.free };
+    }
+
+    const plan = subscription.plan as PlanType;
+
+    // Cache for 5 minutes
+    if (redis) {
+      await redis.setex(cacheKey, 300, JSON.stringify({ plan }));
+    }
+
+    return { plan, limits: PLAN_LIMITS[plan] };
+  } catch (err) {
+    logger.error("Error fetching user plan limits", { userId, error: err });
+    // Fallback to free plan on error
+    return { plan: "free", limits: PLAN_LIMITS.free };
+  }
+}
 
 export default supabaseAdmin;

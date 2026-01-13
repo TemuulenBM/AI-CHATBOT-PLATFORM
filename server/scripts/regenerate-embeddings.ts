@@ -199,7 +199,7 @@ async function regenerateAllEmbeddings(options: RegenerateOptions = {}) {
 }
 
 // Parse command line arguments
-function parseArgs(): RegenerateOptions {
+export function parseArgs(): RegenerateOptions {
   const args = process.argv.slice(2);
   const options: RegenerateOptions = {};
 

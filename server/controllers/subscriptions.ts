@@ -154,64 +154,69 @@ export async function getSubscription(
 
 export async function getPlans(
   _req: Request,
-  res: Response
+  res: Response,
+  next: NextFunction
 ): Promise<void> {
-  res.json({
-    plans: [
-      {
-        id: "free",
-        name: "Free",
-        price: 0,
-        popular: false,
-        features: [
-          `${PLAN_LIMITS.free.chatbots} chatbot`,
-          `${PLAN_LIMITS.free.messages} messages/month`,
-          "Basic analytics",
-          "Community support",
-        ],
-      },
-      {
-        id: "starter",
-        name: "Starter",
-        price: PLAN_LIMITS.starter.price,
-        popular: false,
-        features: [
-          `${PLAN_LIMITS.starter.chatbots} chatbots`,
-          `${PLAN_LIMITS.starter.messages.toLocaleString()} messages/month`,
-          "Advanced analytics",
-          "Email support",
-          "Custom branding",
-        ],
-      },
-      {
-        id: "growth",
-        name: "Growth",
-        price: PLAN_LIMITS.growth.price,
-        popular: true,
-        features: [
-          `${PLAN_LIMITS.growth.chatbots} chatbots`,
-          `${PLAN_LIMITS.growth.messages.toLocaleString()} messages/month`,
-          "Priority support",
-          "Remove branding",
-          "API access",
-          "GPT-5 support",
-        ],
-      },
-      {
-        id: "business",
-        name: "Business",
-        price: PLAN_LIMITS.business.price,
-        popular: false,
-        features: [
-          "Unlimited chatbots",
-          `${PLAN_LIMITS.business.messages.toLocaleString()} messages/month`,
-          "Dedicated support",
-          "White-label option",
-          "Custom integrations",
-          "Advanced customization",
-          "SLA guarantee",
-        ],
-      },
-    ],
-  });
+  try {
+    res.json({
+      plans: [
+        {
+          id: "free",
+          name: "Free",
+          price: 0,
+          popular: false,
+          features: [
+            `${PLAN_LIMITS.free.chatbots} chatbot`,
+            `${PLAN_LIMITS.free.messages} messages/month`,
+            "Basic analytics",
+            "Community support",
+          ],
+        },
+        {
+          id: "starter",
+          name: "Starter",
+          price: PLAN_LIMITS.starter.price,
+          popular: false,
+          features: [
+            `${PLAN_LIMITS.starter.chatbots} chatbots`,
+            `${PLAN_LIMITS.starter.messages.toLocaleString()} messages/month`,
+            "Advanced analytics",
+            "Email support",
+            "Custom branding",
+          ],
+        },
+        {
+          id: "growth",
+          name: "Growth",
+          price: PLAN_LIMITS.growth.price,
+          popular: true,
+          features: [
+            `${PLAN_LIMITS.growth.chatbots} chatbots`,
+            `${PLAN_LIMITS.growth.messages.toLocaleString()} messages/month`,
+            "Priority support",
+            "Remove branding",
+            "API access",
+            "GPT-5 support",
+          ],
+        },
+        {
+          id: "business",
+          name: "Business",
+          price: PLAN_LIMITS.business.price,
+          popular: false,
+          features: [
+            "Unlimited chatbots",
+            `${PLAN_LIMITS.business.messages.toLocaleString()} messages/month`,
+            "Dedicated support",
+            "White-label option",
+            "Custom integrations",
+            "Advanced customization",
+            "SLA guarantee",
+          ],
+        },
+      ],
+    });
+  } catch (error) {
+    next(error);
+  }
 }

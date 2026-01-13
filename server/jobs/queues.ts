@@ -2,7 +2,7 @@ import { Queue, Worker, Job } from "bullmq";
 import { redis } from "../utils/redis";
 import { scrapeWebsite } from "../services/scraper";
 import { embeddingService } from "../services/embedding";
-import { supabaseAdmin } from "../utils/supabase";
+import { supabaseAdmin, getUserPlanLimits } from "../utils/supabase";
 import logger from "../utils/logger";
 import EmailService from "../services/email";
 import { alertCritical, incrementCounter } from "../utils/monitoring";
@@ -365,7 +365,7 @@ export const scheduledRescrapeWorker = new Worker<ScheduledRescrapeJobData>(
       // Get all chatbots with auto-scrape enabled that need re-scraping
       const { data: chatbots, error } = await supabaseAdmin
         .from("chatbots")
-        .select("id, website_url, scrape_frequency, last_scraped_at")
+        .select("id, website_url, user_id, scrape_frequency, last_scraped_at")
         .eq("auto_scrape_enabled", true)
         .neq("scrape_frequency", "manual");
 
@@ -386,6 +386,9 @@ export const scheduledRescrapeWorker = new Worker<ScheduledRescrapeJobData>(
         const needsRescrape = shouldRescrape(chatbot.last_scraped_at, chatbot.scrape_frequency);
 
         if (needsRescrape) {
+          // Get user's plan limits
+          const { limits } = await getUserPlanLimits(chatbot.user_id);
+
           // Create scrape history entry
           const { data: historyEntry, error: historyError } = await supabaseAdmin
             .from("scrape_history")
@@ -406,13 +409,13 @@ export const scheduledRescrapeWorker = new Worker<ScheduledRescrapeJobData>(
             continue;
           }
 
-          // Queue the scraping job
+          // Queue the scraping job with plan-based page limit
           await scrapeQueue.add(
             "scrape-website",
             {
               chatbotId: chatbot.id,
               websiteUrl: chatbot.website_url,
-              maxPages: 50,
+              maxPages: limits.pages_per_crawl,
               historyId: historyEntry.id,
               isRescrape: true,
             },
@@ -426,6 +429,7 @@ export const scheduledRescrapeWorker = new Worker<ScheduledRescrapeJobData>(
           logger.info("Scheduled re-scrape job queued", {
             chatbotId: chatbot.id,
             frequency: chatbot.scrape_frequency,
+            maxPages: limits.pages_per_crawl,
           });
         }
       }

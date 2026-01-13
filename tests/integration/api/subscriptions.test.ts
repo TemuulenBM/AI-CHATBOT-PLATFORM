@@ -68,12 +68,12 @@ import { verifyToken } from "@clerk/backend";
 
 describe("Subscription API Endpoints", () => {
   let app: Express;
-  let getPlans: (req: Request, res: Response) => Promise<void>;
+  let getPlans: (req: Request, res: Response, next: NextFunction) => Promise<void>;
   let PLAN_LIMITS: Record<string, { chatbots: number; messages: number; price: number }>;
 
   beforeAll(async () => {
     const controllers = await import("../../../server/controllers/subscriptions");
-    getPlans = controllers.getPlans;
+    getPlans = controllers.getPlans as (req: Request, res: Response, next: NextFunction) => Promise<void>;
 
     const supabase = await import("../../../server/utils/supabase");
     PLAN_LIMITS = supabase.PLAN_LIMITS;
@@ -84,7 +84,9 @@ describe("Subscription API Endpoints", () => {
     app.use(express.json());
 
     // Setup only the public route that doesn't require auth
-    app.get("/api/subscriptions/plans", getPlans);
+    app.get("/api/subscriptions/plans", (req, res, next) => {
+      getPlans(req, res, next).catch(next);
+    });
 
     // Error handler
     app.use((err: Error & { statusCode?: number }, req: Request, res: Response, next: NextFunction) => {

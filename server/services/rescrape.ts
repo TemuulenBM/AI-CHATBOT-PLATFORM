@@ -1,4 +1,4 @@
-import { supabaseAdmin } from "../utils/supabase";
+import { supabaseAdmin, getUserPlanLimits } from "../utils/supabase";
 import { scrapeQueue } from "../jobs/queues";
 import { deleteCache, deleteCachePattern } from "../utils/redis";
 import logger from "../utils/logger";
@@ -44,6 +44,9 @@ export class RescrapeService {
       throw new Error("Chatbot not found");
     }
 
+    // Get user's plan limits
+    const { limits } = await getUserPlanLimits(chatbot.user_id);
+
     // Create scrape history entry
     const { data: historyEntry, error: historyError } = await supabaseAdmin
       .from("scrape_history")
@@ -61,13 +64,13 @@ export class RescrapeService {
       throw new Error("Failed to initiate re-scraping");
     }
 
-    // Queue the scraping job with history ID for tracking
+    // Queue the scraping job with history ID and plan-based page limit
     const job = await scrapeQueue.add(
       "scrape-website",
       {
         chatbotId,
         websiteUrl: chatbot.website_url,
-        maxPages: 50,
+        maxPages: limits.pages_per_crawl,
         historyId: historyEntry.id,
         isRescrape: true,
       },
@@ -85,6 +88,7 @@ export class RescrapeService {
       historyId: historyEntry.id,
       jobId: job.id,
       triggeredBy,
+      maxPages: limits.pages_per_crawl,
     });
 
     // Invalidate cache

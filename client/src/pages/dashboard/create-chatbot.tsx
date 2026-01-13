@@ -16,6 +16,8 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { useScrapeStatus } from "@/hooks/useScrapeStatus";
+import { ScrapeStatusBadge } from "@/components/dashboard/ScrapeStatusBadge";
 
 const steps = [
   { number: 1, title: "Source", icon: Globe },
@@ -58,6 +60,12 @@ export default function CreateChatbot() {
   const { createChatbot, isLoading, error, clearError } = useChatbotStore();
   const [, setLocation] = useLocation();
   const { toast } = useToast();
+
+  // Poll scrape status for newly created chatbot
+  const { status: scrapeStatus } = useScrapeStatus(
+    createdChatbot?.id,
+    { autoRefresh: !!createdChatbot }
+  );
 
   const validateUrl = (urlString: string): boolean => {
     try {
@@ -419,8 +427,20 @@ export default function CreateChatbot() {
                   <p className="text-muted-foreground mb-2 text-sm md:text-base">
                     Your chatbot "<span className="text-foreground font-medium">{createdChatbot.name}</span>" is <span className="text-green-400 font-medium">ready to use</span>!
                   </p>
+
+                  {/* Scrape status badge */}
+                  {scrapeStatus?.history[0] && (
+                    <div className="flex justify-center mb-4">
+                      <ScrapeStatusBadge
+                        status={scrapeStatus.history[0].status}
+                        pagesScraped={scrapeStatus.history[0].pages_scraped}
+                        embeddingsCreated={scrapeStatus.history[0].embeddings_created}
+                      />
+                    </div>
+                  )}
+
                   <p className="text-muted-foreground mb-8 text-sm md:text-base">
-                    It's learning about your website in the background. Copy the code below and paste it into your website's HTML.
+                    Copy the code below and paste it into your website's HTML to embed the chatbot.
                   </p>
 
                   <div className="relative bg-black/50 rounded-lg p-4 md:p-6 text-left font-mono text-xs md:text-sm border border-white/10 mb-8 group">
