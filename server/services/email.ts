@@ -457,6 +457,265 @@ export class EmailService {
       html,
     });
   }
+
+  /**
+   * Send subscription cancellation email
+   */
+  static async sendSubscriptionCanceled(to: string, planName: string, cancelDate: Date): Promise<void> {
+    const html = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta charset="utf-8">
+          <style>
+            body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+            .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+            .header { background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%); color: white; padding: 30px; text-align: center; border-radius: 10px 10px 0 0; }
+            .content { background: #f9fafb; padding: 30px; border-radius: 0 0 10px 10px; }
+            .info-box { background: #fee2e2; border-left: 4px solid #ef4444; padding: 15px; margin: 20px 0; }
+            .button { display: inline-block; background: #3b82f6; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; margin: 20px 0; }
+            .footer { text-align: center; margin-top: 30px; color: #666; font-size: 14px; }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <div class="header">
+              <h1>Subscription Canceled</h1>
+            </div>
+            <div class="content">
+              <p>Your ${planName} subscription has been canceled.</p>
+              <div class="info-box">
+                <strong>Cancellation Details:</strong>
+                <ul style="margin: 10px 0;">
+                  <li>Plan: ${planName}</li>
+                  <li>Canceled on: ${cancelDate.toLocaleDateString()}</li>
+                  <li>Your account has been downgraded to the Free plan</li>
+                </ul>
+              </div>
+              <p>You still have access to basic features on the Free plan:</p>
+              <ul>
+                <li>Up to 3 chatbots</li>
+                <li>500 messages per month</li>
+                <li>Basic analytics</li>
+              </ul>
+              <p>If you'd like to resubscribe at any time, you can do so from your dashboard.</p>
+              <a href="${process.env.APP_URL}/dashboard/settings/billing" class="button">Manage Subscription</a>
+              <p>We're sorry to see you go. If you have feedback on how we can improve, please let us know.</p>
+              <p>Best regards,<br>The ConvoAI Team</p>
+            </div>
+            <div class="footer">
+              <p>&copy; ${new Date().getFullYear()} ConvoAI. All rights reserved.</p>
+            </div>
+          </div>
+        </body>
+      </html>
+    `;
+
+    await this.sendEmail({
+      to,
+      subject: `Subscription Canceled - ${planName}`,
+      html,
+    });
+  }
+
+  /**
+   * Send subscription past due warning
+   */
+  static async sendSubscriptionPastDue(to: string, planName: string, dueDate: Date): Promise<void> {
+    const html = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta charset="utf-8">
+          <style>
+            body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+            .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+            .header { background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); color: white; padding: 30px; text-align: center; border-radius: 10px 10px 0 0; }
+            .content { background: #f9fafb; padding: 30px; border-radius: 0 0 10px 10px; }
+            .warning-box { background: #fef3c7; border-left: 4px solid #f59e0b; padding: 15px; margin: 20px 0; }
+            .button { display: inline-block; background: #f59e0b; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; margin: 20px 0; }
+            .footer { text-align: center; margin-top: 30px; color: #666; font-size: 14px; }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <div class="header">
+              <h1>Payment Past Due - Action Required</h1>
+            </div>
+            <div class="content">
+              <p>We were unable to process your payment for your ${planName} subscription.</p>
+              <div class="warning-box">
+                <strong>⚠️ Action Required:</strong>
+                <p style="margin: 10px 0;">Your payment is past due. Please update your payment method to avoid service interruption.</p>
+                <p style="margin: 10px 0;"><strong>Due Date:</strong> ${dueDate.toLocaleDateString()}</p>
+              </div>
+              <p>What happens next:</p>
+              <ul>
+                <li>We'll retry the payment automatically</li>
+                <li>If payment fails again, your subscription may be canceled</li>
+                <li>You'll be downgraded to the Free plan</li>
+              </ul>
+              <a href="${process.env.APP_URL}/dashboard/settings/billing" class="button">Update Payment Method</a>
+              <p>If you have questions or need assistance, please contact our support team.</p>
+              <p>Best regards,<br>The ConvoAI Team</p>
+            </div>
+            <div class="footer">
+              <p>&copy; ${new Date().getFullYear()} ConvoAI. All rights reserved.</p>
+            </div>
+          </div>
+        </body>
+      </html>
+    `;
+
+    await this.sendEmail({
+      to,
+      subject: 'Payment Past Due - Action Required',
+      html,
+    });
+  }
+
+  /**
+   * Send payment failed notification
+   */
+  static async sendPaymentFailed(to: string, planName: string, amount: string, retryDate?: Date): Promise<void> {
+    const html = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta charset="utf-8">
+          <style>
+            body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+            .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+            .header { background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%); color: white; padding: 30px; text-align: center; border-radius: 10px 10px 0 0; }
+            .content { background: #f9fafb; padding: 30px; border-radius: 0 0 10px 10px; }
+            .error-box { background: #fee2e2; border-left: 4px solid #ef4444; padding: 15px; margin: 20px 0; }
+            .button { display: inline-block; background: #ef4444; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; margin: 20px 0; }
+            .footer { text-align: center; margin-top: 30px; color: #666; font-size: 14px; }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <div class="header">
+              <h1>Payment Failed</h1>
+            </div>
+            <div class="content">
+              <p>We were unable to process your payment for your ${planName} subscription.</p>
+              <div class="error-box">
+                <strong>❌ Payment Failed:</strong>
+                <ul style="margin: 10px 0;">
+                  <li><strong>Plan:</strong> ${planName}</li>
+                  <li><strong>Amount:</strong> ${amount}</li>
+                  ${retryDate ? `<li><strong>Next Retry:</strong> ${retryDate.toLocaleDateString()}</li>` : ''}
+                </ul>
+              </div>
+              <p>Common reasons for payment failure:</p>
+              <ul>
+                <li>Insufficient funds</li>
+                <li>Card expired or invalid</li>
+                <li>Payment method declined by bank</li>
+                <li>Billing address mismatch</li>
+              </ul>
+              <p>Please update your payment method to continue using ${planName} features.</p>
+              <a href="${process.env.APP_URL}/dashboard/settings/billing" class="button">Update Payment Method</a>
+              <p>If the issue persists, please contact your bank or our support team for assistance.</p>
+              <p>Best regards,<br>The ConvoAI Team</p>
+            </div>
+            <div class="footer">
+              <p>&copy; ${new Date().getFullYear()} ConvoAI. All rights reserved.</p>
+            </div>
+          </div>
+        </body>
+      </html>
+    `;
+
+    await this.sendEmail({
+      to,
+      subject: `Payment Failed - ${planName}`,
+      html,
+    });
+  }
+
+  /**
+   * Send critical admin alert
+   */
+  static async sendAdminAlert(
+    to: string | string[],
+    alertType: string,
+    message: string,
+    details?: Record<string, any>
+  ): Promise<void> {
+    const detailsHtml = details
+      ? `
+        <div class="details">
+          <h3>Details:</h3>
+          <pre>${JSON.stringify(details, null, 2)}</pre>
+        </div>
+      `
+      : '';
+
+    const html = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta charset="utf-8">
+          <style>
+            body { font-family: 'Courier New', monospace; line-height: 1.6; color: #333; background: #1a1a1a; }
+            .container { max-width: 700px; margin: 0 auto; padding: 20px; }
+            .header { background: #dc2626; color: white; padding: 20px; border-radius: 5px 5px 0 0; border-left: 5px solid #991b1b; }
+            .content { background: #2d2d2d; color: #e5e5e5; padding: 30px; border-radius: 0 0 5px 5px; }
+            .alert-type { background: #991b1b; color: white; padding: 5px 10px; border-radius: 3px; display: inline-block; margin-bottom: 15px; }
+            .details { background: #1a1a1a; padding: 15px; border-radius: 3px; margin: 20px 0; overflow-x: auto; }
+            .details pre { color: #10b981; margin: 0; font-size: 12px; }
+            .timestamp { color: #9ca3af; font-size: 14px; }
+            .footer { text-align: center; margin-top: 20px; color: #9ca3af; font-size: 12px; }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <div class="header">
+              <h1 style="margin: 0;">🚨 CRITICAL ALERT</h1>
+            </div>
+            <div class="content">
+              <div class="alert-type">${alertType}</div>
+              <h2 style="color: #fbbf24; margin-top: 0;">${message}</h2>
+              ${detailsHtml}
+              <p class="timestamp">Timestamp: ${new Date().toISOString()}</p>
+              <p style="border-top: 1px solid #4b5563; padding-top: 15px; margin-top: 20px;">
+                This is an automated alert from ConvoAI monitoring system. Please investigate immediately.
+              </p>
+            </div>
+            <div class="footer">
+              <p>ConvoAI Admin Alert System</p>
+            </div>
+          </div>
+        </body>
+      </html>
+    `;
+
+    await this.sendEmail({
+      to,
+      subject: `[CRITICAL] ${alertType} - ${message}`,
+      html,
+      from: process.env.EMAIL_FROM_ALERTS || process.env.EMAIL_FROM,
+    });
+  }
+
+  /**
+   * Send Redis quota exceeded notification
+   */
+  static async sendRedisQuotaExceeded(to: string | string[]): Promise<void> {
+    await this.sendAdminAlert(
+      to,
+      'Redis Quota Exceeded',
+      'Redis quota limit exceeded - features degraded',
+      {
+        affectedFeatures: ['Rate limiting', 'Caching', 'Job queues', 'Session storage'],
+        action: 'Upgrade Upstash Redis plan or optimize usage',
+        impact: 'HIGH - Core features may be degraded or unavailable',
+        urgency: 'IMMEDIATE ACTION REQUIRED',
+      }
+    );
+  }
 }
 
 export default EmailService;

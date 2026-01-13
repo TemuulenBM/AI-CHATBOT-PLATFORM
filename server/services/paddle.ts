@@ -49,6 +49,7 @@ interface PaddleSubscription {
     starts_at: string;
     ends_at: string;
   };
+  next_billed_at?: string;
   custom_data?: Record<string, any>;
 }
 
@@ -545,7 +546,7 @@ export class PaddleService {
   private async handleSubscriptionCanceled(subscription: PaddleSubscription): Promise<void> {
     const { data } = await supabaseAdmin
       .from("subscriptions")
-      .select("user_id")
+      .select("user_id, plan")
       .eq("paddle_subscription_id", subscription.id)
       .single();
 
@@ -553,6 +554,13 @@ export class PaddleService {
       logger.warn("User not found for canceled subscription", { subscriptionId: subscription.id });
       return;
     }
+
+    // Get user email for notification
+    const { data: userData } = await supabaseAdmin
+      .from("users")
+      .select("email")
+      .eq("id", data.user_id)
+      .single();
 
     // Downgrade to free plan
     await supabaseAdmin
@@ -565,6 +573,21 @@ export class PaddleService {
       .eq("user_id", data.user_id);
 
     await deleteCache(`subscription:${data.user_id}`);
+
+    // Send cancellation email
+    if (userData?.email) {
+      try {
+        await EmailService.sendSubscriptionCanceled(
+          userData.email,
+          data.plan || "Pro",
+          new Date()
+        );
+        logger.info("Subscription cancellation email sent", { userId: data.user_id, email: userData.email });
+      } catch (emailError) {
+        logger.error("Failed to send subscription cancellation email", { error: emailError, userId: data.user_id });
+      }
+    }
+
     logger.info("Subscription canceled", { userId: data.user_id });
   }
 
@@ -572,32 +595,88 @@ export class PaddleService {
     // Get user info for alerting
     const { data: subData } = await supabaseAdmin
       .from("subscriptions")
-      .select("user_id")
+      .select("user_id, plan")
       .eq("paddle_subscription_id", subscription.id)
       .single();
 
+    if (!subData) {
+      logger.warn("User not found for past due subscription", { subscriptionId: subscription.id });
+      return;
+    }
+
+    // Get user email
+    const { data: userData } = await supabaseAdmin
+      .from("users")
+      .select("email")
+      .eq("id", subData.user_id)
+      .single();
+
+    // Send past due warning email
+    if (userData?.email) {
+      try {
+        await EmailService.sendSubscriptionPastDue(
+          userData.email,
+          subData.plan || "Pro",
+          new Date(subscription.next_billed_at || Date.now())
+        );
+        logger.info("Subscription past due email sent", { userId: subData.user_id, email: userData.email });
+      } catch (emailError) {
+        logger.error("Failed to send past due email", { error: emailError, userId: subData.user_id });
+      }
+    }
+
     alertWarning("subscription_past_due", "Subscription payment is past due", {
       subscriptionId: subscription.id,
-      userId: subData?.user_id,
+      userId: subData.user_id,
       status: subscription.status,
     });
 
     incrementCounter("billing.past_due", 1);
-    logger.warn("Subscription past due", { subscriptionId: subscription.id, userId: subData?.user_id });
+    logger.warn("Subscription past due", { subscriptionId: subscription.id, userId: subData.user_id });
   }
 
   private async handlePaymentFailed(transaction: any): Promise<void> {
     // Get user info for alerting
     const { data: subData } = await supabaseAdmin
       .from("subscriptions")
-      .select("user_id")
+      .select("user_id, plan")
       .eq("paddle_customer_id", transaction.customer_id)
       .single();
+
+    if (!subData) {
+      logger.warn("User not found for failed payment", { customerId: transaction.customer_id });
+      return;
+    }
+
+    // Get user email
+    const { data: userData } = await supabaseAdmin
+      .from("users")
+      .select("email")
+      .eq("id", subData.user_id)
+      .single();
+
+    // Send payment failed email
+    if (userData?.email) {
+      try {
+        const amount = transaction.details?.totals?.total
+          ? `$${(transaction.details.totals.total / 100).toFixed(2)}`
+          : "N/A";
+
+        await EmailService.sendPaymentFailed(
+          userData.email,
+          subData.plan || "Pro",
+          amount
+        );
+        logger.info("Payment failed email sent", { userId: subData.user_id, email: userData.email });
+      } catch (emailError) {
+        logger.error("Failed to send payment failed email", { error: emailError, userId: subData.user_id });
+      }
+    }
 
     alertCritical("billing_failure", "Payment failed for subscription", {
       transactionId: transaction.id,
       customerId: transaction.customer_id,
-      userId: subData?.user_id,
+      userId: subData.user_id,
       errorCode: transaction.error_code,
       errorDetail: transaction.error_detail,
     });
@@ -606,7 +685,7 @@ export class PaddleService {
     logger.error("Payment failed", {
       transactionId: transaction.id,
       customerId: transaction.customer_id,
-      userId: subData?.user_id,
+      userId: subData.user_id,
     });
   }
 }

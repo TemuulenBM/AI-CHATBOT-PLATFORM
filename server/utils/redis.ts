@@ -1,6 +1,7 @@
 import Redis, { RedisOptions } from "ioredis";
 import logger from "./logger";
 import { alertCritical, incrementCounter } from "./monitoring";
+import EmailService from "../services/email";
 
 const redisUrl = (() => {
   const url = process.env.REDIS_URL;
@@ -56,7 +57,7 @@ redis.on("connect", () => {
   logger.info("Redis connected");
 });
 
-redis.on("error", (error: NodeJS.ErrnoException) => {
+redis.on("error", async (error: NodeJS.ErrnoException) => {
   // Silently ignore common connection reset errors
   if (error.code === "ECONNRESET" || error.code === "EPIPE" || error.code === "ETIMEDOUT") {
     return;
@@ -88,6 +89,25 @@ redis.on("error", (error: NodeJS.ErrnoException) => {
 
     // Track metric for monitoring dashboard
     incrementCounter("redis.quota_exceeded", 1);
+
+    // Send admin email (rate limited - once per hour)
+    const emailCacheKey = "redis_quota_email_sent";
+    try {
+      const lastSent = await redis.get(emailCacheKey).catch(() => null);
+
+      if (!lastSent) {
+        const adminEmail = process.env.ADMIN_EMAIL || process.env.EMAIL_FROM;
+        if (adminEmail) {
+          await EmailService.sendRedisQuotaExceeded(adminEmail);
+          await redis.setex(emailCacheKey, 3600, Date.now().toString()).catch(() => {});
+          logger.info("Admin email sent for Redis quota exceeded", { adminEmail });
+        } else {
+          logger.warn("ADMIN_EMAIL not configured, skipping admin notification");
+        }
+      }
+    } catch (emailError) {
+      logger.error("Failed to send Redis quota email", { error: emailError });
+    }
 
     // Gracefully degrade
     return;
