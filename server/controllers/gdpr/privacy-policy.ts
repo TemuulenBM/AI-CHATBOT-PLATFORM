@@ -9,6 +9,8 @@ import { Request, Response } from 'express';
 import { supabaseAdmin } from '../../utils/supabase';
 import { z } from 'zod';
 import logger from '../../utils/logger';
+import { AdminAuthenticatedRequest } from '../../middleware/adminAuth';
+import { AuthorizationError } from '../../utils/errors';
 
 const createVersionSchema = z.object({
   version: z.string(),
@@ -92,8 +94,13 @@ export const getPrivacyPolicyByVersion = async (req: Request, res: Response) => 
  * Create new privacy policy version
  * Requires admin authorization
  */
-export const createVersion = async (req: Request, res: Response) => {
+export const createVersion = async (req: AdminAuthenticatedRequest, res: Response) => {
   try {
+    // Explicit admin authorization check (defense in depth)
+    if (!req.isAdmin) {
+      throw new AuthorizationError('Admin access required');
+    }
+
     const { version, content, effectiveDate } = createVersionSchema.parse(req.body);
 
     // Check if version already exists
@@ -149,8 +156,13 @@ export const createVersion = async (req: Request, res: Response) => {
  * Update privacy policy version (only before effective date)
  * Requires admin authorization
  */
-export const updateVersion = async (req: Request, res: Response) => {
+export const updateVersion = async (req: AdminAuthenticatedRequest, res: Response) => {
   try {
+    // Explicit admin authorization check (defense in depth)
+    if (!req.isAdmin) {
+      throw new AuthorizationError('Admin access required');
+    }
+
     const { version } = req.params;
     const { content, effectiveDate } = updateVersionSchema.parse(req.body);
 

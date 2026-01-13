@@ -15,6 +15,7 @@ import { Worker, Job } from 'bullmq';
 import { supabaseAdmin } from '../utils/supabase';
 import logger from '../utils/logger';
 import { getRedisConnection } from './queue-connection';
+import EmailService from '../services/email';
 
 interface AccountDeletionJobData {
   requestId: string;
@@ -32,10 +33,10 @@ export const accountDeletionWorker = new Worker<AccountDeletionJobData>(
     logger.info('Starting account deletion', { requestId });
 
     try {
-      // Get deletion request
+      // Get deletion request (include user_email for confirmation)
       const { data: request, error: requestError } = await supabaseAdmin
         .from('deletion_requests')
-        .select('user_id, scheduled_deletion_date, status')
+        .select('user_id, user_email, scheduled_deletion_date, status')
         .eq('id', requestId)
         .single();
 
@@ -118,7 +119,25 @@ export const accountDeletionWorker = new Worker<AccountDeletionJobData>(
           billingRecordsAnonymized: billingRecords?.length || 0,
         });
 
-        // TODO: Send confirmation email to user's email (stored before deletion)
+        // Send GDPR confirmation email (Article 17 compliance)
+        if (request.user_email) {
+          try {
+            await EmailService.sendAccountDeletionCompleted(request.user_email);
+            logger.info('Deletion confirmation email sent', {
+              requestId,
+              email: request.user_email,
+            });
+          } catch (emailError) {
+            // Log email error but don't fail the deletion
+            logger.error('Failed to send deletion confirmation email', {
+              requestId,
+              email: request.user_email,
+              error: emailError,
+            });
+          }
+        } else {
+          logger.warn('No email stored for deletion confirmation', { requestId });
+        }
 
         return {
           success: true,

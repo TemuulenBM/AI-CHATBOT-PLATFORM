@@ -352,6 +352,61 @@ export class EmailService {
   }
 
   /**
+   * Send account deletion completed email (GDPR Article 17 compliance)
+   */
+  static async sendAccountDeletionCompleted(to: string): Promise<void> {
+    const html = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta charset="utf-8">
+          <style>
+            body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+            .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+            .header { background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%); color: white; padding: 30px; text-align: center; border-radius: 10px 10px 0 0; }
+            .content { background: #f9fafb; padding: 30px; border-radius: 0 0 10px 10px; }
+            .info-box { background: #dbeafe; border-left: 4px solid #3b82f6; padding: 15px; margin: 20px 0; }
+            .footer { text-align: center; margin-top: 30px; color: #666; font-size: 14px; }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <div class="header">
+              <h1>Account Deletion Completed</h1>
+            </div>
+            <div class="content">
+              <p>Your ConvoAI account has been permanently deleted as requested.</p>
+              <div class="info-box">
+                <strong>What was deleted:</strong>
+                <ul style="margin: 10px 0;">
+                  <li>All chatbots and training data</li>
+                  <li>All conversations and messages</li>
+                  <li>Personal information and settings</li>
+                  <li>Analytics and usage data</li>
+                </ul>
+              </div>
+              <p><strong>Data Retention:</strong> Some billing records may be retained for 7 years as required by tax and accounting regulations, but all personally identifiable information has been anonymized.</p>
+              <p>This email serves as confirmation that your GDPR Right to Erasure request has been fulfilled.</p>
+              <p>If you have any questions or believe this was done in error, please contact our support team.</p>
+              <p>Thank you for using ConvoAI.</p>
+              <p>Best regards,<br>The ConvoAI Team</p>
+            </div>
+            <div class="footer">
+              <p>&copy; ${new Date().getFullYear()} ConvoAI. All rights reserved.</p>
+            </div>
+          </div>
+        </body>
+      </html>
+    `;
+
+    await this.sendEmail({
+      to,
+      subject: 'Account Deletion Completed - ConvoAI',
+      html,
+    });
+  }
+
+  /**
    * Send usage limit warning email
    */
   static async sendUsageLimitWarning(to: string, currentUsage: number, limit: number, resourceType: string): Promise<void> {

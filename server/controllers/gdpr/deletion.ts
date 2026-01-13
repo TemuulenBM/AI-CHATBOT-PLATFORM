@@ -141,11 +141,12 @@ export const requestAccountDeletion = async (req: AuthenticatedRequest, res: Res
     // Schedule deletion for 30 days from now
     const scheduledDate = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
 
-    // Create deletion request
+    // Create deletion request (store email for GDPR confirmation)
     const { data: request, error } = await supabaseAdmin
       .from('deletion_requests')
       .insert({
         user_id: userId,
+        user_email: user.email, // Store email before user deletion
         reason: reason || null,
         status: 'pending',
         request_date: new Date().toISOString(),
