@@ -82,12 +82,29 @@ vi.mock("../../../server/utils/monitoring", () => ({
   alertInfo: vi.fn(),
 }));
 
+// Mock queues.ts before importing widget-analytics-cleanup
+vi.mock("../../../server/jobs/queues", () => ({
+  getRedisConnection: vi.fn(() => ({
+    host: "localhost",
+    port: 6379,
+    maxRetriesPerRequest: null,
+  })),
+  analyticsCleanupQueue: {
+    getWaitingCount: vi.fn().mockResolvedValue(0),
+    getActiveCount: vi.fn().mockResolvedValue(0),
+    getCompletedCount: vi.fn().mockResolvedValue(10),
+    getFailedCount: vi.fn().mockResolvedValue(1),
+    getRepeatableJobs: vi.fn().mockResolvedValue([]),
+    close: vi.fn().mockResolvedValue(undefined),
+  },
+}));
+
 import { supabaseAdmin } from "../../../server/utils/supabase";
 import logger from "../../../server/utils/logger";
 import { alertWarning, alertInfo } from "../../../server/utils/monitoring";
 import {
   analyticsCleanupQueue,
-  analyticsCleanupWorker as getAnalyticsCleanupWorker,
+  analyticsCleanupWorker,
   scheduleAnalyticsCleanup,
   triggerCleanup,
 } from "../../../server/jobs/widget-analytics-cleanup";
@@ -157,8 +174,8 @@ describe("Widget Analytics Cleanup", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    // Initialize worker to get processor
-    const worker = getAnalyticsCleanupWorker() as any;
+    // Get processor from worker instance
+    const worker = analyticsCleanupWorker as any;
     cleanupProcessor = worker.processor;
     mockJob = {
       id: "job-123",
@@ -507,7 +524,7 @@ describe("Widget Analytics Cleanup", () => {
 
   describe("scheduleAnalyticsCleanup", () => {
     it("should schedule daily cleanup job", async () => {
-      const queue = analyticsCleanupQueue() as any;
+      const queue = analyticsCleanupQueue as any;
       queue.getRepeatableJobs = vi.fn().mockResolvedValue([]);
       queue.add = vi.fn().mockResolvedValue({ id: "job-123" });
       queue.removeRepeatableByKey = vi.fn().mockResolvedValue(undefined);
@@ -531,7 +548,7 @@ describe("Widget Analytics Cleanup", () => {
 
     it("should remove existing repeatable jobs before scheduling", async () => {
       const existingJobs = [{ key: "job-key-1" }, { key: "job-key-2" }];
-      const queue = analyticsCleanupQueue() as any;
+      const queue = analyticsCleanupQueue as any;
       queue.getRepeatableJobs = vi.fn().mockResolvedValue(existingJobs);
       queue.add = vi.fn().mockResolvedValue({ id: "job-123" });
       queue.removeRepeatableByKey = vi.fn().mockResolvedValue(undefined);
@@ -544,7 +561,7 @@ describe("Widget Analytics Cleanup", () => {
 
     it("should handle scheduling errors", async () => {
       const error = new Error("Scheduling failed");
-      const queue = analyticsCleanupQueue() as any;
+      const queue = analyticsCleanupQueue as any;
       queue.getRepeatableJobs = vi.fn().mockRejectedValue(error);
       queue.add = vi.fn().mockResolvedValue({ id: "job-123" });
       queue.removeRepeatableByKey = vi.fn().mockResolvedValue(undefined);
@@ -559,7 +576,7 @@ describe("Widget Analytics Cleanup", () => {
 
   describe("triggerCleanup", () => {
     it("should manually trigger cleanup job", async () => {
-      const queue = analyticsCleanupQueue() as any;
+      const queue = analyticsCleanupQueue as any;
       queue.add = vi.fn().mockResolvedValue({ id: "job-123" });
 
       const result = await triggerCleanup();
@@ -572,7 +589,7 @@ describe("Widget Analytics Cleanup", () => {
 
   describe("Worker Event Handlers", () => {
     it("should handle completed event", () => {
-      const mockWorker = getAnalyticsCleanupWorker() as any;
+      const mockWorker = analyticsCleanupWorker as any;
       const handlers = mockWorker.eventHandlers?.get("completed");
 
       if (handlers && handlers.length > 0) {
@@ -591,7 +608,7 @@ describe("Widget Analytics Cleanup", () => {
     });
 
     it("should handle failed event", () => {
-      const mockWorker = getAnalyticsCleanupWorker() as any;
+      const mockWorker = analyticsCleanupWorker as any;
       const handlers = mockWorker.eventHandlers?.get("failed");
 
       if (handlers && handlers.length > 0) {
@@ -604,6 +621,20 @@ describe("Widget Analytics Cleanup", () => {
           expect.any(Object)
         );
       }
+    });
+  });
+
+  describe("Queue and Worker Initialization", () => {
+    it("should initialize queue with correct configuration", () => {
+      const queue = analyticsCleanupQueue as any;
+      expect(queue.name).toBe("analytics-cleanup");
+      expect(queue.options).toBeDefined();
+    });
+
+    it("should initialize worker with correct configuration", () => {
+      const worker = analyticsCleanupWorker as any;
+      expect(worker.queueName).toBe("analytics-cleanup");
+      expect(worker.options.concurrency).toBe(1);
     });
   });
 });

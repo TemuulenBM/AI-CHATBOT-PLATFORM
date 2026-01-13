@@ -58,6 +58,11 @@ vi.mock("../../../server/utils/redis", () => ({
 }));
 
 vi.mock("../../../server/jobs/queues", () => ({
+  getRedisConnection: vi.fn(() => ({
+    host: "localhost",
+    port: 6379,
+    maxRetriesPerRequest: null,
+  })),
   scrapeQueue: {
     add: vi.fn().mockResolvedValue({ id: "job_123" }),
     getWaitingCount: vi.fn().mockResolvedValue(0),

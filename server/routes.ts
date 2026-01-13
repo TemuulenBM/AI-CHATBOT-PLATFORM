@@ -8,6 +8,7 @@ import subscriptionRoutes from "./routes/subscriptions";
 import widgetRoutes from "./routes/widget";
 import widgetAnalyticsRoutes from "./routes/widget-analytics";
 import gdprRoutes from "./routes/gdpr";
+import adminRoutes from "./routes/admin";
 import * as feedbackController from "./controllers/feedback";
 import * as chatbotsController from "./controllers/chatbots";
 import { clerkAuthMiddleware as authMiddleware, loadSubscription } from "./middleware/clerkAuth";
@@ -458,6 +459,7 @@ export async function registerRoutes(
   app.use("/api/subscriptions", subscriptionRoutes);
   app.use("/api/analytics/widget", authMiddleware, widgetAnalyticsRoutes);
   app.use("/api/gdpr", gdprRoutes);
+  app.use("/api/admin", adminRoutes);
 
   // Widget routes (served at root level for easy embedding)
   app.use("/", widgetRoutes);

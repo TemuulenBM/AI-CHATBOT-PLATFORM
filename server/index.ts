@@ -6,7 +6,7 @@ import swaggerUi from "swagger-ui-express";
 import { registerRoutes } from "./routes";
 import { serveStatic } from "./static";
 import { createServer } from "http";
-import { closeQueues, initScheduledRescrape, initScheduledDeletion } from "./jobs/queues";
+import { closeQueues, initScheduledRescrape, initScheduledDeletion, scheduleAnalyticsCleanup } from "./jobs/queues";
 import logger from "./utils/logger";
 import { initializeEnvironment } from "./utils/env";
 import { applySecurity } from "./middleware/security";
@@ -222,9 +222,12 @@ app.use((req, res, next) => {
       }
 
       // Initialize analytics cleanup job
-      // Note: Cleanup job temporarily disabled - will be re-enabled after BullMQ configuration fix
-      // The cleanup can be run manually via: curl -X POST http://localhost:5000/api/admin/cleanup-analytics
-      logger.info("Analytics cleanup job will be enabled in next deployment");
+      try {
+        await scheduleAnalyticsCleanup();
+        logger.info("Analytics cleanup job initialized successfully");
+      } catch (error) {
+        logger.warn("Failed to initialize analytics cleanup (Redis may be unavailable)", { error });
+      }
 
     },
   );

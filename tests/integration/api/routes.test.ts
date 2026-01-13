@@ -64,6 +64,11 @@ vi.mock("../../../server/utils/monitoring", () => ({
 }));
 
 vi.mock("../../../server/jobs/queues", () => ({
+  getRedisConnection: vi.fn(() => ({
+    host: "localhost",
+    port: 6379,
+    maxRetriesPerRequest: null,
+  })),
   scrapeQueue: {
     getWaitingCount: vi.fn().mockResolvedValue(0),
     getActiveCount: vi.fn().mockResolvedValue(0),
@@ -71,6 +76,13 @@ vi.mock("../../../server/jobs/queues", () => ({
   embeddingQueue: {
     getWaitingCount: vi.fn().mockResolvedValue(0),
     getActiveCount: vi.fn().mockResolvedValue(0),
+  },
+  analyticsCleanupQueue: {
+    getWaitingCount: vi.fn().mockResolvedValue(0),
+    getActiveCount: vi.fn().mockResolvedValue(0),
+    getCompletedCount: vi.fn().mockResolvedValue(0),
+    getFailedCount: vi.fn().mockResolvedValue(0),
+    getRepeatableJobs: vi.fn().mockResolvedValue([]),
   },
 }));
 

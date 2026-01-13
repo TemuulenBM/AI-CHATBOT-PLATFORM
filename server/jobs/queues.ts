@@ -513,8 +513,14 @@ import './data-export-processor';
 import './account-deletion-processor';
 import { scheduledDeletionQueue, scheduledDeletionWorker, initScheduledDeletion } from './deletion-scheduler';
 
-// Export GDPR scheduler init function
-export { initScheduledDeletion };
+// Import Analytics Cleanup
+import { analyticsCleanupQueue, analyticsCleanupWorker, scheduleAnalyticsCleanup } from './widget-analytics-cleanup';
+
+// Export scheduler init functions
+export { initScheduledDeletion, scheduleAnalyticsCleanup };
+
+// Export getRedisConnection for use by other job files
+export { getRedisConnection };
 
 // Graceful shutdown
 export async function closeQueues(): Promise<void> {
@@ -522,11 +528,13 @@ export async function closeQueues(): Promise<void> {
   await embeddingWorker.close();
   await scheduledRescrapeWorker.close();
   await scheduledDeletionWorker.close();
+  await analyticsCleanupWorker.close();
   await scrapeQueue.close();
   await embeddingQueue.close();
   await scheduledRescrapeQueue.close();
   await dataExportQueue.close();
   await accountDeletionQueue.close();
   await scheduledDeletionQueue.close();
+  await analyticsCleanupQueue.close();
   logger.info("All queues closed");
 }

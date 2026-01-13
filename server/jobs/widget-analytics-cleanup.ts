@@ -12,42 +12,36 @@
 import { Queue, Worker, Job } from "bullmq";
 import { supabaseAdmin } from "../utils/supabase";
 import logger from "../utils/logger";
-import { redis } from "../utils/redis";
 import { alertWarning, alertInfo } from "../utils/monitoring";
 
 // ============================================
 // Queue Setup
 // ============================================
 
-// Lazy initialization to avoid connection issues
-let analyticsCleanupQueue: Queue | null = null;
-let analyticsCleanupWorker: Worker | null = null;
+// Import Redis connection helper from queues.ts
+import { getRedisConnection } from './queues';
 
-function getQueue(): Queue {
-  if (!analyticsCleanupQueue) {
-    analyticsCleanupQueue = new Queue("analytics-cleanup", {
-      connection: redis,
-      defaultJobOptions: {
-        attempts: 3,
-        backoff: {
-          type: "exponential",
-          delay: 60000, // 1 minute
-        },
-        removeOnComplete: {
-          age: 86400, // Keep completed jobs for 24 hours
-          count: 100,
-        },
-        removeOnFail: {
-          age: 604800, // Keep failed jobs for 7 days
-          count: 1000,
-        },
-      },
-    });
-  }
-  return analyticsCleanupQueue;
-}
+const connection = getRedisConnection();
 
-export { getQueue as analyticsCleanupQueue };
+// Immediate initialization (matching pattern from queues.ts)
+export const analyticsCleanupQueue = new Queue("analytics-cleanup", {
+  connection,
+  defaultJobOptions: {
+    attempts: 3,
+    backoff: {
+      type: "exponential",
+      delay: 60000, // 1 minute
+    },
+    removeOnComplete: {
+      age: 86400, // Keep completed jobs for 24 hours
+      count: 100,
+    },
+    removeOnFail: {
+      age: 604800, // Keep failed jobs for 7 days
+      count: 1000,
+    },
+  },
+});
 
 // ============================================
 // Data Retention Configuration
@@ -323,85 +317,78 @@ async function generateDailyStatsForChatbot(
 // ============================================
 
 /**
- * Get or create worker instance
+ * Immediate worker initialization
  */
-function getWorker(): Worker {
-  if (!analyticsCleanupWorker) {
-    analyticsCleanupWorker = new Worker(
-      "analytics-cleanup",
-      async (job: Job) => {
-        logger.info("Starting analytics cleanup job", { job_id: job.id });
+export const analyticsCleanupWorker = new Worker(
+  "analytics-cleanup",
+  async (job: Job) => {
+    logger.info("Starting analytics cleanup job", { job_id: job.id });
 
-        const results = {
-          events_deleted: 0,
-          sessions_deleted: 0,
-          stats_generated: 0,
-        };
+    const results = {
+      events_deleted: 0,
+      sessions_deleted: 0,
+      stats_generated: 0,
+    };
 
-        try {
-          // Step 1: Delete old events
-          const eventResult = await cleanupOldEvents();
-          results.events_deleted = eventResult.deleted;
+    try {
+      // Step 1: Delete old events
+      const eventResult = await cleanupOldEvents();
+      results.events_deleted = eventResult.deleted;
 
-          if (eventResult.deleted > 0) {
-            alertInfo(
-              "analytics_cleanup",
-              `Deleted ${eventResult.deleted} old widget events (${RETENTION_POLICIES.events}d retention)`
-            );
-          }
-
-          // Step 2: Delete old sessions
-          const sessionResult = await cleanupOldSessions();
-          results.sessions_deleted = sessionResult.deleted;
-
-          if (sessionResult.deleted > 0) {
-            alertInfo(
-              "analytics_cleanup",
-              `Deleted ${sessionResult.deleted} old widget sessions (${RETENTION_POLICIES.sessions}d retention)`
-            );
-          }
-
-          // Step 3: Generate daily stats rollups
-          const statsResult = await generateDailyStats();
-          results.stats_generated = statsResult.processed;
-
-          logger.info("Analytics cleanup job completed", results);
-
-          return results;
-        } catch (error) {
-          logger.error("Analytics cleanup job failed", { error, results });
-          alertWarning("analytics_cleanup_failed", "Analytics cleanup job encountered errors", {
-            error: error instanceof Error ? error.message : String(error),
-            results,
-          });
-          throw error;
-        }
-      },
-      {
-        connection: redis,
-        concurrency: 1, // Only one cleanup job at a time
+      if (eventResult.deleted > 0) {
+        alertInfo(
+          "analytics_cleanup",
+          `Deleted ${eventResult.deleted} old widget events (${RETENTION_POLICIES.events}d retention)`
+        );
       }
-    );
 
-    // Worker event handlers
-    analyticsCleanupWorker.on("completed", (job) => {
-      logger.info("Analytics cleanup job completed", {
-        job_id: job.id,
-        duration_ms: job.finishedOn ? job.finishedOn - (job.processedOn || job.finishedOn) : null,
-      });
-    });
+      // Step 2: Delete old sessions
+      const sessionResult = await cleanupOldSessions();
+      results.sessions_deleted = sessionResult.deleted;
 
-    analyticsCleanupWorker.on("failed", (job, err) => {
-      logger.error("Analytics cleanup job failed", {
-        job_id: job?.id,
-        error: err.message,
+      if (sessionResult.deleted > 0) {
+        alertInfo(
+          "analytics_cleanup",
+          `Deleted ${sessionResult.deleted} old widget sessions (${RETENTION_POLICIES.sessions}d retention)`
+        );
+      }
+
+      // Step 3: Generate daily stats rollups
+      const statsResult = await generateDailyStats();
+      results.stats_generated = statsResult.processed;
+
+      logger.info("Analytics cleanup job completed", results);
+
+      return results;
+    } catch (error) {
+      logger.error("Analytics cleanup job failed", { error, results });
+      alertWarning("analytics_cleanup_failed", "Analytics cleanup job encountered errors", {
+        error: error instanceof Error ? error.message : String(error),
+        results,
       });
-    });
+      throw error;
+    }
+  },
+  {
+    connection,
+    concurrency: 1, // Only one cleanup job at a time
   }
-  return analyticsCleanupWorker;
-}
+);
 
-export { getWorker as analyticsCleanupWorker };
+// Worker event handlers
+analyticsCleanupWorker.on("completed", (job) => {
+  logger.info("Analytics cleanup job completed", {
+    job_id: job.id,
+    duration_ms: job.finishedOn ? job.finishedOn - (job.processedOn || job.finishedOn) : null,
+  });
+});
+
+analyticsCleanupWorker.on("failed", (job, err) => {
+  logger.error("Analytics cleanup job failed", {
+    job_id: job?.id,
+    error: err.message,
+  });
+});
 
 // ============================================
 // Scheduler
@@ -413,17 +400,14 @@ export { getWorker as analyticsCleanupWorker };
  */
 export async function scheduleAnalyticsCleanup(): Promise<void> {
   try {
-    const queue = getQueue();
-    const worker = getWorker(); // Initialize worker
-
-    // Remove existing repeatable jobs
-    const repeatableJobs = await queue.getRepeatableJobs();
+    // Remove existing repeatable jobs to avoid duplicates
+    const repeatableJobs = await analyticsCleanupQueue.getRepeatableJobs();
     for (const job of repeatableJobs) {
-      await queue.removeRepeatableByKey(job.key);
+      await analyticsCleanupQueue.removeRepeatableByKey(job.key);
     }
 
     // Schedule daily at 2 AM UTC
-    await queue.add(
+    await analyticsCleanupQueue.add(
       "daily-cleanup",
       {},
       {
@@ -449,13 +433,12 @@ export async function scheduleAnalyticsCleanup(): Promise<void> {
  */
 export async function triggerCleanup(): Promise<Job> {
   logger.info("Manually triggering analytics cleanup");
-  const queue = getQueue();
-  return await queue.add("manual-cleanup", {});
+  return await analyticsCleanupQueue.add("manual-cleanup", {});
 }
 
 export default {
-  queue: getQueue,
-  worker: getWorker,
+  queue: analyticsCleanupQueue,
+  worker: analyticsCleanupWorker,
   scheduleAnalyticsCleanup,
   triggerCleanup,
 };

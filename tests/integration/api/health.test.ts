@@ -48,6 +48,11 @@ vi.mock("../../../server/utils/monitoring", () => ({
 
 // Mock queues
 vi.mock("../../../server/jobs/queues", () => ({
+  getRedisConnection: vi.fn(() => ({
+    host: "localhost",
+    port: 6379,
+    maxRetriesPerRequest: null,
+  })),
   scrapeQueue: {
     getWaitingCount: vi.fn().mockResolvedValue(0),
     getActiveCount: vi.fn().mockResolvedValue(0),
