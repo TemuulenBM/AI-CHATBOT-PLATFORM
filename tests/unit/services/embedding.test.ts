@@ -232,4 +232,91 @@ describe("Embedding Service", () => {
       expect(embeddingService).toBeInstanceOf(EmbeddingService);
     });
   });
+
+  describe("splitIntoChunks - overlap verification", () => {
+    it("should not lose any content between chunks", () => {
+      const numberedWords = Array.from({ length: 500 }, (_, i) => `word${i}`).join(" ");
+      const chunks = service.splitIntoChunks(numberedWords, "test");
+
+      // Verify all words are present in at least one chunk
+      for (let i = 0; i < 500; i++) {
+        const wordFound = chunks.some(chunk => chunk.content.includes(`word${i}`));
+        expect(wordFound).toBe(true);
+      }
+    });
+
+    it("should have proper overlap between consecutive chunks", () => {
+      const content = "word ".repeat(500);
+      const chunks = service.splitIntoChunks(content, "test");
+
+      if (chunks.length < 2) {
+        // Skip test if not enough chunks
+        return;
+      }
+
+      // Check overlap between consecutive chunks
+      for (let i = 1; i < chunks.length; i++) {
+        const prevChunk = chunks[i - 1].content;
+        const currChunk = chunks[i].content;
+
+        // Find overlap by checking if end of prev appears in start of curr
+        const prevWords = prevChunk.split(/\s+/).filter(w => w.length > 0);
+        const currWords = currChunk.split(/\s+/).filter(w => w.length > 0);
+
+        let overlapCount = 0;
+        const maxCheck = Math.min(50, prevWords.length, currWords.length);
+
+        for (let j = 0; j < maxCheck; j++) {
+          if (prevWords[prevWords.length - 1 - j] === currWords[j]) {
+            overlapCount++;
+          } else {
+            break;
+          }
+        }
+
+        expect(overlapCount).toBeGreaterThan(0); // Should have some overlap
+      }
+    });
+
+    it("should maintain consistent chunk sizes", () => {
+      const content = "word ".repeat(1000);
+      const chunks = service.splitIntoChunks(content, "test");
+
+      // All chunks except last should be close to CHUNK_SIZE (1000 chars)
+      for (let i = 0; i < chunks.length - 1; i++) {
+        expect(chunks[i].content.length).toBeGreaterThan(800);
+        expect(chunks[i].content.length).toBeLessThan(1200);
+      }
+    });
+
+    it("should create chunks with forward sequential processing", () => {
+      const numberedWords = Array.from({ length: 300 }, (_, i) => `word${i}`).join(" ");
+      const chunks = service.splitIntoChunks(numberedWords, "test");
+
+      // Extract first and last word numbers from each chunk
+      for (let i = 0; i < chunks.length - 1; i++) {
+        const currentWords = chunks[i].content.match(/word(\d+)/g) || [];
+        const nextWords = chunks[i + 1].content.match(/word(\d+)/g) || [];
+
+        if (currentWords.length > 0 && nextWords.length > 0) {
+          const currentFirst = parseInt(currentWords[0].replace("word", ""));
+          const nextFirst = parseInt(nextWords[0].replace("word", ""));
+
+          // Next chunk should start after or at current chunk's start (with overlap)
+          expect(nextFirst).toBeGreaterThanOrEqual(currentFirst);
+        }
+      }
+    });
+
+    it("should handle very long content without gaps", () => {
+      const content = "word ".repeat(2000); // ~10,000 chars
+      const chunks = service.splitIntoChunks(content, "test");
+
+      expect(chunks.length).toBeGreaterThan(5);
+
+      // Count total words in all chunks (with overlap, some words appear multiple times)
+      const allWords = chunks.flatMap(c => c.content.split(/\s+/).filter(w => w.length > 0));
+      expect(allWords.length).toBeGreaterThan(1900); // Should have most words represented
+    });
+  });
 });

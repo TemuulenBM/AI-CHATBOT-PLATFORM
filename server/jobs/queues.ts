@@ -519,6 +519,9 @@ import { analyticsCleanupQueue, analyticsCleanupWorker, scheduleAnalyticsCleanup
 // Export scheduler init functions
 export { initScheduledDeletion, scheduleAnalyticsCleanup };
 
+// Export analytics cleanup queue for admin controller
+export { analyticsCleanupQueue };
+
 // Export getRedisConnection for use by other job files
 export { getRedisConnection };
 

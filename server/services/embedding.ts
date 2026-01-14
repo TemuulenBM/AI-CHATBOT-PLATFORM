@@ -26,38 +26,62 @@ interface SimilarContent {
 export class EmbeddingService {
   /**
    * Split content into overlapping chunks for better context preservation
+   * Uses sequential chunking with character-based overlap calculation
    */
   splitIntoChunks(content: string, pageUrl: string): TextChunk[] {
     const chunks: TextChunk[] = [];
     const words = content.split(/\s+/);
 
-    // Calculate approximate character positions
-    let currentChunk = "";
-    let chunkStart = 0;
+    if (words.length === 0 || content.trim().length === 0) {
+      return chunks;
+    }
 
-    for (let i = 0; i < words.length; i++) {
-      const word = words[i];
-      currentChunk += (currentChunk ? " " : "") + word;
+    let startIdx = 0;
 
-      if (currentChunk.length >= CHUNK_SIZE) {
+    while (startIdx < words.length) {
+      let currentChunk = "";
+      let endIdx = startIdx;
+
+      // Build chunk up to CHUNK_SIZE characters
+      for (let i = startIdx; i < words.length; i++) {
+        const wordToAdd = words[i];
+        const testChunk = currentChunk + (currentChunk ? " " : "") + wordToAdd;
+
+        if (testChunk.length > CHUNK_SIZE && currentChunk.length > 0) {
+          // We've exceeded size, use previous chunk
+          break;
+        }
+
+        currentChunk = testChunk;
+        endIdx = i;
+      }
+
+      // Only add if chunk is substantial (> 50 chars)
+      if (currentChunk.trim().length > 50) {
         chunks.push({
           content: currentChunk.trim(),
           pageUrl,
         });
-
-        // Start next chunk with overlap
-        const overlapWords = Math.floor(CHUNK_OVERLAP / 6); // Approximate words
-        const startIdx = Math.max(0, i - overlapWords);
-        currentChunk = words.slice(startIdx, i + 1).join(" ");
       }
-    }
 
-    // Add remaining content
-    if (currentChunk.trim().length > 50) {
-      chunks.push({
-        content: currentChunk.trim(),
-        pageUrl,
-      });
+      // Calculate overlap for next chunk
+      if (endIdx >= words.length - 1) {
+        // Last chunk, we're done
+        break;
+      }
+
+      // Move back by calculating character-based overlap
+      let overlapChars = 0;
+      let overlapWords = 0;
+
+      // Count back from endIdx to get ~CHUNK_OVERLAP characters
+      for (let i = endIdx; i >= startIdx && overlapChars < CHUNK_OVERLAP; i--) {
+        overlapChars += words[i].length + 1; // +1 for space
+        overlapWords++;
+      }
+
+      // Next chunk starts with overlap
+      startIdx = Math.max(startIdx + 1, endIdx - overlapWords + 1);
     }
 
     return chunks;
