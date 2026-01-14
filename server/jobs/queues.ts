@@ -55,7 +55,7 @@ export const scrapeQueue = new Queue("scrape", { connection });
 export const embeddingQueue = new Queue("embedding", { connection });
 
 // Handle queue errors with proper alerting
-const handleQueueError = (err: Error, queueName: string) => {
+const handleQueueError = async (err: Error, queueName: string) => {
   if (err.message && err.message.includes("max requests limit exceeded")) {
     // Send critical alert with rate-limiting built-in (60s cooldown)
     alertCritical(
@@ -72,6 +72,35 @@ const handleQueueError = (err: Error, queueName: string) => {
 
     // Track metric for monitoring dashboard
     incrementCounter("redis.quota_exceeded", 1);
+
+    // Send admin email (rate limited - once per hour per queue)
+    const emailCacheKey = `queue_error_email:${queueName}`;
+    try {
+      const lastSent = await redis.get(emailCacheKey).catch(() => null);
+
+      if (!lastSent) {
+        const adminEmail = process.env.ADMIN_EMAIL || process.env.EMAIL_FROM;
+        if (adminEmail) {
+          await EmailService.sendAdminAlert(
+            adminEmail,
+            `Queue Error: ${queueName}`,
+            "Redis quota exceeded affecting job queues",
+            {
+              queueName,
+              error: err.message,
+              impact: "Background jobs (scraping, embeddings) may fail",
+              action: "Check Upstash Redis quota and upgrade plan if needed",
+            }
+          );
+          await redis.setex(emailCacheKey, 3600, Date.now().toString()).catch(() => {});
+          logger.info("Admin email sent for queue error", { queueName, adminEmail });
+        } else {
+          logger.warn("ADMIN_EMAIL not configured, skipping queue error notification");
+        }
+      }
+    } catch (emailError) {
+      logger.error("Failed to send queue error email", { error: emailError, queueName });
+    }
 
     // Gracefully degrade - don't crash the queue
     return;

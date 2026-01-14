@@ -15,6 +15,9 @@ interface ScraperOptions {
   concurrency: number;
   timeout: number;
   userAgent: string;
+  filterLoginPages?: boolean;
+  filterErrorPages?: boolean;
+  customFilterPatterns?: string[];
 }
 
 const DEFAULT_OPTIONS: ScraperOptions = {
@@ -22,6 +25,8 @@ const DEFAULT_OPTIONS: ScraperOptions = {
   concurrency: 3,
   timeout: 30000,
   userAgent: "ChatbotScraper/1.0 (+https://example.com/bot)",
+  filterLoginPages: true,
+  filterErrorPages: true,
 };
 
 export class WebsiteScraper {
@@ -30,12 +35,14 @@ export class WebsiteScraper {
   private visitedUrls: Set<string>;
   private robotsRules: ReturnType<typeof robotsParser> | null;
   private baseUrl: string;
+  private filteredCount: { status: number; url: number; content: number };
 
   constructor(options: Partial<ScraperOptions> = {}) {
     this.options = { ...DEFAULT_OPTIONS, ...options };
     this.visitedUrls = new Set();
     this.robotsRules = null;
     this.baseUrl = "";
+    this.filteredCount = { status: 0, url: 0, content: 0 };
 
     this.client = axios.create({
       timeout: this.options.timeout,
@@ -51,6 +58,7 @@ export class WebsiteScraper {
     const limit = maxPages || this.options.maxPages;
     this.baseUrl = new URL(url).origin;
     this.visitedUrls.clear();
+    this.filteredCount = { status: 0, url: 0, content: 0 };
 
     logger.info("Starting website scrape", { url, maxPages: limit });
 
@@ -85,7 +93,16 @@ export class WebsiteScraper {
       await this.delay(1000);
     }
 
-    logger.info("Scraping completed", { pagesScraped: results.length });
+    logger.info("Scraping completed", {
+      pagesScraped: results.length,
+      filteredByStatus: this.filteredCount.status,
+      filteredByUrl: this.filteredCount.url,
+      filteredByContent: this.filteredCount.content,
+      totalFiltered:
+        this.filteredCount.status +
+        this.filteredCount.url +
+        this.filteredCount.content,
+    });
     return results;
   }
 
@@ -102,16 +119,34 @@ export class WebsiteScraper {
   }
 
   private async getUrlsToScrape(startUrl: string): Promise<string[]> {
-    const urls: Set<string> = new Set([startUrl]);
+    const urls: Set<string> = new Set();
+
+    // Filter start URL if needed
+    if (!this.isUselessUrl(startUrl)) {
+      urls.add(startUrl);
+    } else {
+      logger.debug("Start URL filtered by pattern", {
+        url: startUrl,
+        reason: "url_pattern",
+      });
+    }
 
     // Try to get sitemap
     const sitemapUrls = await this.fetchSitemap();
-    sitemapUrls.forEach((url) => urls.add(url));
+    sitemapUrls.forEach((url) => {
+      if (!this.isUselessUrl(url)) {
+        urls.add(url);
+      }
+    });
 
     // If sitemap didn't provide enough URLs, crawl from start page
     if (urls.size < this.options.maxPages) {
       const crawledUrls = await this.crawlForLinks(startUrl);
-      crawledUrls.forEach((url) => urls.add(url));
+      crawledUrls.forEach((url) => {
+        if (!this.isUselessUrl(url)) {
+          urls.add(url);
+        }
+      });
     }
 
     return Array.from(urls);
@@ -141,7 +176,11 @@ export class WebsiteScraper {
         if (parsed.urlset?.url) {
           for (const urlEntry of parsed.urlset.url) {
             if (urlEntry.loc?.[0]) {
-              urls.push(urlEntry.loc[0]);
+              const url = urlEntry.loc[0];
+              // Filter by robots.txt and useless URL patterns
+              if (this.isAllowedUrl(url) && !this.isUselessUrl(url)) {
+                urls.push(url);
+              }
             }
           }
         }
@@ -155,7 +194,7 @@ export class WebsiteScraper {
       }
     }
 
-    return urls.filter((url) => this.isAllowedUrl(url));
+    return urls;
   }
 
   private async fetchSitemapFromUrl(sitemapUrl: string): Promise<string[]> {
@@ -167,7 +206,11 @@ export class WebsiteScraper {
       if (parsed.urlset?.url) {
         for (const urlEntry of parsed.urlset.url) {
           if (urlEntry.loc?.[0]) {
-            urls.push(urlEntry.loc[0]);
+            const url = urlEntry.loc[0];
+            // Filter by robots.txt and useless URL patterns
+            if (this.isAllowedUrl(url) && !this.isUselessUrl(url)) {
+              urls.push(url);
+            }
           }
         }
       }
@@ -188,7 +231,11 @@ export class WebsiteScraper {
         const href = $(element).attr("href");
         if (href) {
           const absoluteUrl = this.resolveUrl(href);
-          if (absoluteUrl && this.isAllowedUrl(absoluteUrl)) {
+          if (
+            absoluteUrl &&
+            this.isAllowedUrl(absoluteUrl) &&
+            !this.isUselessUrl(absoluteUrl)
+          ) {
             urls.add(absoluteUrl);
           }
         }
@@ -210,10 +257,30 @@ export class WebsiteScraper {
       return null;
     }
 
+    // Filter by URL patterns early (before making HTTP request)
+    if (this.isUselessUrl(url)) {
+      this.filteredCount.url++;
+      logger.debug("URL filtered by pattern", { url, reason: "url_pattern" });
+      return null;
+    }
+
     this.visitedUrls.add(url);
 
     try {
       const response = await this.client.get(url);
+
+      // Check HTTP status code
+      const status = response.status;
+      if (status !== 200 && status !== 201) {
+        this.filteredCount.status++;
+        logger.debug("Page filtered by HTTP status", {
+          url,
+          status,
+          reason: "http_status",
+        });
+        return null;
+      }
+
       const $ = cheerio.load(response.data);
 
       // Remove unwanted elements
@@ -227,6 +294,28 @@ export class WebsiteScraper {
         $("title").text().trim() ||
         $("h1").first().text().trim() ||
         url;
+
+      // Content-based filtering: Check for login pages
+      if (this.isLoginPage($, title)) {
+        this.filteredCount.content++;
+        logger.debug("Page filtered as login page", {
+          url,
+          title,
+          reason: "login_page",
+        });
+        return null;
+      }
+
+      // Content-based filtering: Check for error pages
+      if (this.isErrorPage($, title)) {
+        this.filteredCount.content++;
+        logger.debug("Page filtered as error page", {
+          url,
+          title,
+          reason: "error_page",
+        });
+        return null;
+      }
 
       // Extract main content
       const content = this.extractContent($);
@@ -243,6 +332,20 @@ export class WebsiteScraper {
 
       return { url, title, content };
     } catch (error) {
+      // Check if it's an HTTP error with status code
+      if (axios.isAxiosError(error) && error.response) {
+        const status = error.response.status;
+        if (status === 404 || status === 401 || status === 403 || status >= 500) {
+          this.filteredCount.status++;
+          logger.debug("Page filtered by HTTP error status", {
+            url,
+            status,
+            reason: "http_error",
+          });
+          return null;
+        }
+      }
+
       logger.debug("Failed to scrape page", { url, error });
       return null;
     }
@@ -329,6 +432,184 @@ export class WebsiteScraper {
     }
 
     return this.robotsRules.isAllowed(url, this.options.userAgent) !== false;
+  }
+
+  /**
+   * Check if URL matches patterns for login/auth/error pages
+   */
+  private isUselessUrl(url: string): boolean {
+    if (!this.options.filterLoginPages && !this.options.filterErrorPages) {
+      return false;
+    }
+
+    try {
+      const urlObj = new URL(url);
+      const pathname = urlObj.pathname.toLowerCase();
+
+      // Common login/auth patterns
+      if (this.options.filterLoginPages) {
+        const loginPatterns = [
+          /\/login/i,
+          /\/signin/i,
+          /\/sign-in/i,
+          /\/auth/i,
+          /\/authentication/i,
+          /\/logout/i,
+          /\/signout/i,
+          /\/sign-out/i,
+          /\/register/i,
+          /\/signup/i,
+          /\/sign-up/i,
+          /\/forgot-password/i,
+          /\/reset-password/i,
+          /\/password-reset/i,
+          /\/password\/reset/i,
+          /\/admin\/login/i,
+          /\/wp-admin/i,
+          /\/wp-login/i,
+        ];
+
+        if (loginPatterns.some((pattern) => pattern.test(pathname))) {
+          return true;
+        }
+      }
+
+      // Common error page patterns
+      if (this.options.filterErrorPages) {
+        const errorPatterns = [
+          /\/404/i,
+          /\/error/i,
+          /\/not-found/i,
+          /\/500/i,
+          /\/503/i,
+          /\/unauthorized/i,
+          /\/forbidden/i,
+        ];
+
+        if (errorPatterns.some((pattern) => pattern.test(pathname))) {
+          return true;
+        }
+      }
+
+      // Check custom filter patterns
+      if (this.options.customFilterPatterns && this.options.customFilterPatterns.length > 0) {
+        for (const pattern of this.options.customFilterPatterns) {
+          try {
+            const regex = new RegExp(pattern, "i");
+            if (regex.test(pathname) || regex.test(url)) {
+              return true;
+            }
+          } catch {
+            // Invalid regex pattern, skip
+          }
+        }
+      }
+
+      return false;
+    } catch {
+      // Invalid URL, allow it to be processed (will fail later)
+      return false;
+    }
+  }
+
+  /**
+   * Detect if page content indicates a login page
+   */
+  private isLoginPage($: cheerio.CheerioAPI, title: string): boolean {
+    if (!this.options.filterLoginPages) {
+      return false;
+    }
+
+    const titleLower = title.toLowerCase();
+
+    // Check title for login indicators
+    const loginTitlePatterns = [
+      "login",
+      "sign in",
+      "sign-in",
+      "sign up",
+      "sign-up",
+      "register",
+      "authentication",
+      "log in",
+    ];
+
+    if (loginTitlePatterns.some((pattern) => titleLower.includes(pattern))) {
+      return true;
+    }
+
+    // Check for password input fields (strong indicator of login page)
+    const passwordInputs = $('input[type="password"]');
+    if (passwordInputs.length > 0) {
+      // Check if it's likely a login form vs contact form
+      const form = passwordInputs.closest("form");
+      if (form.length > 0) {
+        const formText = form.text().toLowerCase();
+        // If form contains login-related text, it's likely a login page
+        if (
+          formText.includes("login") ||
+          formText.includes("sign in") ||
+          formText.includes("email") ||
+          formText.includes("username")
+        ) {
+          return true;
+        }
+      }
+    }
+
+    return false;
+  }
+
+  /**
+   * Detect if page content indicates an error page
+   */
+  private isErrorPage($: cheerio.CheerioAPI, title: string): boolean {
+    if (!this.options.filterErrorPages) {
+      return false;
+    }
+
+    const titleLower = title.toLowerCase();
+    const bodyText = $("body").text().toLowerCase();
+
+    // Check title for error indicators
+    const errorTitlePatterns = [
+      "404",
+      "not found",
+      "page not found",
+      "error",
+      "unauthorized",
+      "forbidden",
+      "server error",
+      "500",
+      "503",
+    ];
+
+    if (errorTitlePatterns.some((pattern) => titleLower.includes(pattern))) {
+      return true;
+    }
+
+    // Check body content for common error messages
+    const errorContentPatterns = [
+      "404",
+      "not found",
+      "page not found",
+      "error occurred",
+      "something went wrong",
+      "unauthorized access",
+      "access denied",
+      "forbidden",
+      "internal server error",
+    ];
+
+    if (errorContentPatterns.some((pattern) => bodyText.includes(pattern))) {
+      // Additional check: if page has very little content, it's likely an error page
+      const contentLength = bodyText.trim().length;
+      if (contentLength < 200) {
+        return true;
+      }
+    }
+
+    return false;
   }
 
   private chunkArray<T>(array: T[], size: number): T[][] {
