@@ -10,6 +10,14 @@ vi.mock("../../../server/utils/logger", () => ({
   },
 }));
 
+// Mock email service to prevent Resend initialization errors
+vi.mock("../../../server/services/email", () => ({
+  default: {
+    sendRedisQuotaExceeded: vi.fn().mockResolvedValue({ success: true }),
+    sendEmail: vi.fn().mockResolvedValue({ success: true }),
+  },
+}));
+
 // Mock Redis as a class constructor - define inside mock to avoid hoisting issues
 vi.mock("ioredis", () => {
   const mockRedis = {

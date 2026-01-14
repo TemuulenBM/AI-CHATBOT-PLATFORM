@@ -23,6 +23,13 @@ vi.mock("../../../server/utils/monitoring", () => ({
   incrementCounter: mockMonitoring.incrementCounter,
 }));
 
+vi.mock("../../../server/services/email", () => ({
+  default: {
+    sendRedisQuotaExceeded: vi.fn().mockResolvedValue({ success: true }),
+    sendEmail: vi.fn().mockResolvedValue({ success: true }),
+  },
+}));
+
 vi.mock("ioredis", () => {
   return {
     default: class MockRedis {
