@@ -438,6 +438,11 @@ export async function supportBotMessage(
 
     const sid = sessionId || "anonymous";
 
+    logger.info("Support bot request started", {
+      sessionId: sid,
+      messageLength: message.length,
+    });
+
     // Get conversation history
     const history = supportConversations.get(sid) || [];
 
@@ -452,7 +457,8 @@ export async function supportBotMessage(
     try {
       const messages: OpenAI.ChatCompletionMessageParam[] = [
         { role: "system", content: SUPPORT_BOT_SYSTEM_PROMPT },
-        ...history.slice(-10).map((msg) => ({
+        // Keep last 6 messages only to leave room for response
+        ...history.slice(-6).map((msg) => ({
           role: msg.role as "user" | "assistant",
           content: msg.content,
         })),
@@ -460,7 +466,7 @@ export async function supportBotMessage(
       ];
 
       const model = "gpt-5-mini";
-      const maxTokens = 500;
+      const maxTokens = 1500; // Increased from 500 to allow longer responses
       
       const requestParams: Record<string, unknown> = {
         model,
@@ -485,17 +491,59 @@ export async function supportBotMessage(
         requestParams as unknown as OpenAI.ChatCompletionCreateParamsStreaming
       );
 
+      logger.info("Support bot: OpenAI stream started", { sessionId: sid });
+
+      let chunkCount = 0;
+      let totalChunks = 0;
       for await (const chunk of stream) {
+        totalChunks++;
         const content = chunk.choices[0]?.delta?.content;
+
+        // Log first few chunks for debugging
+        if (totalChunks <= 3) {
+          logger.info("Support bot: Chunk received", {
+            sessionId: sid,
+            chunkNumber: totalChunks,
+            hasContent: !!content,
+            contentLength: content?.length || 0,
+            finishReason: chunk.choices[0]?.finish_reason,
+          });
+        }
+
         if (content) {
+          chunkCount++;
           fullResponse += content;
           res.write(`data: ${JSON.stringify({ type: "chunk", content })}\n\n`);
         }
       }
 
-      res.write(`data: ${JSON.stringify({ type: "done" })}\n\n`);
+      logger.info("Support bot: Stream completed", {
+        sessionId: sid,
+        responseLength: fullResponse.length,
+        chunkCount,
+        totalChunks,
+        historyLength: history.length,
+      });
+
+      // Check if we got any response
+      if (fullResponse.length === 0) {
+        logger.warn("Support bot: Empty response from OpenAI", { sessionId: sid });
+        res.write(
+          `data: ${JSON.stringify({
+            type: "error",
+            message: "Received empty response from AI. Please try again.",
+          })}\n\n`
+        );
+      } else {
+        res.write(`data: ${JSON.stringify({ type: "done" })}\n\n`);
+      }
     } catch (streamError) {
-      logger.error("Support bot stream error", { error: streamError });
+      logger.error("Support bot stream error", {
+        error: streamError,
+        errorMessage: streamError instanceof Error ? streamError.message : "Unknown error",
+        errorStack: streamError instanceof Error ? streamError.stack : undefined,
+        sessionId: sid,
+      });
       res.write(
         `data: ${JSON.stringify({
           type: "error",

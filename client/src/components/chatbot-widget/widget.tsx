@@ -19,6 +19,7 @@ export function ChatbotWidget({ chatbotId, welcomeMessage = "Hi! How can I help 
   const [isLoading, setIsLoading] = useState(false);
   const [sessionId] = useState(() => "session_" + Math.random().toString(36).substring(2, 15));
   const scrollRef = useRef<HTMLDivElement>(null);
+  const timeoutRef = useRef<number | null>(null);
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -28,7 +29,7 @@ export function ChatbotWidget({ chatbotId, welcomeMessage = "Hi! How can I help 
 
   const handleSend = async () => {
     if (!input.trim() || isLoading) return;
-    
+
     const userMessage = input.trim();
     setMessages(prev => [...prev, { role: 'user', text: userMessage }]);
     setInput("");
@@ -36,9 +37,21 @@ export function ChatbotWidget({ chatbotId, welcomeMessage = "Hi! How can I help 
 
     // Use support bot endpoint if no chatbotId, otherwise use regular chat
     const endpoint = chatbotId ? "/api/chat/stream" : "/api/chat/support";
-    const payload = chatbotId 
+    const payload = chatbotId
       ? { chatbotId, sessionId, message: userMessage }
       : { sessionId, message: userMessage };
+
+    // Clear any existing timeout
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current);
+    }
+
+    // Timeout to prevent infinite loading
+    timeoutRef.current = window.setTimeout(() => {
+      setIsLoading(false);
+      setMessages(prev => [...prev, { role: 'bot', text: "Request timed out. Please try again." }]);
+      timeoutRef.current = null;
+    }, 30000); // 30 second timeout
 
     try {
       const response = await fetch(endpoint, {
@@ -54,42 +67,107 @@ export function ChatbotWidget({ chatbotId, welcomeMessage = "Hi! How can I help 
       const reader = response.body?.getReader();
       const decoder = new TextDecoder();
       let botMessage = "";
+      let hasStartedStreaming = false;
 
-      // Add empty bot message
+      // Add empty bot message (will show loading dots)
       setMessages(prev => [...prev, { role: 'bot', text: "" }]);
-      setIsLoading(false);
 
       if (reader) {
+        let buffer = "";
+
         while (true) {
           const { done, value } = await reader.read();
           if (done) break;
 
-          const chunk = decoder.decode(value);
-          const lines = chunk.split("\n");
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split("\n");
+
+          // Keep the last incomplete line in the buffer
+          buffer = lines.pop() || "";
 
           for (const line of lines) {
-            if (line.startsWith("data: ")) {
-              try {
-                const data = JSON.parse(line.slice(6));
-                if (data.type === "chunk") {
-                  botMessage += data.content;
-                  setMessages(prev => {
-                    const updated = [...prev];
-                    updated[updated.length - 1] = { role: 'bot', text: botMessage };
-                    return updated;
-                  });
+            const trimmed = line.trim();
+            if (!trimmed || !trimmed.startsWith("data: ")) continue;
+
+            try {
+              const data = JSON.parse(trimmed.slice(6));
+              if (data.type === "chunk") {
+                // First chunk received - turn off loading indicator
+                if (!hasStartedStreaming) {
+                  hasStartedStreaming = true;
+                  setIsLoading(false);
+                  if (timeoutRef.current) {
+                    clearTimeout(timeoutRef.current);
+                    timeoutRef.current = null;
+                  }
                 }
-              } catch {
-                // Ignore parse errors
+                botMessage += data.content;
+                setMessages(prev => {
+                  const updated = [...prev];
+                  updated[updated.length - 1] = { role: 'bot', text: botMessage };
+                  return updated;
+                });
+              } else if (data.type === "done") {
+                setIsLoading(false);
+                if (timeoutRef.current) {
+                  clearTimeout(timeoutRef.current);
+                  timeoutRef.current = null;
+                }
+              } else if (data.type === "error") {
+                setIsLoading(false);
+                if (timeoutRef.current) {
+                  clearTimeout(timeoutRef.current);
+                  timeoutRef.current = null;
+                }
+                setMessages(prev => {
+                  const updated = [...prev];
+                  updated[updated.length - 1] = { role: 'bot', text: data.message || "Sorry, I encountered an error. Please try again." };
+                  return updated;
+                });
               }
+            } catch (parseError) {
+              // Log parse errors for debugging
+              console.warn("Failed to parse SSE message:", line, parseError);
             }
           }
         }
       }
+
+      // If stream ended but no content was received
+      // Only show error if BOTH stream never started AND message is empty
+      if (!hasStartedStreaming && botMessage.length === 0) {
+        console.warn("Support bot: Stream completed but no content received");
+        setIsLoading(false);
+        if (timeoutRef.current) {
+          clearTimeout(timeoutRef.current);
+          timeoutRef.current = null;
+        }
+        setMessages(prev => {
+          const updated = [...prev];
+          updated[updated.length - 1] = { role: 'bot', text: "Sorry, I didn't receive a response. Please try again." };
+          return updated;
+        });
+      }
     } catch (error) {
       console.error("Chat error:", error);
-      setMessages(prev => [...prev, { role: 'bot', text: "Sorry, I encountered an error. Please try again." }]);
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+        timeoutRef.current = null;
+      }
       setIsLoading(false);
+      setMessages(prev => {
+        // Check if we already added an empty bot message
+        const lastMsg = prev[prev.length - 1];
+        if (lastMsg && lastMsg.role === 'bot' && !lastMsg.text) {
+          // Update the existing empty message
+          const updated = [...prev];
+          updated[updated.length - 1] = { role: 'bot', text: "Sorry, I encountered an error. Please try again." };
+          return updated;
+        } else {
+          // Add a new error message
+          return [...prev, { role: 'bot', text: "Sorry, I encountered an error. Please try again." }];
+        }
+      });
     }
   };
 
