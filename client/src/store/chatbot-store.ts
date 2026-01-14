@@ -197,6 +197,18 @@ interface ChatbotStore {
   fetchChatbotComparison: () => Promise<ChatbotComparisonItem[] | null>;
   fetchWidgetAnalytics: (chatbotId: string, days?: number) => Promise<WidgetAnalyticsSummary | null>;
   exportAnalytics: (chatbotId: string, options?: AnalyticsExportOptions) => Promise<boolean>;
+
+  // Performance: Consolidated dashboard data
+  fetchDashboardOverview: (days?: number) => Promise<DashboardOverview | null>;
+}
+
+export interface DashboardOverview {
+  stats: ChatbotStats;
+  chatbots: Chatbot[];
+  messageVolume: MessageVolumePoint[];
+  chatbotComparison: ChatbotComparisonItem[];
+  sentiment: SentimentBreakdown | null;
+  satisfaction: SatisfactionMetrics | null;
 }
 
 // Helper function to get auth headers from Clerk token and CSRF token
@@ -709,5 +721,35 @@ export const useChatbotStore = create<ChatbotStore>((set, get) => ({
       set({ isExporting: false, error: 'Network error. Please try again.' });
     }
     return false;
+  },
+
+  // Performance: Fetch consolidated dashboard data in single request
+  fetchDashboardOverview: async (days: number = 7) => {
+    try {
+      const headers = await getAuthHeaders(get()._getToken);
+      const response = await fetch(`/api/dashboard/overview?days=${days}`, {
+        headers,
+      });
+
+      if (response.ok) {
+        const data: DashboardOverview = await response.json();
+
+        // Update store with all the data
+        set({
+          stats: data.stats,
+          chatbots: data.chatbots,
+          messageVolume: data.messageVolume,
+          chatbotComparison: data.chatbotComparison,
+        });
+
+        return data;
+      } else {
+        console.error('Failed to fetch dashboard overview');
+        return null;
+      }
+    } catch (error) {
+      console.error('Failed to fetch dashboard overview:', error);
+      return null;
+    }
   },
 }));

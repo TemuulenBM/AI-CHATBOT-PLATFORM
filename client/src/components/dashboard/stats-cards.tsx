@@ -1,3 +1,4 @@
+import { memo } from "react";
 import { GlassCard } from "@/components/ui/glass-card";
 import { MessageSquare, Bot, Zap, Users, Clock } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -15,7 +16,7 @@ interface StatsCardsProps {
   isLoading?: boolean;
 }
 
-export function StatsCards({ stats, isLoading = false }: StatsCardsProps) {
+export const StatsCards = memo(function StatsCards({ stats, isLoading = false }: StatsCardsProps) {
   const formatNumber = (num: number): string => {
     if (num >= 1000000) {
       return (num / 1000000).toFixed(1) + 'M';
@@ -81,4 +82,4 @@ export function StatsCards({ stats, isLoading = false }: StatsCardsProps) {
       ))}
     </div>
   );
-}
+});

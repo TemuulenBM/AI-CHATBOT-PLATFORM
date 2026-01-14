@@ -8,6 +8,7 @@ import subscriptionRoutes from "./routes/subscriptions";
 import widgetRoutes from "./routes/widget";
 import widgetAnalyticsRoutes from "./routes/widget-analytics";
 import gdprRoutes from "./routes/gdpr";
+import dashboardRoutes from "./routes/dashboard";
 // import adminRoutes from "./routes/admin"; // Phase 1.1 - Not implemented yet
 import * as feedbackController from "./controllers/feedback";
 import * as chatbotsController from "./controllers/chatbots";
@@ -454,6 +455,7 @@ export async function registerRoutes(
   app.use("/api", validateCsrfToken);
 
   // API Routes
+  app.use("/api/dashboard", dashboardRoutes);
   app.use("/api/chatbots", chatbotRoutes);
   app.use("/api/chat", chatRoutes);
   app.use("/api/subscriptions", subscriptionRoutes);

@@ -1,14 +1,12 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo, lazy, Suspense } from "react";
 import { Sidebar } from "@/components/dashboard/sidebar";
 import { StatsCards } from "@/components/dashboard/stats-cards";
 import { GlassCard } from "@/components/ui/glass-card";
-import { AreaChart, Area, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { useAuth, useUser } from "@clerk/clerk-react";
 import { useChatbotStore, ChatbotComparisonItem } from "@/store/chatbot-store";
 import { useUserPreferencesStore } from "@/store/user-preferences-store";
 import { useLocation } from "wouter";
 import { Bot, Loader2, TrendingUp, ThumbsUp, ThumbsDown, Smile, BarChart3, ExternalLink, Clock, HelpCircle } from "lucide-react";
-import { PieChart, Pie, Cell } from "recharts";
 import { Button } from "@/components/ui/button";
 import { Link } from "wouter";
 import {
@@ -19,7 +17,6 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { OnboardingModal } from "@/components/onboarding/onboarding-modal";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -27,19 +24,37 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 
+// Lazy load OnboardingModal (heavy component, not needed initially)
+const OnboardingModal = lazy(() =>
+  import("@/components/onboarding/onboarding-modal").then(mod => ({
+    default: mod.OnboardingModal
+  }))
+);
+
+// Lazy load Chart components (Recharts library ~100KB+, load only when needed)
+const MessageVolumeChart = lazy(() =>
+  import("@/components/dashboard/charts").then(mod => ({
+    default: mod.MessageVolumeChart
+  }))
+);
+
+const SentimentPieChart = lazy(() =>
+  import("@/components/dashboard/charts").then(mod => ({
+    default: mod.SentimentPieChart
+  }))
+);
+
 export default function Dashboard() {
   const { isSignedIn, isLoaded, getToken } = useAuth();
   const { user } = useUser();
   const {
     stats,
-    fetchStats,
     chatbots,
-    fetchChatbots,
     messageVolume,
     fetchMessageVolume,
-    fetchChatbotComparison,
     chatbotComparison,
     setGetToken,
+    fetchDashboardOverview,
   } = useChatbotStore();
   const {
     shouldShowOnboarding,
@@ -72,8 +87,7 @@ export default function Dashboard() {
     setOnboardingCompleted();
     setShowOnboarding(false);
     // Refresh data after onboarding
-    fetchChatbots();
-    fetchStats();
+    fetchDashboardOverview(selectedDays);
   };
 
   useEffect(() => {
@@ -85,23 +99,14 @@ export default function Dashboard() {
     if (isSignedIn) {
       const loadData = async () => {
         setIsLoading(true);
-        await Promise.all([
-          fetchStats(), 
-          fetchChatbots(), 
-          fetchMessageVolume(selectedDays),
-          fetchChatbotComparison(),
-        ]);
 
-        // Fetch analytics for the first active chatbot if available
-        const activeBot = chatbots.find(b => b.status === "ready");
-        if (activeBot) {
-          const { fetchSentimentBreakdown, fetchSatisfactionMetrics } = useChatbotStore.getState();
-          const [sentiment, satisfaction] = await Promise.all([
-            fetchSentimentBreakdown(activeBot.id),
-            fetchSatisfactionMetrics(activeBot.id)
-          ]);
-          setSentimentData(sentiment);
-          setSatisfactionData(satisfaction);
+        // Fetch all dashboard data in single consolidated API call
+        const data = await fetchDashboardOverview(selectedDays);
+
+        if (data) {
+          // Set sentiment and satisfaction data from response
+          setSentimentData(data.sentiment);
+          setSatisfactionData(data.satisfaction);
         }
 
         setIsLoading(false);
@@ -111,8 +116,8 @@ export default function Dashboard() {
     }
   }, [isLoaded, isSignedIn, selectedDays]);
 
-  // Format date for chart display
-  const formatChartData = () => {
+  // Format date for chart display - memoized for performance
+  const chartData = useMemo(() => {
     return messageVolume.map((point) => {
       const date = new Date(point.date);
       const dayName = date.toLocaleDateString('en-US', { weekday: 'short' });
@@ -122,9 +127,7 @@ export default function Dashboard() {
         messages: point.messages,
       };
     });
-  };
-
-  const chartData = formatChartData();
+  }, [messageVolume]);
 
   // Get recent chatbots for activity
   const recentChatbots = chatbots.slice(0, 5);
@@ -180,17 +183,19 @@ export default function Dashboard() {
             </DropdownMenu>
           </header>
 
-          {/* Onboarding Modal */}
-          <OnboardingModal
-            open={showOnboarding}
-            onOpenChange={(open) => {
-              setShowOnboarding(open);
-              if (!open) {
-                setOnboardingSkipped();
-              }
-            }}
-            onComplete={handleOnboardingComplete}
-          />
+          {/* Onboarding Modal - Lazy loaded */}
+          <Suspense fallback={null}>
+            <OnboardingModal
+              open={showOnboarding}
+              onOpenChange={(open) => {
+                setShowOnboarding(open);
+                if (!open) {
+                  setOnboardingSkipped();
+                }
+              }}
+              onComplete={handleOnboardingComplete}
+            />
+          </Suspense>
 
           <StatsCards stats={stats} isLoading={isLoading} />
 
@@ -241,33 +246,19 @@ export default function Dashboard() {
                     </p>
                   </div>
                 ) : (
-                  <ResponsiveContainer width="100%" height="100%">
-                    <AreaChart data={chartData}>
-                      <defs>
-                        <linearGradient id="colorMessages" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%" stopColor="#8B5CF6" stopOpacity={0.3} />
-                          <stop offset="95%" stopColor="#8B5CF6" stopOpacity={0} />
-                        </linearGradient>
-                      </defs>
-                      <XAxis dataKey="name" stroke="#525252" fontSize={12} tickLine={false} axisLine={false} />
-                      <YAxis stroke="#525252" fontSize={12} tickLine={false} axisLine={false} tickFormatter={(value) => `${value}`} />
-                      <Tooltip
-                        contentStyle={{ backgroundColor: '#1e293b', borderColor: '#334155', borderRadius: '8px' }}
-                        itemStyle={{ color: '#fff' }}
-                        labelFormatter={(label, payload) => {
-                          if (payload && payload[0]?.payload?.date) {
-                            return new Date(payload[0].payload.date).toLocaleDateString('en-US', {
-                              weekday: 'long',
-                              month: 'short',
-                              day: 'numeric'
-                            });
-                          }
-                          return label;
-                        }}
-                      />
-                      <Area type="monotone" dataKey="messages" stroke="#8B5CF6" strokeWidth={3} fillOpacity={1} fill="url(#colorMessages)" />
-                    </AreaChart>
-                  </ResponsiveContainer>
+                  <Suspense fallback={
+                    <div className="h-full flex items-end justify-between gap-2 px-4 animate-pulse">
+                      {Array.from({ length: 7 }).map((_, i) => (
+                        <div
+                          key={i}
+                          className="flex-1 bg-primary/10 rounded-t-md"
+                          style={{ height: `${30 + Math.random() * 60}%` }}
+                        />
+                      ))}
+                    </div>
+                  }>
+                    <MessageVolumeChart data={chartData} />
+                  </Suspense>
                 )}
               </div>
               {!isLoading && chartData.length > 0 && chartData.some(d => d.messages > 0) && (
@@ -439,31 +430,13 @@ export default function Dashboard() {
             ) : sentimentData && sentimentData.total > 0 ? (
               <div className="flex items-center justify-around">
                 <div className="h-[200px] w-[200px]">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <PieChart>
-                      <Pie
-                        data={[
-                          { name: 'Positive', value: sentimentData.positive },
-                          { name: 'Neutral', value: sentimentData.neutral },
-                          { name: 'Negative', value: sentimentData.negative },
-                        ]}
-                        cx="50%"
-                        cy="50%"
-                        innerRadius={60}
-                        outerRadius={80}
-                        paddingAngle={5}
-                        dataKey="value"
-                      >
-                        <Cell fill="#4ade80" />
-                        <Cell fill="#94a3b8" />
-                        <Cell fill="#f87171" />
-                      </Pie>
-                      <Tooltip
-                        contentStyle={{ backgroundColor: '#1e293b', borderColor: '#334155', borderRadius: '8px' }}
-                        itemStyle={{ color: '#fff' }}
-                      />
-                    </PieChart>
-                  </ResponsiveContainer>
+                  <Suspense fallback={
+                    <div className="w-full h-full flex items-center justify-center">
+                      <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                    </div>
+                  }>
+                    <SentimentPieChart data={sentimentData} />
+                  </Suspense>
                 </div>
                 <div className="space-y-4">
                   <div className="flex items-center gap-2">
