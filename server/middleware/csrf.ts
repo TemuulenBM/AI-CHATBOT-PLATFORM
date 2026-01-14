@@ -97,6 +97,22 @@ export function validateCsrfToken(req: Request, res: Response, next: NextFunctio
     return;
   }
 
+  // Skip CSRF validation for GDPR consent endpoint (public endpoint for anonymous users)
+  // Check both /consent (from router) and /api/gdpr/consent (full path)
+  const isGdprConsent = 
+    req.path === "/consent" || 
+    req.path === "/gdpr/consent" ||
+    req.path.startsWith("/consent/") ||
+    req.path.startsWith("/gdpr/consent/") ||
+    fullPath.includes("/gdpr/consent") ||
+    fullPath === "/api/gdpr/consent";
+  
+  if (isGdprConsent) {
+    logger.debug("Skipping CSRF validation for GDPR consent endpoint", { path: req.path, fullPath, originalUrl: req.originalUrl, url: req.url });
+    next();
+    return;
+  }
+
   // Get token from cookie
   const cookieToken = req.cookies?.[CSRF_COOKIE_NAME];
 

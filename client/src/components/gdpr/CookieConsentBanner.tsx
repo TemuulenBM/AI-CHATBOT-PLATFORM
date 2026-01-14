@@ -16,6 +16,8 @@ import { Button } from '../ui/button';
 import { Card } from '../ui/card';
 import { Checkbox } from '../ui/checkbox';
 import { X } from 'lucide-react';
+import { getCsrfHeaders } from '../../hooks/use-csrf';
+import { useToast } from '@/hooks/use-toast';
 
 interface ConsentPreferences {
   essential: boolean;
@@ -24,6 +26,7 @@ interface ConsentPreferences {
 }
 
 export const CookieConsentBanner: React.FC = () => {
+  const { toast } = useToast();
   const [isVisible, setIsVisible] = useState(false);
   const [showDetails, setShowDetails] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -120,6 +123,7 @@ export const CookieConsentBanner: React.FC = () => {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          ...getCsrfHeaders(),
         },
         body: JSON.stringify({
           ...prefs,
@@ -128,7 +132,18 @@ export const CookieConsentBanner: React.FC = () => {
       });
 
       if (!response.ok) {
-        throw new Error('Failed to save consent');
+        let errorMessage = 'Failed to save consent preferences';
+        try {
+          const errorData = await response.json();
+          errorMessage = errorData.error || errorData.message || errorMessage;
+          if (errorData.details) {
+            errorMessage += `: ${Array.isArray(errorData.details) ? errorData.details.join(', ') : errorData.details}`;
+          }
+        } catch (parseError) {
+          // If response is not JSON, use default message
+          errorMessage = `Failed to save consent preferences (${response.status} ${response.statusText})`;
+        }
+        throw new Error(errorMessage);
       }
 
       const data = await response.json();
@@ -139,11 +154,23 @@ export const CookieConsentBanner: React.FC = () => {
       // Apply consent preferences
       applyConsentPreferences(prefs);
 
+      // Show success toast
+      toast({
+        title: 'Preferences saved',
+        description: 'Your cookie preferences have been saved successfully.',
+        variant: 'default',
+      });
+
       // Hide banner
       setIsVisible(false);
     } catch (error) {
       console.error('Error saving consent:', error);
-      alert('Failed to save consent preferences. Please try again.');
+      const errorMessage = error instanceof Error ? error.message : 'Failed to save consent preferences. Please try again.';
+      toast({
+        title: 'Error',
+        description: errorMessage,
+        variant: 'destructive',
+      });
     } finally {
       setIsLoading(false);
     }

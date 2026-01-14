@@ -30,27 +30,53 @@ const withdrawSchema = z.object({
 export const recordConsent = async (req: AuthenticatedRequest, res: Response) => {
   try {
     const userId = req.user?.userId;
-    const { essential, analytics, marketing, anonymousId } = consentSchema.parse(req.body);
+    
+    // Validate request body
+    let parsedBody;
+    try {
+      parsedBody = consentSchema.parse(req.body);
+    } catch (validationError) {
+      if (validationError instanceof z.ZodError) {
+        logger.warn('Invalid consent request', { errors: validationError.errors });
+        return res.status(400).json({ 
+          error: 'Invalid request data',
+          details: validationError.errors.map(e => `${e.path.join('.')}: ${e.message}`)
+        });
+      }
+      throw validationError;
+    }
+
+    const { essential, analytics, marketing, anonymousId } = parsedBody;
 
     const ipAddress = req.ip || req.socket.remoteAddress;
     const userAgent = req.get('user-agent');
 
     // Get active privacy policy version
-    const { data: policyData } = await supabaseAdmin
+    const { data: policyData, error: policyError } = await supabaseAdmin
       .from('privacy_policy_versions')
       .select('version')
       .eq('is_active', true)
       .single();
 
+    if (policyError && policyError.code !== 'PGRST116') {
+      logger.error('Failed to get privacy policy version', { error: policyError });
+      return res.status(500).json({ error: 'Failed to retrieve privacy policy version' });
+    }
+
     const currentVersion = policyData?.version || '1.0.0';
 
     // If user is authenticated, withdraw any previous consents
     if (userId) {
-      await supabaseAdmin
+      const { error: withdrawError } = await supabaseAdmin
         .from('user_consents')
         .update({ withdrawn_at: new Date().toISOString() })
         .eq('user_id', userId)
         .is('withdrawn_at', null);
+
+      if (withdrawError) {
+        logger.error('Failed to withdraw previous consents', { error: withdrawError, userId });
+        // Continue anyway - this is not critical
+      }
     }
 
     // Record new consents
@@ -60,8 +86,9 @@ export const recordConsent = async (req: AuthenticatedRequest, res: Response) =>
       { type: 'marketing', granted: marketing },
     ];
 
+    const insertErrors: any[] = [];
     for (const consent of consents) {
-      await supabaseAdmin.from('user_consents').insert({
+      const { error: insertError } = await supabaseAdmin.from('user_consents').insert({
         user_id: userId || null,
         anonymous_id: !userId ? anonymousId : null,
         consent_type: consent.type,
@@ -71,6 +98,18 @@ export const recordConsent = async (req: AuthenticatedRequest, res: Response) =>
         consent_version: currentVersion,
         granted_at: new Date().toISOString(),
       });
+
+      if (insertError) {
+        insertErrors.push({ type: consent.type, error: insertError });
+      }
+    }
+
+    if (insertErrors.length > 0) {
+      logger.error('Failed to insert some consents', { errors: insertErrors, userId, anonymousId });
+      return res.status(500).json({ 
+        error: 'Failed to save consent preferences',
+        details: 'Some consent records could not be saved'
+      });
     }
 
     logger.info('Consent recorded', { userId, anonymousId, consents });
@@ -79,10 +118,18 @@ export const recordConsent = async (req: AuthenticatedRequest, res: Response) =>
       success: true,
       message: 'Consent preferences recorded',
       version: currentVersion,
+      consents: {
+        essential,
+        analytics,
+        marketing,
+      },
     });
   } catch (error) {
-    logger.error('Failed to record consent', { error });
-    res.status(500).json({ error: 'Failed to record consent' });
+    logger.error('Failed to record consent', { error, stack: error instanceof Error ? error.stack : undefined });
+    res.status(500).json({ 
+      error: 'Failed to record consent',
+      message: error instanceof Error ? error.message : 'Unknown error'
+    });
   }
 };
 
@@ -121,12 +168,18 @@ export const getConsentStatus = async (req: AuthenticatedRequest, res: Response)
       }
     });
 
+    const consentData = {
+      essential: latestConsents.essential?.granted ?? true,
+      analytics: latestConsents.analytics?.granted ?? false,
+      marketing: latestConsents.marketing?.granted ?? false,
+    };
+
+    // Check if user has any consent (hasConsent = true if at least essential is granted)
+    const hasConsent = consents && consents.length > 0 && latestConsents.essential?.granted !== false;
+
     res.json({
-      consents: {
-        essential: latestConsents.essential?.granted ?? true,
-        analytics: latestConsents.analytics?.granted ?? false,
-        marketing: latestConsents.marketing?.granted ?? false,
-      },
+      hasConsent,
+      consents: consentData,
       version: latestConsents.essential?.consent_version || '1.0.0',
     });
   } catch (error) {
