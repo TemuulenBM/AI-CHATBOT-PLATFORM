@@ -36,6 +36,12 @@ const DEFAULT_OPTIONS: ChatOptions = {
   maxTokens: 1000,
 };
 
+// Input/Context limits for cost optimization and reliability
+const MAX_CONTEXT_CHUNKS = 3;       // Reduced from 5 to 3 chunks
+const MAX_HISTORY_MESSAGES = 20;    // Keep last 20 messages only
+const MAX_CONTEXT_LENGTH = 4000;    // Max characters for context (~1000 tokens)
+const MAX_TOTAL_INPUT_TOKENS = 10000; // Soft limit for total input (conservative estimate)
+
 /**
  * Check if a model requires max_completion_tokens instead of max_tokens
  * GPT-5 series and o1 models use max_completion_tokens
@@ -82,15 +88,32 @@ export class AIService {
       }
 
       // Step 2: Fall back to scraped content embeddings
-      const similar = await embeddingService.findSimilar(chatbotId, message, 5, 0.6);
+      // Use MAX_CONTEXT_CHUNKS instead of hardcoded 5
+      const similar = await embeddingService.findSimilar(
+        chatbotId,
+        message,
+        MAX_CONTEXT_CHUNKS, // 3 chunks instead of 5
+        0.6
+      );
 
       if (similar.length === 0) {
         return { relevantContent: "", sources: [] };
       }
 
-      const relevantContent = similar
+      // Build context from chunks
+      let relevantContent = similar
         .map((s, i) => `[${i + 1}] ${s.content}`)
         .join("\n\n");
+
+      // Apply character limit to prevent token overflow
+      if (relevantContent.length > MAX_CONTEXT_LENGTH) {
+        relevantContent = relevantContent.substring(0, MAX_CONTEXT_LENGTH) + "\n[...truncated for length]";
+        logger.debug("Context truncated due to length limit", {
+          chatbotId,
+          originalLength: relevantContent.length,
+          truncatedTo: MAX_CONTEXT_LENGTH,
+        });
+      }
 
       const sources = Array.from(new Set(similar.map((s) => s.pageUrl)));
 
@@ -100,6 +123,57 @@ export class AIService {
       logger.warn("Failed to build context, using fallback mode", { chatbotId, error });
       return { relevantContent: "", sources: [] };
     }
+  }
+
+  /**
+   * Check if error is related to context length/token limit
+   */
+  private isContextLengthError(error: any): boolean {
+    if (!error) return false;
+
+    const errorMessage = error.message?.toLowerCase() || "";
+    const errorCode = error.code?.toLowerCase() || "";
+
+    // OpenAI context length errors
+    if (
+      errorMessage.includes("context_length_exceeded") ||
+      errorMessage.includes("maximum context length") ||
+      errorMessage.includes("token limit") ||
+      errorCode === "context_length_exceeded"
+    ) {
+      return true;
+    }
+
+    // Anthropic context length errors
+    if (
+      errorMessage.includes("prompt is too long") ||
+      errorMessage.includes("maximum context") ||
+      errorCode === "invalid_request_error"
+    ) {
+      return true;
+    }
+
+    return false;
+  }
+
+  /**
+   * Limit conversation history to prevent context window overflow
+   * Keeps the most recent messages up to MAX_HISTORY_MESSAGES
+   */
+  private limitHistory(history: ConversationMessage[]): ConversationMessage[] {
+    if (history.length <= MAX_HISTORY_MESSAGES) {
+      return history;
+    }
+
+    const limitedHistory = history.slice(-MAX_HISTORY_MESSAGES);
+
+    logger.debug("Conversation history truncated", {
+      originalCount: history.length,
+      truncatedTo: MAX_HISTORY_MESSAGES,
+      removedCount: history.length - MAX_HISTORY_MESSAGES,
+    });
+
+    return limitedHistory;
   }
 
   /**
@@ -170,6 +244,10 @@ Helpful, concise responses acknowledging knowledge limitations when appropriate.
     options: ChatOptions = {}
   ): Promise<string> {
     const opts = { ...DEFAULT_OPTIONS, ...options };
+
+    // Limit history to prevent context overflow
+    const limitedHistory = this.limitHistory(history);
+
     const systemPrompt = this.buildSystemPrompt(
       websiteName,
       settings,
@@ -180,7 +258,7 @@ Helpful, concise responses acknowledging knowledge limitations when appropriate.
       if (opts.provider === "anthropic") {
         return this.getAnthropicResponse(
           message,
-          history,
+          limitedHistory,
           systemPrompt,
           opts
         );
@@ -188,11 +266,35 @@ Helpful, concise responses acknowledging knowledge limitations when appropriate.
 
       return this.getOpenAIResponse(
         message,
-        history,
+        limitedHistory,
         systemPrompt,
         opts
       );
     } catch (error) {
+      // Add specific handling for context length errors
+      if (this.isContextLengthError(error)) {
+        logger.error("Context length exceeded, retrying with reduced context", {
+          provider: opts.provider,
+          error,
+        });
+
+        // Fallback: try again with empty context
+        const fallbackPrompt = this.buildSystemPrompt(websiteName, settings, "");
+
+        try {
+          if (opts.provider === "anthropic") {
+            return this.getAnthropicResponse(message, [], fallbackPrompt, opts);
+          }
+          return this.getOpenAIResponse(message, [], fallbackPrompt, opts);
+        } catch (fallbackError) {
+          logger.error("Fallback also failed", { error: fallbackError });
+          throw new ExternalServiceError(
+            opts.provider || "AI",
+            "Failed to generate response even with reduced context"
+          );
+        }
+      }
+
       logger.error("AI response error", { error, provider: opts.provider });
       throw new ExternalServiceError(
         opts.provider || "AI",
@@ -276,6 +378,10 @@ Helpful, concise responses acknowledging knowledge limitations when appropriate.
     options: ChatOptions = {}
   ): AsyncGenerator<string> {
     const opts = { ...DEFAULT_OPTIONS, ...options };
+
+    // Limit history to prevent context overflow
+    const limitedHistory = this.limitHistory(history);
+
     const systemPrompt = this.buildSystemPrompt(
       websiteName,
       settings,
@@ -284,9 +390,9 @@ Helpful, concise responses acknowledging knowledge limitations when appropriate.
 
     try {
       if (opts.provider === "anthropic") {
-        yield* this.streamAnthropicResponse(message, history, systemPrompt, opts);
+        yield* this.streamAnthropicResponse(message, limitedHistory, systemPrompt, opts);
       } else {
-        yield* this.streamOpenAIResponse(message, history, systemPrompt, opts);
+        yield* this.streamOpenAIResponse(message, limitedHistory, systemPrompt, opts);
       }
     } catch (error) {
       logger.error("AI streaming error", { error, provider: opts.provider });
