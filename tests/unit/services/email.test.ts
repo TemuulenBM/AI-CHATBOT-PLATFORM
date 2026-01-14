@@ -393,5 +393,226 @@ describe("Email Service", () => {
       expect(html).toContain("50% Used");
     });
   });
+
+  describe("sendAccountDeletionCompleted", () => {
+    it("should send account deletion completed email", async () => {
+      process.env.RESEND_API_KEY = "test-key";
+
+      getMockSend().mockResolvedValue({
+        data: { id: "email-123" },
+        error: null,
+      });
+
+      await EmailService.sendAccountDeletionCompleted("test@example.com");
+
+      expect(getMockSend()).toHaveBeenCalledWith(
+        expect.objectContaining({
+          to: ["test@example.com"],
+          subject: "Account Deletion Completed - ConvoAI",
+        })
+      );
+      const html = getMockSend().mock.calls[0][0].html;
+      expect(html).toContain("Account Deletion Completed");
+      expect(html).toContain("permanently deleted");
+      expect(html).toContain("GDPR Right to Erasure");
+    });
+  });
+
+  describe("sendSubscriptionCanceled", () => {
+    it("should send subscription canceled email", async () => {
+      process.env.RESEND_API_KEY = "test-key";
+      process.env.APP_URL = "https://app.example.com";
+
+      getMockSend().mockResolvedValue({
+        data: { id: "email-123" },
+        error: null,
+      });
+
+      const cancelDate = new Date("2024-12-31");
+      await EmailService.sendSubscriptionCanceled("test@example.com", "Starter", cancelDate);
+
+      expect(getMockSend()).toHaveBeenCalledWith(
+        expect.objectContaining({
+          to: ["test@example.com"],
+          subject: "Subscription Canceled - Starter",
+        })
+      );
+      const html = getMockSend().mock.calls[0][0].html;
+      expect(html).toContain("Starter");
+      expect(html).toContain("canceled");
+      expect(html).toContain("Free plan");
+    });
+  });
+
+  describe("sendSubscriptionPastDue", () => {
+    it("should send subscription past due email", async () => {
+      process.env.RESEND_API_KEY = "test-key";
+      process.env.APP_URL = "https://app.example.com";
+
+      getMockSend().mockResolvedValue({
+        data: { id: "email-123" },
+        error: null,
+      });
+
+      const dueDate = new Date("2024-12-31");
+      await EmailService.sendSubscriptionPastDue("test@example.com", "Growth", dueDate);
+
+      expect(getMockSend()).toHaveBeenCalledWith(
+        expect.objectContaining({
+          to: ["test@example.com"],
+          subject: "Payment Past Due - Action Required",
+        })
+      );
+      const html = getMockSend().mock.calls[0][0].html;
+      expect(html).toContain("Growth");
+      expect(html).toContain("past due");
+      expect(html).toContain("Action Required");
+    });
+  });
+
+  describe("sendPaymentFailed", () => {
+    it("should send payment failed email without retry date", async () => {
+      process.env.RESEND_API_KEY = "test-key";
+      process.env.APP_URL = "https://app.example.com";
+
+      getMockSend().mockResolvedValue({
+        data: { id: "email-123" },
+        error: null,
+      });
+
+      await EmailService.sendPaymentFailed("test@example.com", "Business", "$99.00");
+
+      expect(getMockSend()).toHaveBeenCalledWith(
+        expect.objectContaining({
+          to: ["test@example.com"],
+          subject: "Payment Failed - Business",
+        })
+      );
+      const html = getMockSend().mock.calls[0][0].html;
+      expect(html).toContain("Business");
+      expect(html).toContain("$99.00");
+      expect(html).toContain("Payment Failed");
+    });
+
+    it("should send payment failed email with retry date", async () => {
+      process.env.RESEND_API_KEY = "test-key";
+      process.env.APP_URL = "https://app.example.com";
+
+      getMockSend().mockResolvedValue({
+        data: { id: "email-123" },
+        error: null,
+      });
+
+      const retryDate = new Date("2024-12-31");
+      await EmailService.sendPaymentFailed("test@example.com", "Business", "$99.00", retryDate);
+
+      const html = getMockSend().mock.calls[0][0].html;
+      expect(html).toContain("Next Retry");
+    });
+  });
+
+  describe("sendAdminAlert", () => {
+    it("should send admin alert email to single recipient", async () => {
+      process.env.RESEND_API_KEY = "test-key";
+      process.env.EMAIL_FROM_ALERTS = "alerts@example.com";
+
+      getMockSend().mockResolvedValue({
+        data: { id: "email-123" },
+        error: null,
+      });
+
+      await EmailService.sendAdminAlert(
+        "admin@example.com",
+        "Database Error",
+        "Connection failed",
+        { error: "Connection timeout" }
+      );
+
+      expect(getMockSend()).toHaveBeenCalledWith(
+        expect.objectContaining({
+          to: ["admin@example.com"],
+          subject: "[CRITICAL] Database Error - Connection failed",
+          from: "alerts@example.com",
+        })
+      );
+      const html = getMockSend().mock.calls[0][0].html;
+      expect(html).toContain("Database Error");
+      expect(html).toContain("Connection failed");
+      expect(html).toContain("Connection timeout");
+    });
+
+    it("should send admin alert email to multiple recipients", async () => {
+      process.env.RESEND_API_KEY = "test-key";
+
+      getMockSend().mockResolvedValue({
+        data: { id: "email-123" },
+        error: null,
+      });
+
+      await EmailService.sendAdminAlert(
+        ["admin1@example.com", "admin2@example.com"],
+        "Redis Error",
+        "Quota exceeded"
+      );
+
+      expect(getMockSend()).toHaveBeenCalledWith(
+        expect.objectContaining({
+          to: ["admin1@example.com", "admin2@example.com"],
+          subject: "[CRITICAL] Redis Error - Quota exceeded",
+        })
+      );
+    });
+
+    it("should send admin alert without details", async () => {
+      process.env.RESEND_API_KEY = "test-key";
+
+      getMockSend().mockResolvedValue({
+        data: { id: "email-123" },
+        error: null,
+      });
+
+      await EmailService.sendAdminAlert("admin@example.com", "System Alert", "Service down");
+
+      const html = getMockSend().mock.calls[0][0].html;
+      expect(html).not.toContain("Details:");
+    });
+  });
+
+  describe("sendRedisQuotaExceeded", () => {
+    it("should send Redis quota exceeded alert", async () => {
+      process.env.RESEND_API_KEY = "test-key";
+
+      getMockSend().mockResolvedValue({
+        data: { id: "email-123" },
+        error: null,
+      });
+
+      await EmailService.sendRedisQuotaExceeded("admin@example.com");
+
+      expect(getMockSend()).toHaveBeenCalledWith(
+        expect.objectContaining({
+          to: ["admin@example.com"],
+          subject: expect.stringContaining("Redis Quota Exceeded"),
+        })
+      );
+    });
+
+    it("should send Redis quota exceeded alert to multiple recipients", async () => {
+      process.env.RESEND_API_KEY = "test-key";
+
+      getMockSend().mockResolvedValue({
+        data: { id: "email-123" },
+        error: null,
+      });
+
+      await EmailService.sendRedisQuotaExceeded(["admin1@example.com", "admin2@example.com"]);
+
+      expect(getMockSend()).toHaveBeenCalledWith(
+        expect.objectContaining({
+          to: ["admin1@example.com", "admin2@example.com"],
+        })
+      );
+    });
+  });
 });
 

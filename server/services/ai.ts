@@ -256,7 +256,7 @@ Helpful, concise responses acknowledging knowledge limitations when appropriate.
 
     try {
       if (opts.provider === "anthropic") {
-        return this.getAnthropicResponse(
+        return await this.getAnthropicResponse(
           message,
           limitedHistory,
           systemPrompt,
@@ -264,7 +264,7 @@ Helpful, concise responses acknowledging knowledge limitations when appropriate.
         );
       }
 
-      return this.getOpenAIResponse(
+      return await this.getOpenAIResponse(
         message,
         limitedHistory,
         systemPrompt,
@@ -283,9 +283,9 @@ Helpful, concise responses acknowledging knowledge limitations when appropriate.
 
         try {
           if (opts.provider === "anthropic") {
-            return this.getAnthropicResponse(message, [], fallbackPrompt, opts);
+            return await this.getAnthropicResponse(message, [], fallbackPrompt, opts);
           }
-          return this.getOpenAIResponse(message, [], fallbackPrompt, opts);
+          return await this.getOpenAIResponse(message, [], fallbackPrompt, opts);
         } catch (fallbackError) {
           logger.error("Fallback also failed", { error: fallbackError });
           throw new ExternalServiceError(

@@ -1448,6 +1448,7 @@ describe("Chatbots Controller", () => {
             id: "chatbot123",
             name: "Public Bot",
             status: "ready",
+            user_id: "user123",
             settings: {
               primaryColor: "#3B82F6",
               welcomeMessage: "Hello!",
@@ -1457,15 +1458,27 @@ describe("Chatbots Controller", () => {
         }),
       };
 
+      const subscriptionBuilder = {
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        single: vi.fn().mockResolvedValue({
+          data: { plan: "free" },
+          error: null,
+        }),
+      };
+
       const embeddingsBuilder = {
         select: vi.fn().mockReturnThis(),
         eq: vi.fn().mockResolvedValue({
           count: 100,
+          data: null,
+          error: null,
         }),
       };
 
       vi.mocked(supabaseAdmin.from)
         .mockReturnValueOnce(chatbotBuilder as any)
+        .mockReturnValueOnce(subscriptionBuilder as any)
         .mockReturnValueOnce(embeddingsBuilder as any);
 
       const req = createMockRequest({

@@ -6,6 +6,7 @@ import {
   withdrawConsent,
   getConsentHistory,
 } from "../../../server/controllers/gdpr/consent";
+import { AuthenticatedRequest } from "../../../server/middleware/clerkAuth";
 
 // Mock Supabase
 vi.mock("../../../server/utils/supabase", () => ({
@@ -17,7 +18,7 @@ vi.mock("../../../server/utils/supabase", () => ({
 import { supabaseAdmin } from "../../../server/utils/supabase";
 
 // Helper factories
-function createMockRequest(overrides: Partial<Request> = {}): Request {
+function createMockRequest(overrides: Partial<AuthenticatedRequest> = {}): AuthenticatedRequest {
   return {
     body: {},
     params: {},
@@ -29,7 +30,7 @@ function createMockRequest(overrides: Partial<Request> = {}): Request {
       return undefined;
     }),
     ...overrides,
-  } as unknown as Request;
+  } as unknown as AuthenticatedRequest;
 }
 
 function createMockResponse(): Response & { _json: any; _status: number } {
@@ -96,7 +97,7 @@ describe("GDPR Consent Controller", () => {
           analytics: true,
           marketing: false,
         },
-      } as any);
+      });
       const res = createMockResponse();
 
       await recordConsent(req, res);
@@ -106,6 +107,11 @@ describe("GDPR Consent Controller", () => {
         success: true,
         message: "Consent preferences recorded",
         version: "1.0.0",
+        consents: {
+          essential: true,
+          analytics: true,
+          marketing: false,
+        },
       });
       expect(insertBuilder.insert).toHaveBeenCalledTimes(3);
     });
@@ -189,7 +195,7 @@ describe("GDPR Consent Controller", () => {
       expect(res._json.version).toBe("1.0.0");
     });
 
-    it("should return 500 on validation error", async () => {
+    it("should return 400 on validation error", async () => {
       const req = createMockRequest({
         body: {
           essential: "invalid", // Should be boolean
@@ -201,8 +207,8 @@ describe("GDPR Consent Controller", () => {
 
       await recordConsent(req, res);
 
-      expect(res._status).toBe(500);
-      expect(res._json.error).toBe("Failed to record consent");
+      expect(res._status).toBe(400);
+      expect(res._json.error).toBe("Invalid request data");
     });
 
     it("should capture IP address and user agent", async () => {
@@ -290,6 +296,7 @@ describe("GDPR Consent Controller", () => {
 
       expect(res._status).toBe(200);
       expect(res._json).toEqual({
+        hasConsent: true,
         consents: {
           essential: true,
           analytics: false,
@@ -406,7 +413,7 @@ describe("GDPR Consent Controller", () => {
         body: {
           consentType: "analytics",
         },
-      } as any);
+      });
       const res = createMockResponse();
 
       await withdrawConsent(req, res);
@@ -438,7 +445,7 @@ describe("GDPR Consent Controller", () => {
         body: {
           consentType: "invalid",
         },
-      } as any);
+      });
       const res = createMockResponse();
 
       await withdrawConsent(req, res);
@@ -453,7 +460,7 @@ describe("GDPR Consent Controller", () => {
         body: {
           consentType: "essential",
         },
-      } as any);
+      });
       const res = createMockResponse();
 
       await withdrawConsent(req, res);
@@ -475,7 +482,7 @@ describe("GDPR Consent Controller", () => {
         body: {
           consentType: "marketing",
         },
-      } as any);
+      });
       const res = createMockResponse();
 
       await withdrawConsent(req, res);

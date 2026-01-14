@@ -812,3 +812,246 @@ describe("AI Service - Model Parameter Tests", () => {
     });
   });
 });
+
+describe("AI Service - Context and History Management", () => {
+  let aiService: AIService;
+
+  beforeEach(() => {
+    aiService = new AIService();
+    vi.clearAllMocks();
+    
+    // Set default successful responses
+    mockOpenAICreate.mockResolvedValue({
+      choices: [{ message: { content: "Mock response" } }],
+    });
+    
+    mockAnthropicCreate.mockResolvedValue({
+      content: [{ type: "text", text: "Mock Anthropic response" }],
+    });
+  });
+
+  describe("buildContext - context truncation", () => {
+    it("should truncate context when it exceeds MAX_CONTEXT_LENGTH", async () => {
+      const { embeddingService } = await import("../../../server/services/embedding");
+      const { knowledgeBaseService } = await import("../../../server/services/knowledge-base");
+      const logger = await import("../../../server/utils/logger");
+
+      // Mock knowledge base to return no matches (so it falls back to embeddings)
+      vi.mocked(knowledgeBaseService.searchKnowledgeBase).mockResolvedValue([]);
+
+      // Create content that exceeds MAX_CONTEXT_LENGTH (4000)
+      const longContent = "x".repeat(5000);
+      vi.mocked(embeddingService.findSimilar).mockResolvedValue([
+        { content: longContent, pageUrl: "https://example.com/page1", similarity: 0.7 },
+      ]);
+
+      const context = await aiService.buildContext("chatbot123", "question");
+
+      expect(context.relevantContent).toContain("[...truncated for length]");
+      expect(context.relevantContent.length).toBeLessThanOrEqual(4000 + 30); // MAX_CONTEXT_LENGTH (4000) + truncation message
+      expect(vi.mocked(logger.default.debug)).toHaveBeenCalledWith(
+        "Context truncated due to length limit",
+        expect.any(Object)
+      );
+    });
+  });
+
+  describe("getChatResponse - context length error handling", () => {
+    it("should retry with empty context when OpenAI context length error occurs", async () => {
+      const context = { relevantContent: "Very long context", sources: [] };
+      const settings = { personality: 50 } as any;
+
+      // Reset mocks for this test
+      mockOpenAICreate.mockReset();
+      
+      // First call fails with context length error
+      const contextLengthError = new Error("context_length_exceeded");
+      mockOpenAICreate.mockRejectedValueOnce(contextLengthError);
+
+      // Second call (fallback) succeeds
+      mockOpenAICreate.mockResolvedValueOnce({
+        choices: [{ message: { content: "Fallback response" } }],
+      });
+
+      const response = await aiService.getChatResponse(
+        "Hello",
+        context,
+        [],
+        settings,
+        "TestSite"
+      );
+
+      expect(response).toBe("Fallback response");
+      expect(mockOpenAICreate).toHaveBeenCalledTimes(2);
+    });
+
+    it("should retry with empty context when Anthropic context length error occurs", async () => {
+      const context = { relevantContent: "Very long context", sources: [] };
+      const settings = { personality: 50 } as any;
+
+      // Reset mocks for this test
+      mockAnthropicCreate.mockReset();
+
+      // First call fails with context length error
+      const contextLengthError = new Error("prompt is too long");
+      mockAnthropicCreate.mockRejectedValueOnce(contextLengthError);
+
+      // Second call (fallback) succeeds
+      mockAnthropicCreate.mockResolvedValueOnce({
+        content: [{ type: "text", text: "Fallback response" }],
+      });
+
+      const response = await aiService.getChatResponse(
+        "Hello",
+        context,
+        [],
+        settings,
+        "TestSite",
+        { provider: "anthropic" }
+      );
+
+      expect(response).toBe("Fallback response");
+      expect(mockAnthropicCreate).toHaveBeenCalledTimes(2);
+    });
+
+    it("should throw ExternalServiceError when fallback also fails", async () => {
+      const context = { relevantContent: "Very long context", sources: [] };
+      const settings = { personality: 50 } as any;
+
+      // Reset mocks for this test
+      mockOpenAICreate.mockReset();
+
+      // Both calls fail - first with context length error, second with any error
+      const contextLengthError = new Error("context_length_exceeded");
+      mockOpenAICreate
+        .mockRejectedValueOnce(contextLengthError) // First call fails
+        .mockRejectedValueOnce(new Error("Another error")); // Fallback also fails
+
+      await expect(
+        aiService.getChatResponse("Hello", context, [], settings, "TestSite")
+      ).rejects.toThrow(ExternalServiceError);
+
+      expect(mockOpenAICreate).toHaveBeenCalledTimes(2);
+    });
+
+    it("should detect OpenAI context length errors by message", async () => {
+      const context = { relevantContent: "", sources: [] };
+      const settings = { personality: 50 } as any;
+
+      const errors = [
+        new Error("maximum context length exceeded"),
+        new Error("token limit exceeded"),
+        (() => {
+          const err = new Error("context_length_exceeded");
+          (err as any).code = "context_length_exceeded";
+          return err;
+        })(),
+      ];
+
+      // Reset mocks for this test
+      mockOpenAICreate.mockReset();
+
+      for (const error of errors) {
+        mockOpenAICreate.mockRejectedValueOnce(error);
+        mockOpenAICreate.mockResolvedValueOnce({
+          choices: [{ message: { content: "Response" } }],
+        });
+
+        await aiService.getChatResponse("Hello", context, [], settings, "TestSite");
+      }
+
+      expect(mockOpenAICreate).toHaveBeenCalledTimes(6); // 3 errors + 3 fallbacks
+    });
+
+    it("should detect Anthropic context length errors", async () => {
+      const context = { relevantContent: "", sources: [] };
+      const settings = { personality: 50 } as any;
+
+      // Reset mocks for this test
+      mockAnthropicCreate.mockReset();
+
+      const errors = [
+        new Error("prompt is too long"),
+        new Error("maximum context exceeded"),
+        (() => {
+          const err = new Error("error");
+          (err as any).code = "invalid_request_error";
+          return err;
+        })(),
+      ];
+
+      for (const error of errors) {
+        mockAnthropicCreate.mockRejectedValueOnce(error);
+        mockAnthropicCreate.mockResolvedValueOnce({
+          content: [{ type: "text", text: "Response" }],
+        });
+
+        await aiService.getChatResponse("Hello", context, [], settings, "TestSite", {
+          provider: "anthropic",
+        });
+      }
+
+      expect(mockAnthropicCreate).toHaveBeenCalledTimes(6); // 3 errors + 3 fallbacks
+    });
+  });
+
+  describe("getChatResponse - history limiting", () => {
+    it("should limit history to MAX_HISTORY_MESSAGES", async () => {
+      const context = { relevantContent: "", sources: [] };
+      const settings = { personality: 50 } as any;
+
+      // Reset mocks for this test
+      mockOpenAICreate.mockReset();
+      mockOpenAICreate.mockResolvedValue({
+        choices: [{ message: { content: "Response" } }],
+      });
+
+      // Create history with more than MAX_HISTORY_MESSAGES (20)
+      const longHistory = Array.from({ length: 30 }, (_, i) => ({
+        role: i % 2 === 0 ? ("user" as const) : ("assistant" as const),
+        content: `Message ${i}`,
+        timestamp: new Date().toISOString(),
+      }));
+
+      const logger = await import("../../../server/utils/logger");
+
+      await aiService.getChatResponse("Hello", context, longHistory, settings, "TestSite");
+
+      const callArgs = mockOpenAICreate.mock.calls[0][0] as any;
+      // Should only have last 20 messages from history + system + user message
+      // Note: getOpenAIResponse uses history.slice(-10), so it only takes last 10
+      // But limitHistory limits to 20, so we should have at most 20 history messages
+      expect(callArgs.messages.length).toBeLessThanOrEqual(22); // system + up to 20 history + current
+      expect(vi.mocked(logger.default.debug)).toHaveBeenCalledWith(
+        "Conversation history truncated",
+        expect.objectContaining({
+          originalCount: 30,
+          truncatedTo: 20,
+        })
+      );
+    });
+
+    it("should not limit history when it's within MAX_HISTORY_MESSAGES", async () => {
+      const context = { relevantContent: "", sources: [] };
+      const settings = { personality: 50 } as any;
+
+      // Reset mocks for this test
+      mockOpenAICreate.mockReset();
+      mockOpenAICreate.mockResolvedValue({
+        choices: [{ message: { content: "Response" } }],
+      });
+
+      const shortHistory = Array.from({ length: 10 }, (_, i) => ({
+        role: i % 2 === 0 ? ("user" as const) : ("assistant" as const),
+        content: `Message ${i}`,
+        timestamp: new Date().toISOString(),
+      }));
+
+      await aiService.getChatResponse("Hello", context, shortHistory, settings, "TestSite");
+
+      const callArgs = mockOpenAICreate.mock.calls[0][0] as any;
+      // Should have all 10 messages + system + user message
+      expect(callArgs.messages.length).toBeGreaterThanOrEqual(12);
+    });
+  });
+});
