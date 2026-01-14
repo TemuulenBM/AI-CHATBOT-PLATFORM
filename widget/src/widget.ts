@@ -302,10 +302,12 @@ export class ConvoAIWidget {
         <!-- Feedback Container -->
         <div class="convoai-feedback-container"></div>
 
-        <!-- Powered By -->
-        <div class="convoai-powered-by">
-          ${t.poweredBy} <a href="__WIDGET_POWERED_BY_URL__" target="_blank" rel="noopener noreferrer">ChatAI</a>
-        </div>
+        <!-- Powered By (conditionally rendered based on showBranding setting) -->
+        ${this.config.showBranding !== false ? `
+          <div class="convoai-powered-by">
+            ${t.poweredBy} <a href="__WIDGET_POWERED_BY_URL__" target="_blank" rel="noopener noreferrer">ChatAI</a>
+          </div>
+        ` : ''}
       </div>
 
       <!-- Widget Button -->

@@ -118,6 +118,8 @@ export default function ChatbotSettings() {
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [animationStyle, setAnimationStyle] = useState<"slide" | "fade" | "bounce" | "none">("slide");
 
+  const [userPlan, setUserPlan] = useState<"free" | "starter" | "growth" | "business">("free");
+
   const [hasChanges, setHasChanges] = useState(false);
 
   // Re-scraping state
@@ -147,6 +149,29 @@ export default function ChatbotSettings() {
       clearError();
     };
   }, [id, isSignedIn]);
+
+  // Fetch user subscription plan
+  useEffect(() => {
+    const fetchSubscription = async () => {
+      if (!isSignedIn) return;
+
+      try {
+        const token = await getToken();
+        const response = await fetch("/api/subscriptions", {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          setUserPlan(data.plan || "free");
+        }
+      } catch (error) {
+        console.error("Failed to fetch subscription:", error);
+      }
+    };
+
+    fetchSubscription();
+  }, [isSignedIn, getToken]);
 
   // Load scrape schedule settings from backend
   const loadScrapeHistory = useCallback(async () => {
@@ -829,14 +854,28 @@ export default function ChatbotSettings() {
                     </div>
                   </div>
 
-                  {/* Show Branding */}
-                  <div className="flex items-center justify-between">
-                    <div className="space-y-0.5">
-                      <Label>Show "Powered by ConvoAI"</Label>
-                      <p className="text-xs text-muted-foreground">Display branding in widget footer</p>
+                  {/* Show Branding (Growth+ only) */}
+                  {(userPlan === "growth" || userPlan === "business") && (
+                    <div className="flex items-center justify-between">
+                      <div className="space-y-0.5">
+                        <Label>Show "Powered by ConvoAI"</Label>
+                        <p className="text-xs text-muted-foreground">
+                          Display branding in widget footer (Premium Feature)
+                        </p>
+                      </div>
+                      <Switch checked={showBranding} onCheckedChange={setShowBranding} />
                     </div>
-                    <Switch checked={showBranding} onCheckedChange={setShowBranding} />
-                  </div>
+                  )}
+
+                  {/* Info message for Free/Starter users */}
+                  {(userPlan === "free" || userPlan === "starter") && (
+                    <div className="flex items-center gap-2 p-3 bg-muted/50 rounded-lg">
+                      <AlertCircle className="h-4 w-4 text-muted-foreground" />
+                      <p className="text-xs text-muted-foreground">
+                        Upgrade to Growth plan to remove "Powered by" branding
+                      </p>
+                    </div>
+                  )}
                 </div>
               </GlassCard>
 

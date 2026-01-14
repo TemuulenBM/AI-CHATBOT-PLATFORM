@@ -123,6 +123,7 @@ export default function CreateChatbot() {
       personality,
       primaryColor: selectedColor,
       welcomeMessage: welcomeMessage.trim(),
+      showBranding: true,
     });
 
     if (chatbot) {

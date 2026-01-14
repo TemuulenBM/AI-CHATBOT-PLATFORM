@@ -723,7 +723,7 @@ export async function getChatbotPublic(
 
     const { data: chatbot, error } = await supabaseAdmin
       .from("chatbots")
-      .select("id, name, settings, status")
+      .select("id, name, user_id, settings, status")
       .eq("id", id)
       .eq("status", "ready")
       .single();
@@ -756,11 +756,27 @@ export async function getChatbotPublic(
       }
     }
 
+    // Get chatbot owner's subscription plan for branding enforcement
+    const { data: subscription } = await supabaseAdmin
+      .from("subscriptions")
+      .select("plan")
+      .eq("user_id", chatbot.user_id)
+      .single();
+
+    const userPlan = subscription?.plan || "free";
+
     // Get embedding count to determine training status
     const { count: embeddingCount } = await supabaseAdmin
       .from("embeddings")
       .select("*", { count: "exact", head: true })
       .eq("chatbot_id", id);
+
+    // Enforce branding based on plan tier
+    // Only Growth+ plans can remove branding
+    const canRemoveBranding = userPlan === "growth" || userPlan === "business";
+    const showBranding = canRemoveBranding
+      ? (chatbot.settings.showBranding ?? true)  // Respect user setting
+      : true;  // Force branding for Free/Starter
 
     res.json({
       id: chatbot.id,
@@ -779,7 +795,7 @@ export async function getChatbotPublic(
         borderRadius: chatbot.settings.borderRadius,
         fontFamily: chatbot.settings.fontFamily,
         headerStyle: chatbot.settings.headerStyle,
-        showBranding: chatbot.settings.showBranding,
+        showBranding,  // Use enforced value based on plan
         openDelay: chatbot.settings.openDelay,
         showInitially: chatbot.settings.showInitially,
         animationStyle: chatbot.settings.animationStyle,
