@@ -5,8 +5,8 @@ import { AuthorizationError } from "../utils/errors";
 import logger from "../utils/logger";
 
 /**
- * Get consolidated dashboard overview data
- * Combines multiple endpoints into one for better performance
+ * Dashboard-ийн нэгдсэн өгөгдөл авах endpoint
+ * Бүх query-г зэрэгцээ (parallel) ажиллуулж, chatbot ID-г нэг удаа татна
  */
 export async function getDashboardOverview(
   req: AuthenticatedRequest,
@@ -21,49 +21,62 @@ export async function getDashboardOverview(
     const days = parseInt(req.query.days as string) || 7;
     const userId = req.user.userId;
 
-    // Execute all queries in parallel for maximum performance
+    // Chatbot мэдээллийг НЭГ удаа татаж, бусад функцүүдэд дамжуулна
+    // Ингэснээр давхардсан 3 query-г 1 болгоно
+    const { data: userChatbots } = await supabaseAdmin
+      .from("chatbots")
+      .select(`
+        id,
+        name,
+        website_url,
+        status,
+        settings,
+        pages_scraped,
+        created_at,
+        updated_at,
+        last_scraped_at,
+        scrape_frequency,
+        auto_scrape_enabled
+      `)
+      .eq("user_id", userId)
+      .order("created_at", { ascending: false });
+
+    const chatbots = userChatbots || [];
+    const chatbotIds = chatbots.map(c => c.id);
+
+    // Эхний идэвхтэй chatbot-г олох (sentiment + satisfaction-д хэрэгтэй)
+    const firstActiveBot = chatbots.find(c => c.status === "ready");
+
+    // Бүх query-г зэрэгцээ ажиллуулна
     const [
       statsResult,
-      chatbotsResult,
       messageVolumeResult,
       comparisonResult,
-      sentimentResult,
-      satisfactionResult
+      firstBotDataResult
     ] = await Promise.allSettled([
-      // Stats query
-      getStats(userId),
-      // Chatbots list
-      getChatbots(userId),
-      // Message volume
-      getMessageVolume(userId, days),
-      // Chatbot comparison
-      getChatbotComparison(userId),
-      // Sentiment for first active chatbot
-      getFirstBotSentiment(userId),
-      // Satisfaction for first active chatbot
-      getFirstBotSatisfaction(userId)
+      getStats(chatbots, chatbotIds),
+      getMessageVolume(chatbotIds, days),
+      getChatbotComparison(chatbots, chatbotIds),
+      getFirstBotData(firstActiveBot?.id || null)
     ]);
 
-    // Extract results, providing fallbacks for failures
+    // Үр дүнг fallback утгуудтай задлах
     const stats = statsResult.status === 'fulfilled' ? statsResult.value : getDefaultStats();
-    const chatbots = chatbotsResult.status === 'fulfilled' ? chatbotsResult.value : [];
     const messageVolume = messageVolumeResult.status === 'fulfilled' ? messageVolumeResult.value : [];
     const chatbotComparison = comparisonResult.status === 'fulfilled' ? comparisonResult.value : [];
-    const sentiment = sentimentResult.status === 'fulfilled' ? sentimentResult.value : null;
-    const satisfaction = satisfactionResult.status === 'fulfilled' ? satisfactionResult.value : null;
+    const firstBotData = firstBotDataResult.status === 'fulfilled' ? firstBotDataResult.value : null;
 
-    // Log any failures (but don't fail the whole request)
-    if (statsResult.status === 'rejected') {
-      logger.warn('Failed to fetch stats', { error: statsResult.reason, userId });
-    }
-    if (chatbotsResult.status === 'rejected') {
-      logger.warn('Failed to fetch chatbots', { error: chatbotsResult.reason, userId });
-    }
-    if (messageVolumeResult.status === 'rejected') {
-      logger.warn('Failed to fetch message volume', { error: messageVolumeResult.reason, userId });
-    }
-    if (comparisonResult.status === 'rejected') {
-      logger.warn('Failed to fetch chatbot comparison', { error: comparisonResult.reason, userId });
+    // Алдааг бүртгэх (хариуг бүтэлгүйтүүлэхгүй)
+    const results = [
+      { name: 'stats', result: statsResult },
+      { name: 'messageVolume', result: messageVolumeResult },
+      { name: 'comparison', result: comparisonResult },
+      { name: 'firstBotData', result: firstBotDataResult }
+    ];
+    for (const { name, result } of results) {
+      if (result.status === 'rejected') {
+        logger.warn(`Dashboard ${name} татахад алдаа`, { error: result.reason, userId });
+      }
     }
 
     logger.info('Dashboard overview fetched', { userId, days });
@@ -73,8 +86,8 @@ export async function getDashboardOverview(
       chatbots,
       messageVolume,
       chatbotComparison,
-      sentiment,
-      satisfaction
+      sentiment: firstBotData?.sentiment || null,
+      satisfaction: firstBotData?.satisfaction || null
     });
   } catch (error) {
     logger.error('Dashboard overview error', { error, userId: req.user?.userId });
@@ -83,71 +96,59 @@ export async function getDashboardOverview(
 }
 
 /**
- * Get user stats
+ * Хэрэглэгчийн статистик авах
+ * Аль хэдийн татсан chatbot-уудын мэдээлэл дээр ажиллана
+ *
+ * Оновчлол: 5 sequential query → 2 parallel query
+ * - chatbots дээрээс total/active-г шууд тоолно (query хэмнэнэ)
+ * - conversations count + message count-г parallel хийнэ
  */
-async function getStats(userId: string) {
-  // Get total chatbots
-  const { count: totalChatbots } = await supabaseAdmin
-    .from("chatbots")
-    .select("id", { count: "exact", head: true })
-    .eq("user_id", userId);
-
-  // Get active chatbots
-  const { count: activeChatbots } = await supabaseAdmin
-    .from("chatbots")
-    .select("id", { count: "exact", head: true })
-    .eq("user_id", userId)
-    .eq("status", "ready");
-
-  // Get all user's chatbot IDs for conversation and message queries
-  const { data: userChatbots } = await supabaseAdmin
-    .from("chatbots")
-    .select("id")
-    .eq("user_id", userId);
-
-  const chatbotIds = userChatbots?.map(c => c.id) || [];
+async function getStats(chatbots: any[], chatbotIds: string[]) {
+  const totalChatbots = chatbots.length;
+  const activeChatbots = chatbots.filter(c => c.status === "ready").length;
 
   if (chatbotIds.length === 0) {
     return {
-      totalChatbots: totalChatbots || 0,
-      activeChatbots: activeChatbots || 0,
+      totalChatbots,
+      activeChatbots,
       totalMessages: 0,
       totalConversations: 0,
       avgResponseTime: null,
     };
   }
 
-  // Get total conversations
-  const { count: totalConversations } = await supabaseAdmin
-    .from("conversations")
-    .select("id", { count: "exact", head: true })
-    .in("chatbot_id", chatbotIds);
+  // Conversation count болон message count-г зэрэгцээ авна
+  const [convCountResult, convMessagesResult] = await Promise.all([
+    // Нийт conversation тоо (head: true → зөвхөн count буцаана, өгөгдөл татахгүй)
+    supabaseAdmin
+      .from("conversations")
+      .select("id", { count: "exact", head: true })
+      .in("chatbot_id", chatbotIds),
+    // Message тоолохдоо зөвхөн messages массивын уртыг авна
+    // JSONB бүтнээр нь татахын оронд messages field-г л авна
+    supabaseAdmin
+      .from("conversations")
+      .select("messages")
+      .in("chatbot_id", chatbotIds)
+  ]);
 
-  // Get conversations with messages to count total messages
-  const { data: conversations } = await supabaseAdmin
-    .from("conversations")
-    .select("messages")
-    .in("chatbot_id", chatbotIds);
+  const totalConversations = convCountResult.count || 0;
 
-  const totalMessages = conversations?.reduce((sum, conv) => {
+  // Messages тоолох — JSONB массивын элемент бүрийг тоолно
+  const totalMessages = convMessagesResult.data?.reduce((sum, conv) => {
     return sum + (Array.isArray(conv.messages) ? conv.messages.length : 0);
   }, 0) || 0;
 
-  // Calculate average response time (simplified - can be enhanced later)
-  const avgResponseTime = null; // TODO: Implement if response_time_ms field exists
-
   return {
-    totalChatbots: totalChatbots || 0,
-    activeChatbots: activeChatbots || 0,
+    totalChatbots,
+    activeChatbots,
     totalMessages,
-    totalConversations: totalConversations || 0,
-    avgResponseTime,
+    totalConversations,
+    avgResponseTime: null,
   };
 }
 
-/**
- * Get default stats (fallback)
- */
+/** Статистикийн анхдагч утгууд */
 function getDefaultStats() {
   return {
     totalChatbots: 0,
@@ -159,62 +160,20 @@ function getDefaultStats() {
 }
 
 /**
- * Get user's chatbots
+ * Мессежийн хэмжээг хугацаагаар авах
+ *
+ * Оновчлол: chatbot ID-г дахин татахгүй (параметрээр авна)
  */
-async function getChatbots(userId: string) {
-  const { data: chatbots } = await supabaseAdmin
-    .from("chatbots")
-    .select(`
-      id,
-      name,
-      website_url,
-      status,
-      settings,
-      pages_scraped,
-      created_at,
-      updated_at,
-      last_scraped_at,
-      scrape_frequency,
-      auto_scrape_enabled
-    `)
-    .eq("user_id", userId)
-    .order("created_at", { ascending: false });
-
-  return chatbots || [];
-}
-
-/**
- * Get message volume over time
- */
-async function getMessageVolume(userId: string, days: number) {
-  // Get user's chatbot IDs
-  const { data: userChatbots } = await supabaseAdmin
-    .from("chatbots")
-    .select("id")
-    .eq("user_id", userId);
-
-  const chatbotIds = userChatbots?.map(c => c.id) || [];
-
+async function getMessageVolume(chatbotIds: string[], days: number) {
   if (chatbotIds.length === 0) {
-    // Return empty volume for date range
-    const volume = [];
-    for (let i = days - 1; i >= 0; i--) {
-      const date = new Date();
-      date.setDate(date.getDate() - i);
-      volume.push({
-        date: date.toISOString().split('T')[0],
-        messages: 0
-      });
-    }
-    return volume;
+    return buildEmptyVolume(days);
   }
 
-  // Calculate date range
   const endDate = new Date();
   const startDate = new Date();
   startDate.setDate(startDate.getDate() - days);
 
-  // Fetch conversations in date range
+  // Хугацааны доторх conversations + messages авах
   const { data: conversations } = await supabaseAdmin
     .from("conversations")
     .select("messages, created_at")
@@ -222,7 +181,7 @@ async function getMessageVolume(userId: string, days: number) {
     .gte("created_at", startDate.toISOString())
     .lte("created_at", endDate.toISOString());
 
-  // Group messages by date
+  // Мессежүүдийг огноогоор бүлэглэх
   const messagesByDate = new Map<string, number>();
 
   conversations?.forEach(conv => {
@@ -234,7 +193,16 @@ async function getMessageVolume(userId: string, days: number) {
     }
   });
 
-  // Build volume array with all dates
+  return buildVolumeArray(days, messagesByDate);
+}
+
+/** Хоосон хугацааны массив үүсгэх */
+function buildEmptyVolume(days: number) {
+  return buildVolumeArray(days, new Map());
+}
+
+/** Огноогоор эрэмбэлсэн volume массив үүсгэх */
+function buildVolumeArray(days: number, messagesByDate: Map<string, number>) {
   const volume = [];
   for (let i = days - 1; i >= 0; i--) {
     const date = new Date();
@@ -245,161 +213,144 @@ async function getMessageVolume(userId: string, days: number) {
       messages: messagesByDate.get(dateStr) || 0
     });
   }
-
   return volume;
 }
 
 /**
- * Get chatbot comparison data
+ * Chatbot-уудын харьцуулалтын өгөгдөл
+ *
+ * Оновчлол (N+1 query засав):
+ *   Өмнө: chatbot бүрт 2 query (conversations + feedback) = 1 + N*2 query
+ *   Одоо: бүгдийг 2 bulk query-ээр авч, JS дээр бүлэглэнэ = 3 query (тогтмол)
+ *
+ * Жишээ: 10 chatbot → өмнө 21 query, одоо 3 query
  */
-async function getChatbotComparison(userId: string) {
-  // Get user's chatbots
-  const { data: chatbots } = await supabaseAdmin
-    .from("chatbots")
-    .select("id, name")
-    .eq("user_id", userId);
-
-  if (!chatbots || chatbots.length === 0) {
+async function getChatbotComparison(chatbots: any[], chatbotIds: string[]) {
+  if (chatbots.length === 0) {
     return [];
   }
 
-  const comparison = await Promise.all(
-    chatbots.map(async (bot) => {
-      // Get conversation stats
-      const { data: conversations } = await supabaseAdmin
-        .from("conversations")
-        .select("messages")
-        .eq("chatbot_id", bot.id);
+  // Бүх conversations болон feedback-г НЭГЭН ЗЭРЭГ bulk query-ээр авна
+  const [allConversations, allFeedback] = await Promise.all([
+    supabaseAdmin
+      .from("conversations")
+      .select("chatbot_id, messages")
+      .in("chatbot_id", chatbotIds),
+    supabaseAdmin
+      .from("feedback")
+      .select("chatbot_id, rating")
+      .in("chatbot_id", chatbotIds)
+  ]);
 
-      const totalMessages = conversations?.reduce((sum, conv) => {
-        return sum + (Array.isArray(conv.messages) ? conv.messages.length : 0);
-      }, 0) || 0;
-
-      const totalConversations = conversations?.length || 0;
-
-      // Get feedback data for CSAT
-      const { data: feedback } = await supabaseAdmin
-        .from("feedback")
-        .select("rating")
-        .eq("chatbot_id", bot.id);
-
-      let csatScore = null;
-      if (feedback && feedback.length > 0) {
-        const positive = feedback.filter(f => f.rating === 'positive').length;
-        csatScore = Math.round((positive / feedback.length) * 100);
-      }
-
-      return {
-        chatbotId: bot.id,
-        chatbotName: bot.name,
-        totalMessages,
-        totalConversations,
-        csatScore,
-        avgResponseTimeMs: null, // TODO: Implement if response_time_ms exists
-        conversionRate: null, // TODO: Implement conversion tracking
-      };
-    })
-  );
-
-  return comparison;
-}
-
-/**
- * Get sentiment data for first active chatbot
- */
-async function getFirstBotSentiment(userId: string) {
-  // Get first active chatbot
-  const { data: chatbot } = await supabaseAdmin
-    .from("chatbots")
-    .select("id")
-    .eq("user_id", userId)
-    .eq("status", "ready")
-    .order("created_at", { ascending: true })
-    .limit(1)
-    .single();
-
-  if (!chatbot) {
-    return null;
-  }
-
-  // Get conversations with sentiment
-  const { data: conversations } = await supabaseAdmin
-    .from("conversations")
-    .select("messages")
-    .eq("chatbot_id", chatbot.id);
-
-  if (!conversations || conversations.length === 0) {
-    return null;
-  }
-
-  let positive = 0;
-  let neutral = 0;
-  let negative = 0;
-  let total = 0;
-
-  conversations.forEach(conv => {
-    if (Array.isArray(conv.messages)) {
-      conv.messages.forEach((msg: any) => {
-        if (msg.sentiment) {
-          total++;
-          if (msg.sentiment === 'positive') positive++;
-          else if (msg.sentiment === 'neutral') neutral++;
-          else if (msg.sentiment === 'negative') negative++;
-        }
-      });
-    }
+  // Conversations-г chatbot_id-аар бүлэглэх (Map ашиглан хурдан хайлт)
+  const convByBot = new Map<string, { msgCount: number; convCount: number }>();
+  allConversations.data?.forEach(conv => {
+    const current = convByBot.get(conv.chatbot_id) || { msgCount: 0, convCount: 0 };
+    current.convCount++;
+    current.msgCount += Array.isArray(conv.messages) ? conv.messages.length : 0;
+    convByBot.set(conv.chatbot_id, current);
   });
 
-  if (total === 0) {
-    return null;
-  }
+  // Feedback-г chatbot_id-аар бүлэглэх
+  const feedbackByBot = new Map<string, { positive: number; total: number }>();
+  allFeedback.data?.forEach(fb => {
+    const current = feedbackByBot.get(fb.chatbot_id) || { positive: 0, total: 0 };
+    current.total++;
+    if (fb.rating === 'positive') current.positive++;
+    feedbackByBot.set(fb.chatbot_id, current);
+  });
 
-  return {
-    positive,
-    neutral,
-    negative,
-    total,
-    positiveRate: Math.round((positive / total) * 100),
-    negativeRate: Math.round((negative / total) * 100),
-  };
+  // Chatbot бүрийн харьцуулалтыг нэгтгэх
+  return chatbots.map(bot => {
+    const convData = convByBot.get(bot.id) || { msgCount: 0, convCount: 0 };
+    const fbData = feedbackByBot.get(bot.id);
+
+    let csatScore = null;
+    if (fbData && fbData.total > 0) {
+      csatScore = Math.round((fbData.positive / fbData.total) * 100);
+    }
+
+    return {
+      chatbotId: bot.id,
+      chatbotName: bot.name,
+      totalMessages: convData.msgCount,
+      totalConversations: convData.convCount,
+      csatScore,
+      avgResponseTimeMs: null,
+      conversionRate: null,
+    };
+  });
 }
 
 /**
- * Get satisfaction data for first active chatbot
+ * Эхний идэвхтэй chatbot-ын sentiment + satisfaction өгөгдөл
+ *
+ * Оновчлол: Өмнө 2 тусдаа функц байсан → нэгтгэсэн
+ * Хоёулаа ижил chatbot-ын өгөгдлийг ашигладаг тул нэг функцэд нийлүүлсэн
  */
-async function getFirstBotSatisfaction(userId: string) {
-  // Get first active chatbot
-  const { data: chatbot } = await supabaseAdmin
-    .from("chatbots")
-    .select("id")
-    .eq("user_id", userId)
-    .eq("status", "ready")
-    .order("created_at", { ascending: true })
-    .limit(1)
-    .single();
-
-  if (!chatbot) {
-    return null;
+async function getFirstBotData(chatbotId: string | null) {
+  if (!chatbotId) {
+    return { sentiment: null, satisfaction: null };
   }
 
-  // Get feedback
-  const { data: feedback } = await supabaseAdmin
-    .from("feedback")
-    .select("rating")
-    .eq("chatbot_id", chatbot.id);
+  // Conversations + feedback-г зэрэгцээ авна
+  const [convResult, feedbackResult] = await Promise.all([
+    supabaseAdmin
+      .from("conversations")
+      .select("messages")
+      .eq("chatbot_id", chatbotId),
+    supabaseAdmin
+      .from("feedback")
+      .select("rating")
+      .eq("chatbot_id", chatbotId)
+  ]);
 
-  if (!feedback || feedback.length === 0) {
-    return null;
+  // Sentiment тооцоолох — messages дотор sentiment field шалгана
+  let sentiment = null;
+  const conversations = convResult.data;
+  if (conversations && conversations.length > 0) {
+    let positive = 0, neutral = 0, negative = 0, total = 0;
+
+    conversations.forEach(conv => {
+      if (Array.isArray(conv.messages)) {
+        conv.messages.forEach((msg: any) => {
+          if (msg.sentiment) {
+            total++;
+            if (msg.sentiment === 'positive') positive++;
+            else if (msg.sentiment === 'neutral') neutral++;
+            else if (msg.sentiment === 'negative') negative++;
+          }
+        });
+      }
+    });
+
+    if (total > 0) {
+      sentiment = {
+        positive,
+        neutral,
+        negative,
+        total,
+        positiveRate: Math.round((positive / total) * 100),
+        negativeRate: Math.round((negative / total) * 100),
+      };
+    }
   }
 
-  const positive = feedback.filter(f => f.rating === 'positive').length;
-  const negative = feedback.filter(f => f.rating === 'negative').length;
-  const total = feedback.length;
+  // Satisfaction тооцоолох — feedback дээр ажиллана
+  let satisfaction = null;
+  const feedback = feedbackResult.data;
+  if (feedback && feedback.length > 0) {
+    const positiveCount = feedback.filter(f => f.rating === 'positive').length;
+    const negativeCount = feedback.filter(f => f.rating === 'negative').length;
+    const totalCount = feedback.length;
 
-  return {
-    positive,
-    negative,
-    total,
-    satisfactionRate: Math.round((positive / total) * 100),
-  };
+    satisfaction = {
+      positive: positiveCount,
+      negative: negativeCount,
+      total: totalCount,
+      satisfactionRate: Math.round((positiveCount / totalCount) * 100),
+    };
+  }
+
+  return { sentiment, satisfaction };
 }
