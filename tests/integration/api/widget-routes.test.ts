@@ -42,6 +42,15 @@ vi.mock("../../../server/services/widget-analytics", () => ({
   trackEvent: vi.fn().mockResolvedValue(undefined),
 }));
 
+// Redis mock — widget route-д validation, rateLimit import нэмсэн тул шаардлагатай
+vi.mock("../../../server/utils/redis", () => ({
+  checkRateLimit: vi.fn().mockResolvedValue({ allowed: true, remaining: 59, resetIn: 60 }),
+  getCache: vi.fn().mockResolvedValue(null),
+  setCache: vi.fn().mockResolvedValue(undefined),
+  deleteCachePattern: vi.fn().mockResolvedValue(undefined),
+  redis: { ping: vi.fn().mockResolvedValue("PONG") },
+}));
+
 import { getChatbotPublic } from "../../../server/controllers/chatbots";
 import * as widgetAnalytics from "../../../server/services/widget-analytics";
 
@@ -60,6 +69,11 @@ describe("Widget Routes Integration Tests", () => {
     app = express();
     app.use(express.json());
     app.use("/", widgetRoutes);
+    // Error handler — validate middleware-ийн ValidationError-г зохицуулна
+    app.use((err: any, _req: any, res: any, _next: any) => {
+      const statusCode = err.statusCode || 500;
+      res.status(statusCode).json({ message: err.message, error: err.message });
+    });
     httpServer = createServer(app);
   });
 
@@ -212,12 +226,13 @@ describe("Widget Routes Integration Tests", () => {
 
   describe("GET /widget/preview", () => {
     it("should redirect to demo page with chatbot ID", async () => {
+      const validId = "11111111-1111-1111-1111-111111111111";
       const response = await request(app)
-        .get("/widget/preview?id=test-chatbot-123")
+        .get(`/widget/preview?id=${validId}`)
         .redirects(0);
 
       expect(response.status).toBe(302);
-      expect(response.headers.location).toBe("/widget/demo?id=test-chatbot-123");
+      expect(response.headers.location).toBe(`/widget/demo?id=${validId}`);
     });
 
     it("should use default ID when not provided", async () => {
@@ -249,23 +264,25 @@ describe("Widget Routes Integration Tests", () => {
   });
 
   describe("POST /widget/analytics", () => {
+    const validChatbotId = "11111111-1111-1111-1111-111111111111";
+
     it("should track analytics events", async () => {
       const events = [
-        { type: "widget_open", timestamp: Date.now() },
-        { type: "message_sent", timestamp: Date.now() },
+        { event_name: "widget_open" },
+        { event_name: "message_sent" },
       ];
 
       const response = await request(app)
         .post("/widget/analytics")
         .send({
-          chatbotId: "chatbot123",
+          chatbotId: validChatbotId,
           sessionId: "session456",
           events,
         });
 
       expect(response.status).toBe(204);
       expect(widgetAnalytics.trackEvents).toHaveBeenCalledWith(
-        "chatbot123",
+        validChatbotId,
         "session456",
         events
       );
@@ -276,36 +293,36 @@ describe("Widget Routes Integration Tests", () => {
         .post("/widget/analytics")
         .send({
           sessionId: "session456",
-          events: [],
+          events: [{ event_name: "test" }],
         });
 
       expect(response.status).toBe(400);
-      expect(response.body.error).toContain("Missing required fields");
+      expect(response.body.message).toBeDefined();
     });
 
     it("should return 400 for missing sessionId", async () => {
       const response = await request(app)
         .post("/widget/analytics")
         .send({
-          chatbotId: "chatbot123",
-          events: [],
+          chatbotId: validChatbotId,
+          events: [{ event_name: "test" }],
         });
 
       expect(response.status).toBe(400);
-      expect(response.body.error).toContain("Missing required fields");
+      expect(response.body.message).toBeDefined();
     });
 
     it("should return 400 for invalid events", async () => {
       const response = await request(app)
         .post("/widget/analytics")
         .send({
-          chatbotId: "chatbot123",
+          chatbotId: validChatbotId,
           sessionId: "session456",
           events: "not-an-array",
         });
 
       expect(response.status).toBe(400);
-      expect(response.body.error).toContain("Missing required fields");
+      expect(response.body.message).toBeDefined();
     });
 
     it("should handle errors gracefully", async () => {
@@ -316,9 +333,9 @@ describe("Widget Routes Integration Tests", () => {
       const response = await request(app)
         .post("/widget/analytics")
         .send({
-          chatbotId: "chatbot123",
+          chatbotId: validChatbotId,
           sessionId: "session456",
-          events: [{ type: "test" }],
+          events: [{ event_name: "test" }],
         });
 
       expect(response.status).toBe(500);

@@ -108,8 +108,16 @@ export async function handleClerkWebhook(
   let event: ClerkWebhookEvent;
 
   try {
-    // Get raw body as string for verification
-    const body = JSON.stringify(req.body);
+    // rawBody ашиглах — JSON.stringify(req.body) нь original bytes-с ялгаатай байж болно
+    // (key дараалал, whitespace гэх мэт). Signature verification яг original body шаарддаг.
+    // rawBody нь express.json() middleware-ийн verify callback-аар хадгалагдсан (index.ts)
+    const rawBody = req.rawBody;
+    if (!rawBody) {
+      logger.error("Raw body not available for webhook verification");
+      res.status(400).json({ error: "Raw body not available" });
+      return;
+    }
+    const body = typeof rawBody === "string" ? rawBody : (rawBody as Buffer).toString("utf-8");
     event = wh.verify(body, {
       "svix-id": svixId,
       "svix-timestamp": svixTimestamp,

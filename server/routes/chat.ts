@@ -2,7 +2,7 @@ import { Router } from "express";
 import * as chatController from "../controllers/chat";
 import { getChatbotPublic } from "../controllers/chatbots";
 import { validate, schemas } from "../middleware/validation";
-import { chatRateLimit } from "../middleware/rateLimit";
+import { chatRateLimit, apiRateLimit } from "../middleware/rateLimit";
 import { checkUsageLimits } from "../middleware/usage-monitor";
 
 const router = Router();
@@ -101,8 +101,10 @@ router.get(
 );
 
 // GET /api/chat/:chatbotId/:sessionId - Get conversation history
+// apiRateLimit нэмсэн — rate limit байхгүй бол session ID enumeration attack хийх боломжтой
 router.get(
   "/:chatbotId/:sessionId",
+  apiRateLimit,
   chatController.getConversation
 );
 

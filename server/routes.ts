@@ -210,7 +210,8 @@ export async function registerRoutes(
    *             schema:
    *               $ref: '#/components/schemas/HealthCheck'
    */
-  app.get("/api/health/detailed", async (_req: Request, res: Response) => {
+  // Auth нэмсэн — дотоод архитектурын мэдээлэл (latency, queue status, memory) задрахаас хамгаална
+  app.get("/api/health/detailed", authMiddleware, async (_req: Request, res: Response) => {
     const checks: Record<string, { status: string; latency?: number; error?: string; details?: unknown }> = {};
     let overallStatus = "ok";
 

@@ -232,9 +232,20 @@ app.use((req, res, next) => {
     },
   );
 
-  // Graceful shutdown
+  // Graceful shutdown — timeout-тай
+  // Яагаад timeout хэрэгтэй: closeQueues() эсвэл httpServer.close() hangордвол
+  // process хэзээ ч exit болохгүй → container/orchestrator kill хийх хүртэл хүлээнэ
+  const SHUTDOWN_TIMEOUT_MS = 15_000; // 15 секунд
   const shutdown = async () => {
     logger.info("Shutting down gracefully...");
+
+    // Хугацаа хэтэрвэл force exit хийх timer
+    const forceExitTimer = setTimeout(() => {
+      logger.error("Graceful shutdown timeout хэтэрсэн, force exit хийж байна");
+      process.exit(1);
+    }, SHUTDOWN_TIMEOUT_MS);
+    // Timer нь process-г alive байлгахаас сэргийлэх
+    forceExitTimer.unref();
 
     httpServer.close(() => {
       logger.info("HTTP server closed");

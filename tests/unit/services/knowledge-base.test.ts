@@ -29,6 +29,7 @@ vi.mock("../../../server/utils/supabase", () => ({
 vi.mock("../../../server/utils/redis", () => ({
   getCache: vi.fn().mockResolvedValue(null),
   setCache: vi.fn().mockResolvedValue(undefined),
+  deleteCachePattern: vi.fn().mockResolvedValue(undefined),
 }));
 
 vi.mock("../../../server/utils/logger", () => ({

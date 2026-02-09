@@ -1,6 +1,6 @@
 import OpenAI from "openai";
 import { supabaseAdmin } from "../utils/supabase";
-import { getCache, setCache } from "../utils/redis";
+import { getCache, setCache, deleteCachePattern } from "../utils/redis";
 import logger from "../utils/logger";
 import { ExternalServiceError } from "../utils/errors";
 import type { KnowledgeBase, InsertKnowledgeBase } from "../../shared/schema";
@@ -84,6 +84,10 @@ export class KnowledgeBaseService {
         category,
       });
 
+      // Knowledge base өөрчлөгдсөн тул search cache-г цэвэрлэх
+      // Эс бөгөөс хэрэглэгч 5 минут хүртэл хуучин хариулт хардаг
+      await deleteCachePattern(`kb:${chatbotId}:*`);
+
       return data as KnowledgeBase;
     } catch (error) {
       logger.error("Error adding knowledge entry", { error, chatbotId });
@@ -141,6 +145,11 @@ export class KnowledgeBaseService {
 
       logger.info("Knowledge entry updated", { id });
 
+      // Knowledge base өөрчлөгдсөн тул search cache-г цэвэрлэх
+      if (data?.chatbot_id) {
+        await deleteCachePattern(`kb:${data.chatbot_id}:*`);
+      }
+
       return data as KnowledgeBase;
     } catch (error) {
       logger.error("Error updating knowledge entry", { error, id });
@@ -151,7 +160,7 @@ export class KnowledgeBaseService {
   /**
    * Delete a knowledge base entry
    */
-  async deleteKnowledgeEntry(id: string): Promise<void> {
+  async deleteKnowledgeEntry(id: string, chatbotId?: string): Promise<void> {
     const { error } = await supabaseAdmin
       .from("knowledge_base")
       .delete()
@@ -160,6 +169,11 @@ export class KnowledgeBaseService {
     if (error) {
       logger.error("Failed to delete knowledge entry", { error, id });
       throw new Error("Failed to delete knowledge entry");
+    }
+
+    // Knowledge base өөрчлөгдсөн тул search cache-г цэвэрлэх
+    if (chatbotId) {
+      await deleteCachePattern(`kb:${chatbotId}:*`);
     }
 
     logger.info("Knowledge entry deleted", { id });

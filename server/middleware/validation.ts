@@ -173,6 +173,17 @@ export const schemas = {
     startDate: z.string().optional(),
     endDate: z.string().optional(),
   }),
+
+  // Widget analytics event schema — Zod validation-гүй бол бүтэцгүй data DB руу бичигдэх эрсдэлтэй
+  widgetAnalyticsEvent: z.object({
+    chatbotId: z.string().uuid("Invalid chatbot ID"),
+    sessionId: z.string().min(1, "Session ID is required").max(200),
+    events: z.array(z.object({
+      event_name: z.string().min(1).max(100),
+      event_category: z.string().max(50).optional(),
+      properties: z.record(z.unknown()).optional(),
+    })).min(1, "At least one event required").max(100, "Too many events"),
+  }),
 };
 
 export type CreateChatbotInput = z.infer<typeof schemas.createChatbot>;

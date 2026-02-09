@@ -190,6 +190,8 @@ export async function streamMessage(
   let chatbot: { id: string; user_id: string; name: string; website_url: string; settings: ChatbotSettings; status: string } | null = null;
   // Store user_id for rollback in case chatbot becomes null
   let userIdForRollback: string | null = null;
+  // Streaming дотоод алдааны error event аль хэдийн client-руу бичигдсэн эсэхийг тэмдэглэх
+  let streamErrorSent = false;
 
   try {
     const { chatbotId, sessionId, message } = req.body as ChatMessageInput;
@@ -252,7 +254,6 @@ export async function streamMessage(
         try {
           res.write(`data: ${JSON.stringify({ type: "chunk", content: chunk })}\n\n`);
         } catch (writeError) {
-          // If write fails during streaming, throw to outer catch
           throw writeError;
         }
       }
@@ -266,14 +267,9 @@ export async function streamMessage(
           })}\n\n`
         );
       } catch (writeError) {
-        // If write fails, throw to outer catch
         throw writeError;
       }
     } catch (streamError) {
-      // NO rollback here - streaming already started (headers sent)
-      // User received partial response, service was delivered
-      // This follows industry standard (OpenAI, AWS) and prevents abuse via network disconnect
-
       // Try to write error event, but handle write failures gracefully
       try {
         res.write(
@@ -282,8 +278,8 @@ export async function streamMessage(
             message: "Failed to generate response",
           })}\n\n`
         );
+        streamErrorSent = true;
       } catch (writeError) {
-        // If we can't write the error, just log it
         logger.error("Failed to write error event during streaming", {
           error: writeError,
           originalError: streamError,
@@ -291,7 +287,6 @@ export async function streamMessage(
         });
       }
       logger.error("Stream error", { error: streamError, chatbotId });
-      // Re-throw to outer catch for rollback handling
       throw streamError;
     }
 
@@ -379,18 +374,20 @@ export async function streamMessage(
       }
     }
 
-    // For SSE, we need to handle errors differently if headers are already sent
+    // SSE headers аль хэдийн илгээгдсэн бол error event бичээд дуусгах
+    // streamErrorSent=true бол дотоод catch аль хэдийн error event бичсэн — давхардуулахгүй
     if (res.headersSent) {
       try {
-        res.write(
-          `data: ${JSON.stringify({
-            type: "error",
-            message: error instanceof Error ? error.message : "Unknown error",
-          })}\n\n`
-        );
+        if (!streamErrorSent) {
+          res.write(
+            `data: ${JSON.stringify({
+              type: "error",
+              message: error instanceof Error ? error.message : "Unknown error",
+            })}\n\n`
+          );
+        }
         res.end();
       } catch (writeError) {
-        // If write fails, just end the response
         try {
           res.end();
         } catch {

@@ -4,6 +4,8 @@ import * as path from "path";
 import * as crypto from "crypto";
 import * as esbuild from "esbuild";
 import { getChatbotPublic } from "../controllers/chatbots";
+import { validate, schemas } from "../middleware/validation";
+import { apiRateLimit } from "../middleware/rateLimit";
 import logger from "../utils/logger";
 
 const router = Router();
@@ -235,9 +237,16 @@ router.get("/widget/manifest.json", async (req: Request, res: Response) => {
 });
 
 // GET /widget/preview - Redirect to new demo page
+// UUID validation нэмсэн — validate хийхгүй бол open redirect эрсдэлтэй
 router.get("/widget/preview", (req: Request, res: Response) => {
-  const chatbotId = req.query.id || "demo-chatbot-id";
-  res.redirect(`/widget/demo?id=${chatbotId}`);
+  const chatbotId = req.query.id;
+  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  if (chatbotId && !uuidRegex.test(chatbotId as string)) {
+    res.status(400).json({ error: "Invalid chatbot ID format" });
+    return;
+  }
+  const safeId = chatbotId || "demo-chatbot-id";
+  res.redirect(`/widget/demo?id=${safeId}`);
 });
 
 // GET /widget/:id - Get chatbot config for widget
@@ -251,15 +260,11 @@ router.get("/widget/:id", (req: Request, res: Response, next: NextFunction) => {
 });
 
 // POST /widget/analytics - Receive widget analytics events
-router.post("/widget/analytics", async (req: Request, res: Response) => {
+// Zod validation нэмсэн — бүтэцгүй data DB руу бичигдэхээс хамгаална
+// Rate limit нэмсэн — DDoS/spam хамгаалалт
+router.post("/widget/analytics", apiRateLimit, validate({ body: schemas.widgetAnalyticsEvent }), async (req: Request, res: Response) => {
   try {
     const { chatbotId, sessionId, events } = req.body;
-
-    // Validate required fields
-    if (!chatbotId || !sessionId || !Array.isArray(events)) {
-      res.status(400).json({ error: "Missing required fields: chatbotId, sessionId, events" });
-      return;
-    }
 
     logger.debug("Widget analytics received", { chatbotId, sessionId, eventCount: events.length });
 

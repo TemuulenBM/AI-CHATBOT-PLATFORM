@@ -345,7 +345,8 @@ Helpful, concise responses acknowledging knowledge limitations when appropriate.
 
     const response = await openai.chat.completions.create(requestParams as unknown as OpenAI.ChatCompletionCreateParamsNonStreaming);
 
-    return response.choices[0]?.message?.content || "I apologize, I couldn't generate a response.";
+    // choices undefined эсвэл хоосон array бол TypeError үүсэхээс хамгаалах
+    return response.choices?.[0]?.message?.content || "I apologize, I couldn't generate a response.";
   }
 
   private async getAnthropicResponse(
@@ -456,7 +457,8 @@ Helpful, concise responses acknowledging knowledge limitations when appropriate.
         break;
       }
 
-      const content = chunk.choices[0]?.delta?.content;
+      // choices undefined эсвэл хоосон array бол TypeError үүсэхээс хамгаалах
+      const content = chunk.choices?.[0]?.delta?.content;
       if (content) {
         yield content;
       }

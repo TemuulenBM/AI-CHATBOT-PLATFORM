@@ -75,6 +75,7 @@ describe("Clerk Webhook Handler - Direct Import", () => {
         "svix-signature": "v1,test_signature",
       },
       body: {},
+      rawBody: Buffer.from(JSON.stringify({})),
     };
 
     mockRes = {

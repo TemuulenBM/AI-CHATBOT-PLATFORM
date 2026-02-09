@@ -280,8 +280,8 @@ export async function deleteKnowledgeEntry(
       throw new NotFoundError("Knowledge entry not found");
     }
 
-    // Delete entry
-    await knowledgeBaseService.deleteKnowledgeEntry(entryId);
+    // Delete entry (chatbotId дамжуулж cache invalidation хийнэ)
+    await knowledgeBaseService.deleteKnowledgeEntry(entryId, chatbotId);
 
     logger.info("Knowledge entry deleted", {
       chatbotId,

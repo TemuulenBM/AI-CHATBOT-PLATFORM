@@ -38,6 +38,7 @@ vi.mock("../../../server/middleware/validation", () => ({
 
 vi.mock("../../../server/middleware/rateLimit", () => ({
   chatRateLimit: vi.fn((req: any, res: any, next: any) => next()),
+  apiRateLimit: vi.fn((req: any, res: any, next: any) => next()),
 }));
 
 vi.mock("../../../server/middleware/usage-monitor", () => ({
