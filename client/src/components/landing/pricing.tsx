@@ -107,14 +107,25 @@ export function Pricing() {
                   </li>
                 ))}
               </ul>
-              <Link href="/signup">
-                <Button 
-                  variant={plan.ctaVariant === "gradient" ? "default" : "outline"} 
-                  className={`w-full ${plan.ctaVariant === "gradient" ? "btn-gradient" : ""}`}
-                >
-                  {plan.cta}
-                </Button>
-              </Link>
+              {plan.id === "business" ? (
+                <a href="mailto:sales@convoai.com?subject=Business Plan Inquiry">
+                  <Button
+                    variant="outline"
+                    className="w-full"
+                  >
+                    {plan.cta}
+                  </Button>
+                </a>
+              ) : (
+                <Link href="/signup">
+                  <Button
+                    variant={plan.ctaVariant === "gradient" ? "default" : "outline"}
+                    className={`w-full ${plan.ctaVariant === "gradient" ? "btn-gradient" : ""}`}
+                  >
+                    {plan.cta}
+                  </Button>
+                </Link>
+              )}
             </GlassCard>
           ))}
         </div>

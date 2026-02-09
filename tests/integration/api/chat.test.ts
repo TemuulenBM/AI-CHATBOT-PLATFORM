@@ -127,24 +127,41 @@ describe("Chat API Endpoints", () => {
   });
 
   describe("GET /api/chat/:chatbotId/:sessionId", () => {
+    // Chatbot ownership шалгалт нэмсэн тул table нэрээр ялгаж mock хийнэ
+    const mockChatbotFound = {
+      select: vi.fn().mockReturnValue({
+        eq: vi.fn().mockReturnValue({
+          single: vi.fn().mockResolvedValue({
+            data: { id: "chatbot_test123", user_id: "user_test123" },
+            error: null,
+          }),
+        }),
+      }),
+    };
+
     it("should return conversation history", async () => {
       const mockMessages = [
         { role: "user", content: "Hello", timestamp: new Date().toISOString() },
         { role: "assistant", content: "Hi there!", timestamp: new Date().toISOString() },
       ];
 
-      (supabaseAdmin.from as ReturnType<typeof vi.fn>).mockReturnValue({
-        select: vi.fn().mockReturnThis(),
-        eq: vi.fn().mockReturnThis(),
-        single: vi.fn().mockResolvedValue({
-          data: {
-            id: "conv_test123",
-            messages: mockMessages,
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-          },
-          error: null,
-        }),
+      (supabaseAdmin.from as ReturnType<typeof vi.fn>).mockImplementation((table: string) => {
+        if (table === "chatbots") {
+          return mockChatbotFound;
+        }
+        return {
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+          single: vi.fn().mockResolvedValue({
+            data: {
+              id: "conv_test123",
+              messages: mockMessages,
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+            },
+            error: null,
+          }),
+        };
       });
 
       const response = await request(app)
@@ -155,13 +172,18 @@ describe("Chat API Endpoints", () => {
     });
 
     it("should return empty conversation for new session", async () => {
-      (supabaseAdmin.from as ReturnType<typeof vi.fn>).mockReturnValue({
-        select: vi.fn().mockReturnThis(),
-        eq: vi.fn().mockReturnThis(),
-        single: vi.fn().mockResolvedValue({
-          data: null,
-          error: { code: "PGRST116" },
-        }),
+      (supabaseAdmin.from as ReturnType<typeof vi.fn>).mockImplementation((table: string) => {
+        if (table === "chatbots") {
+          return mockChatbotFound;
+        }
+        return {
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+          single: vi.fn().mockResolvedValue({
+            data: null,
+            error: { code: "PGRST116" },
+          }),
+        };
       });
 
       const response = await request(app)

@@ -131,6 +131,19 @@ describe("Chat Controller", () => {
   });
 
   describe("getConversation", () => {
+    // Chatbot шалгалт нэмсэн тул from() дуудалт table нэрээр ялгаж mock хийнэ
+    const mockChatbotLookup = (found: boolean) => ({
+      select: vi.fn().mockReturnValue({
+        eq: vi.fn().mockReturnValue({
+          single: vi.fn().mockResolvedValue(
+            found
+              ? { data: { id: "123e4567-e89b-12d3-a456-426614174000", user_id: "owner123" }, error: null }
+              : { data: null, error: { message: "Not found" } }
+          ),
+        }),
+      }),
+    });
+
     it("should return conversation when found", async () => {
       const req = createMockRequest({
         params: {
@@ -150,15 +163,20 @@ describe("Chat Controller", () => {
         updated_at: "2024-01-01T00:00:01Z",
       };
 
-      vi.mocked(supabaseAdmin.from).mockReturnValue({
-        select: vi.fn().mockReturnValue({
-          eq: vi.fn().mockReturnValue({
+      vi.mocked(supabaseAdmin.from).mockImplementation((table: string) => {
+        if (table === "chatbots") {
+          return mockChatbotLookup(true) as unknown as ReturnType<typeof supabaseAdmin.from>;
+        }
+        return {
+          select: vi.fn().mockReturnValue({
             eq: vi.fn().mockReturnValue({
-              single: vi.fn().mockResolvedValue({ data: mockConversation, error: null }),
+              eq: vi.fn().mockReturnValue({
+                single: vi.fn().mockResolvedValue({ data: mockConversation, error: null }),
+              }),
             }),
           }),
-        }),
-      } as unknown as ReturnType<typeof supabaseAdmin.from>);
+        } as unknown as ReturnType<typeof supabaseAdmin.from>;
+      });
 
       await getConversation(req as AuthenticatedRequest, res, mockNext);
 
@@ -175,15 +193,20 @@ describe("Chat Controller", () => {
       }) as Request & { user?: { userId: string } };
       const res = createMockResponse();
 
-      vi.mocked(supabaseAdmin.from).mockReturnValue({
-        select: vi.fn().mockReturnValue({
-          eq: vi.fn().mockReturnValue({
+      vi.mocked(supabaseAdmin.from).mockImplementation((table: string) => {
+        if (table === "chatbots") {
+          return mockChatbotLookup(true) as unknown as ReturnType<typeof supabaseAdmin.from>;
+        }
+        return {
+          select: vi.fn().mockReturnValue({
             eq: vi.fn().mockReturnValue({
-              single: vi.fn().mockResolvedValue({ data: null, error: { message: "Not found" } }),
+              eq: vi.fn().mockReturnValue({
+                single: vi.fn().mockResolvedValue({ data: null, error: { message: "Not found" } }),
+              }),
             }),
           }),
-        }),
-      } as unknown as ReturnType<typeof supabaseAdmin.from>);
+        } as unknown as ReturnType<typeof supabaseAdmin.from>;
+      });
 
       await getConversation(req as AuthenticatedRequest, res, mockNext);
 

@@ -421,6 +421,33 @@ export async function getConversation(
       throw new ValidationError("Chatbot ID and Session ID are required");
     }
 
+    // Chatbot байгаа эсэх, идэвхтэй эсэхийг шалгах
+    // Яагаад: Энэ endpoint auth-гүй (widget-ээс ашигладаг) тул
+    // хамгийн наад зах нь chatbot-ийн оршин байгааг баталгаажуулна
+    const { data: chatbot } = await supabaseAdmin
+      .from("chatbots")
+      .select("id, user_id")
+      .eq("id", chatbotId)
+      .single();
+
+    if (!chatbot) {
+      throw new NotFoundError("Chatbot not found");
+    }
+
+    // Auth байвал зөвхөн chatbot-ийн эзэмшигч бүх conversation унших боломжтой
+    // Auth байхгүй бол (widget) sessionId-ийн randomness-д тулгуурлана
+    if (req.user?.userId) {
+      const { data: user } = await supabaseAdmin
+        .from("users")
+        .select("id")
+        .eq("clerk_id", req.user.userId)
+        .single();
+
+      if (!user || user.id !== chatbot.user_id) {
+        throw new AuthorizationError("You don't have access to this chatbot's conversations");
+      }
+    }
+
     const { data: conversation, error } = await supabaseAdmin
       .from("conversations")
       .select("id, messages, created_at, updated_at")
@@ -429,7 +456,7 @@ export async function getConversation(
       .single();
 
     if (error || !conversation) {
-      // Return empty conversation if not found
+      // Conversation олдохгүй бол хоосон буцаана
       res.json({
         messages: [],
         created_at: null,

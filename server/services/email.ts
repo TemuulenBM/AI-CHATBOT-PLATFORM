@@ -494,8 +494,8 @@ export class EmailService {
               </div>
               <p>You still have access to basic features on the Free plan:</p>
               <ul>
-                <li>Up to 3 chatbots</li>
-                <li>500 messages per month</li>
+                <li>Up to 1 chatbot</li>
+                <li>100 messages per month</li>
                 <li>Basic analytics</li>
               </ul>
               <p>If you'd like to resubscribe at any time, you can do so from your dashboard.</p>
