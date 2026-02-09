@@ -2,6 +2,8 @@ import axios, { AxiosInstance } from "axios";
 import * as cheerio from "cheerio";
 import robotsParser from "robots-parser";
 import { parseStringPromise } from "xml2js";
+import puppeteer, { Browser } from "puppeteer";
+import { existsSync } from "fs";
 import logger from "../utils/logger";
 
 interface ScrapedPage {
@@ -18,6 +20,8 @@ interface ScraperOptions {
   filterLoginPages?: boolean;
   filterErrorPages?: boolean;
   customFilterPatterns?: string[];
+  // SPA сайтуудыг scrape хийхэд Puppeteer ашиглаж JavaScript render хийнэ
+  renderJavaScript?: boolean;
 }
 
 const DEFAULT_OPTIONS: ScraperOptions = {
@@ -27,7 +31,50 @@ const DEFAULT_OPTIONS: ScraperOptions = {
   userAgent: "ChatbotScraper/1.0 (+https://example.com/bot)",
   filterLoginPages: true,
   filterErrorPages: true,
+  renderJavaScript: false,
 };
+
+/**
+ * Chrome executable-ийн path олох
+ * Дараалал:
+ * 1. CHROME_EXECUTABLE_PATH env var (гараар тохируулсан бол)
+ * 2. puppeteer-ийн суулгасан Chrome (npm install үед автоматаар татсан)
+ * 3. System-д суулгасан Chrome/Chromium (macOS, Linux)
+ */
+function findChromePath(): string {
+  // 1. Env var-аар тохируулсан бол шууд ашиглана
+  const envPath = process.env.CHROME_EXECUTABLE_PATH;
+  if (envPath) return envPath;
+
+  // 2. puppeteer package-ийн суулгасан Chrome — Render.com дээр ажиллана
+  // puppeteer (full) нь npm install үед Chrome-г автоматаар татаж суулгадаг
+  try {
+    const bundledPath = puppeteer.executablePath();
+    if (bundledPath && existsSync(bundledPath)) return bundledPath;
+  } catch {
+    // executablePath() олдоогүй бол system path-аас хайна
+  }
+
+  // 3. System-д суулгасан Chrome/Chromium (fallback)
+  const commonPaths = [
+    // macOS
+    "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+    "/Applications/Chromium.app/Contents/MacOS/Chromium",
+    // Linux (Docker, Ubuntu/Debian)
+    "/usr/bin/google-chrome",
+    "/usr/bin/google-chrome-stable",
+    "/usr/bin/chromium-browser",
+    "/usr/bin/chromium",
+  ];
+
+  for (const p of commonPaths) {
+    if (existsSync(p)) return p;
+  }
+
+  throw new Error(
+    "Chrome executable олдсонгүй. CHROME_EXECUTABLE_PATH env var тохируулна уу."
+  );
+}
 
 export class WebsiteScraper {
   private options: ScraperOptions;
@@ -36,6 +83,8 @@ export class WebsiteScraper {
   private robotsRules: ReturnType<typeof robotsParser> | null;
   private baseUrl: string;
   private filteredCount: { status: number; url: number; content: number };
+  // Puppeteer browser instance — scraping session бүхэлд нь нэг удаа нээж дахин ашиглана
+  private browser: Browser | null;
 
   constructor(options: Partial<ScraperOptions> = {}) {
     this.options = { ...DEFAULT_OPTIONS, ...options };
@@ -43,6 +92,7 @@ export class WebsiteScraper {
     this.robotsRules = null;
     this.baseUrl = "";
     this.filteredCount = { status: 0, url: 0, content: 0 };
+    this.browser = null;
 
     this.client = axios.create({
       timeout: this.options.timeout,
@@ -60,50 +110,104 @@ export class WebsiteScraper {
     this.visitedUrls.clear();
     this.filteredCount = { status: 0, url: 0, content: 0 };
 
-    logger.info("Starting website scrape", { url, maxPages: limit });
+    logger.info("Starting website scrape", {
+      url, maxPages: limit, renderJavaScript: !!this.options.renderJavaScript,
+    });
 
-    // Fetch and parse robots.txt
-    await this.fetchRobotsTxt();
-
-    // Get URLs from sitemap or start with base URL
-    const urls = await this.getUrlsToScrape(url);
-    const limitedUrls = urls.slice(0, limit);
-
-    logger.info("Found URLs to scrape", { count: limitedUrls.length });
-
-    // Scrape with concurrency control
-    const results: ScrapedPage[] = [];
-    const chunks = this.chunkArray(limitedUrls, this.options.concurrency);
-
-    for (const chunk of chunks) {
-      if (results.length >= limit) break;
-
-      const chunkResults = await Promise.allSettled(
-        chunk.map((pageUrl) => this.scrapePage(pageUrl))
-      );
-
-      for (const result of chunkResults) {
-        if (result.status === "fulfilled" && result.value) {
-          results.push(result.value);
-          if (results.length >= limit) break;
-        }
-      }
-
-      // Rate limiting delay between batches
-      await this.delay(1000);
+    // Puppeteer ашиглах бол browser нэг удаа нээж, бүх page-д дахин ашиглана
+    // Яагаад: browser launch ~1-2 сек үрдэг, page бүрт нээх нь маш удаан
+    if (this.options.renderJavaScript) {
+      await this.launchBrowser();
     }
 
-    logger.info("Scraping completed", {
-      pagesScraped: results.length,
-      filteredByStatus: this.filteredCount.status,
-      filteredByUrl: this.filteredCount.url,
-      filteredByContent: this.filteredCount.content,
-      totalFiltered:
-        this.filteredCount.status +
-        this.filteredCount.url +
-        this.filteredCount.content,
+    try {
+      // Fetch and parse robots.txt
+      await this.fetchRobotsTxt();
+
+      // Get URLs from sitemap or start with base URL
+      const urls = await this.getUrlsToScrape(url);
+      const limitedUrls = urls.slice(0, limit);
+
+      logger.info("Found URLs to scrape", { count: limitedUrls.length });
+
+      // Scrape with concurrency control
+      // Puppeteer ашиглаж байвал concurrency-г 1 болгоно — memory хамгаалалт
+      const concurrency = this.options.renderJavaScript ? 1 : this.options.concurrency;
+      const results: ScrapedPage[] = [];
+      const chunks = this.chunkArray(limitedUrls, concurrency);
+
+      for (const chunk of chunks) {
+        if (results.length >= limit) break;
+
+        const chunkResults = await Promise.allSettled(
+          chunk.map((pageUrl) => this.scrapePage(pageUrl))
+        );
+
+        for (const result of chunkResults) {
+          if (result.status === "fulfilled" && result.value) {
+            results.push(result.value);
+            if (results.length >= limit) break;
+          }
+        }
+
+        // Rate limiting delay between batches
+        await this.delay(1000);
+      }
+
+      logger.info("Scraping completed", {
+        pagesScraped: results.length,
+        filteredByStatus: this.filteredCount.status,
+        filteredByUrl: this.filteredCount.url,
+        filteredByContent: this.filteredCount.content,
+        totalFiltered:
+          this.filteredCount.status +
+          this.filteredCount.url +
+          this.filteredCount.content,
+      });
+      return results;
+    } finally {
+      // Browser-г заавал хаана — memory leak-ээс сэргийлнэ
+      await this.closeBrowser();
+    }
+  }
+
+  /**
+   * Headless Chrome browser нээх
+   * --no-sandbox: Docker/Render.com дээр root user-ээр ажиллахад шаардлагатай
+   * --disable-dev-shm-usage: /dev/shm жижиг байвал crash-аас сэргийлнэ
+   */
+  private async launchBrowser(): Promise<void> {
+    // findChromePath() нь Chrome олдоогүй бол throw хийнэ
+    const chromePath = findChromePath();
+    logger.info("Launching headless browser", { chromePath });
+    this.browser = await puppeteer.launch({
+      executablePath: chromePath,
+      headless: true,
+      args: [
+        "--no-sandbox",
+        "--disable-setuid-sandbox",
+        "--disable-dev-shm-usage",
+        "--disable-gpu",
+        "--disable-extensions",
+        "--disable-background-networking",
+        // Memory хэмнэх тохиргоо
+        "--js-flags=--max-old-space-size=256",
+      ],
     });
-    return results;
+  }
+
+  /**
+   * Browser хаах — finally block-д заавал дуудагдана
+   */
+  private async closeBrowser(): Promise<void> {
+    if (this.browser) {
+      try {
+        await this.browser.close();
+      } catch (error) {
+        logger.warn("Browser хаахад алдаа гарлаа", { error });
+      }
+      this.browser = null;
+    }
   }
 
   private async fetchRobotsTxt(): Promise<void> {
@@ -224,8 +328,18 @@ export class WebsiteScraper {
     const urls: Set<string> = new Set();
 
     try {
-      const response = await this.client.get(startUrl);
-      const $ = cheerio.load(response.data);
+      let html: string;
+
+      // SPA сайтад link-ууд нь JavaScript-ээр render хийгддэг тул
+      // Puppeteer-ээр rendered HTML авч link discovery хийнэ
+      if (this.options.renderJavaScript && this.browser) {
+        html = await this.getRenderedHtml(startUrl);
+      } else {
+        const response = await this.client.get(startUrl);
+        html = response.data;
+      }
+
+      const $ = cheerio.load(html);
 
       $("a[href]").each((_, element) => {
         const href = $(element).attr("href");
@@ -245,6 +359,41 @@ export class WebsiteScraper {
     }
 
     return Array.from(urls);
+  }
+
+  /**
+   * Puppeteer ашиглан page-ийн rendered HTML авах
+   * networkidle0: Бүх network request дууссан = React/Vue render дууссан гэсэн үг
+   * Timeout: 30 секунд — SPA-ууд initial load удаан байж болно
+   */
+  private async getRenderedHtml(url: string): Promise<string> {
+    if (!this.browser) {
+      throw new Error("Browser is not launched");
+    }
+
+    const page = await this.browser.newPage();
+    try {
+      await page.setUserAgent(this.options.userAgent);
+      // Зураг, font татахгүй — зөвхөн HTML/JS/CSS хэрэгтэй (хурд нэмнэ)
+      await page.setRequestInterception(true);
+      page.on("request", (request) => {
+        const resourceType = request.resourceType();
+        if (["image", "font", "media"].includes(resourceType)) {
+          request.abort();
+        } else {
+          request.continue();
+        }
+      });
+
+      await page.goto(url, {
+        waitUntil: "networkidle0",
+        timeout: this.options.timeout,
+      });
+
+      return await page.content();
+    } finally {
+      await page.close();
+    }
   }
 
   private async scrapePage(url: string): Promise<ScrapedPage | null> {
@@ -267,21 +416,31 @@ export class WebsiteScraper {
     this.visitedUrls.add(url);
 
     try {
-      const response = await this.client.get(url);
+      let html: string;
 
-      // Check HTTP status code
-      const status = response.status;
-      if (status !== 200 && status !== 201) {
-        this.filteredCount.status++;
-        logger.debug("Page filtered by HTTP status", {
-          url,
-          status,
-          reason: "http_status",
-        });
-        return null;
+      // renderJavaScript идэвхтэй бол Puppeteer-ээр rendered HTML авна
+      // Энэ нь React, Vue, Angular зэрэг SPA framework-ийн content-г олж авна
+      if (this.options.renderJavaScript && this.browser) {
+        html = await this.getRenderedHtml(url);
+      } else {
+        const response = await this.client.get(url);
+
+        // Check HTTP status code
+        const status = response.status;
+        if (status !== 200 && status !== 201) {
+          this.filteredCount.status++;
+          logger.debug("Page filtered by HTTP status", {
+            url,
+            status,
+            reason: "http_status",
+          });
+          return null;
+        }
+
+        html = response.data;
       }
 
-      const $ = cheerio.load(response.data);
+      const $ = cheerio.load(html);
 
       // Remove unwanted elements
       $(
@@ -625,11 +784,16 @@ export class WebsiteScraper {
   }
 }
 
-// Factory function
+// Factory функц — queue worker-ээс дуудагдана
 export async function scrapeWebsite(
   url: string,
-  maxPages: number = 50
+  maxPages: number = 50,
+  options: { renderJavaScript?: boolean } = {}
 ): Promise<ScrapedPage[]> {
-  const scraper = new WebsiteScraper({ maxPages, concurrency: 3 });
+  const scraper = new WebsiteScraper({
+    maxPages,
+    concurrency: 3,
+    renderJavaScript: options.renderJavaScript,
+  });
   return scraper.scrapeWebsite(url, maxPages);
 }

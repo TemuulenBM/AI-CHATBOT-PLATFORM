@@ -49,12 +49,14 @@ export async function createChatbot(
     const { limits } = await getUserPlanLimits(req.user.userId);
 
     // Queue scraping job with plan-based page limit
+    // renderJavaScript: SPA сайтуудыг Puppeteer-ээр render хийж scrape хийнэ
     await scrapeQueue.add(
       "scrape-website",
       {
         chatbotId: chatbot.id,
         websiteUrl,
         maxPages: limits.pages_per_crawl,
+        renderJavaScript: settings?.renderJavaScript,
       },
       {
         attempts: 3,

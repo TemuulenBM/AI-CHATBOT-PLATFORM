@@ -57,4 +57,7 @@ services:
         sync: false
       - key: SENTRY_DSN
         sync: false
+      # Puppeteer Chrome-г build cache-д хадгалах — дараагийн deploy хурдасгана
+      - key: PUPPETEER_CACHE_DIR
+        value: /opt/render/.cache/puppeteer
 

@@ -1,4 +1,4 @@
-import { supabaseAdmin, getUserPlanLimits } from "../utils/supabase";
+import { supabaseAdmin, getUserPlanLimits, ChatbotSettings } from "../utils/supabase";
 import { scrapeQueue } from "../jobs/queues";
 import { deleteCache, deleteCachePattern } from "../utils/redis";
 import logger from "../utils/logger";
@@ -33,10 +33,10 @@ export class RescrapeService {
     chatbotId: string,
     triggeredBy: "manual" | "scheduled" = "manual"
   ): Promise<{ historyId: string; jobId: string }> {
-    // Get chatbot to verify it exists and get website URL
+    // Get chatbot to verify it exists and get website URL + settings
     const { data: chatbot, error: chatbotError } = await supabaseAdmin
       .from("chatbots")
-      .select("id, website_url, user_id")
+      .select("id, website_url, user_id, settings")
       .eq("id", chatbotId)
       .single();
 
@@ -64,6 +64,9 @@ export class RescrapeService {
       throw new Error("Failed to initiate re-scraping");
     }
 
+    // Chatbot settings-аас renderJavaScript тохиргоо авах
+    const chatbotSettings = chatbot.settings as ChatbotSettings | null;
+
     // Queue the scraping job with history ID and plan-based page limit
     const job = await scrapeQueue.add(
       "scrape-website",
@@ -73,6 +76,7 @@ export class RescrapeService {
         maxPages: limits.pages_per_crawl,
         historyId: historyEntry.id,
         isRescrape: true,
+        renderJavaScript: chatbotSettings?.renderJavaScript,
       },
       {
         attempts: 3,

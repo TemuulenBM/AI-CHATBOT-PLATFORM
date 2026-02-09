@@ -223,6 +223,9 @@ export interface ChatbotSettings {
 
   // Animations
   animationStyle?: "slide" | "fade" | "bounce" | "none";
+
+  // Scraping тохиргоо — SPA (React, Vue, Angular) сайтуудыг Puppeteer-ээр scrape хийх
+  renderJavaScript?: boolean;
 }
 
 export interface ConversationMessage {

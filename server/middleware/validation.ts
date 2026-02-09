@@ -58,6 +58,8 @@ export const schemas = {
           .default("#7c3aed"),
         welcomeMessage: z.string().max(500).default("Hi! How can I help you today?"),
         systemPrompt: z.string().max(2000).optional(),
+        // SPA (React, Vue, Angular) сайтуудыг headless browser-ээр scrape хийх
+        renderJavaScript: z.boolean().default(false),
       })
       .default({}),
   }),
@@ -119,6 +121,9 @@ export const schemas = {
 
         // Animations
         animationStyle: z.enum(["slide", "fade", "bounce", "none"]).optional(),
+
+        // Scraping тохиргоо
+        renderJavaScript: z.boolean().optional(),
       })
       .optional(),
   }),

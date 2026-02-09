@@ -119,6 +119,7 @@ interface ScrapeJobData {
   maxPages: number;
   historyId?: string; // For tracking re-scrape history
   isRescrape?: boolean; // Flag to indicate this is a re-scrape
+  renderJavaScript?: boolean; // SPA сайтуудын JavaScript-г Puppeteer-ээр render хийх
 }
 
 interface EmbeddingJobData {
@@ -132,9 +133,9 @@ interface EmbeddingJobData {
 export const scrapeWorker = new Worker<ScrapeJobData>(
   "scrape",
   async (job: Job<ScrapeJobData>) => {
-    const { chatbotId, websiteUrl, maxPages, historyId, isRescrape } = job.data;
+    const { chatbotId, websiteUrl, maxPages, historyId, isRescrape, renderJavaScript } = job.data;
 
-    logger.info("Starting scrape job", { chatbotId, websiteUrl, jobId: job.id, isRescrape });
+    logger.info("Starting scrape job", { chatbotId, websiteUrl, jobId: job.id, isRescrape, renderJavaScript });
 
     // Update scrape history status to in_progress if this is a tracked rescrape
     if (historyId) {
@@ -148,8 +149,8 @@ export const scrapeWorker = new Worker<ScrapeJobData>(
       // Chatbot remains "ready" - it's already live and serving requests
       // No status update needed - chatbot stays ready during training
 
-      // Scrape website
-      const pages = await scrapeWebsite(websiteUrl, maxPages);
+      // Scrape website — renderJavaScript: true бол Puppeteer ашиглан SPA content авна
+      const pages = await scrapeWebsite(websiteUrl, maxPages, { renderJavaScript });
 
       if (pages.length === 0) {
         throw new Error("No pages scraped from website");
@@ -396,9 +397,10 @@ export const scheduledRescrapeWorker = new Worker<ScheduledRescrapeJobData>(
 
     try {
       // Get all chatbots with auto-scrape enabled that need re-scraping
+      // settings-г авч renderJavaScript тохиргоо дамжуулна
       const { data: chatbots, error } = await supabaseAdmin
         .from("chatbots")
-        .select("id, website_url, user_id, scrape_frequency, last_scraped_at")
+        .select("id, website_url, user_id, scrape_frequency, last_scraped_at, settings")
         .eq("auto_scrape_enabled", true)
         .neq("scrape_frequency", "manual");
 
@@ -442,6 +444,9 @@ export const scheduledRescrapeWorker = new Worker<ScheduledRescrapeJobData>(
             continue;
           }
 
+          // Chatbot settings-аас renderJavaScript тохиргоо авна
+          const settings = chatbot.settings as Record<string, unknown> | null;
+
           // Queue the scraping job with plan-based page limit
           await scrapeQueue.add(
             "scrape-website",
@@ -451,6 +456,7 @@ export const scheduledRescrapeWorker = new Worker<ScheduledRescrapeJobData>(
               maxPages: limits.pages_per_crawl,
               historyId: historyEntry.id,
               isRescrape: true,
+              renderJavaScript: !!settings?.renderJavaScript,
             },
             {
               attempts: 3,

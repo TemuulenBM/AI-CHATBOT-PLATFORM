@@ -266,7 +266,8 @@ describe("Queues Integration Tests", () => {
       const result = await scrapeProcessor(job);
 
       expect(result.pagesScraped).toBe(1);
-      expect(scrapeWebsite).toHaveBeenCalledWith("https://example.com", 50);
+      // 3 дахь аргумент: renderJavaScript тохиргоо (undefined = Cheerio ашиглана)
+      expect(scrapeWebsite).toHaveBeenCalledWith("https://example.com", 50, { renderJavaScript: undefined });
       expect(embeddingQueue.add).toHaveBeenCalled();
       expect(logger.info).toHaveBeenCalledWith(
         "Scraping completed",
