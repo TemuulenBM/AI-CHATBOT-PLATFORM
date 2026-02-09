@@ -18,13 +18,13 @@ export function ChatbotWidget({ chatbotId, welcomeMessage = "Hi! How can I help 
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [sessionId] = useState(() => "session_" + Math.random().toString(36).substring(2, 15));
-  const scrollRef = useRef<HTMLDivElement>(null);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
   const timeoutRef = useRef<number | null>(null);
 
+  // Шинэ мессеж ирэх бүрт доод хэсэг рүү scroll хийх
+  // scrollTop биш scrollIntoView ашиглана — Radix ScrollArea-ийн Viewport wrapper-тай нийцтэй
   useEffect(() => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-    }
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
   const handleSend = async () => {
@@ -200,7 +200,7 @@ export function ChatbotWidget({ chatbotId, welcomeMessage = "Hi! How can I help 
             </div>
 
             {/* Chat Area */}
-            <ScrollArea className="flex-1 p-4" ref={scrollRef}>
+            <ScrollArea className="flex-1 p-4">
               <div className="space-y-4">
                 {messages.map((msg, i) => (
                   <div
@@ -225,6 +225,7 @@ export function ChatbotWidget({ chatbotId, welcomeMessage = "Hi! How can I help 
                     </div>
                   </div>
                 )}
+                <div ref={messagesEndRef} />
               </div>
             </ScrollArea>
 
