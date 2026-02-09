@@ -455,6 +455,12 @@ export async function registerRoutes(
   // This middleware validates CSRF tokens for POST, PUT, PATCH, DELETE requests
   app.use("/api", validateCsrfToken);
 
+  // Widget analytics tracking (public for widget access)
+  // ЧУХАЛ: authMiddleware-тай widget analytics route-аас ӨМНӨ бүртгэх ёстой
+  // Учир нь app.use("/api/analytics/widget", authMiddleware, ...) prefix match хийгээд
+  // /api/analytics/widget/track endpoint-д хүрэхээс өмнө auth шалгана
+  app.post("/api/analytics/widget/track", chatbotsController.trackWidgetEvent);
+
   // API Routes
   app.use("/api/dashboard", dashboardRoutes);
   app.use("/api/chatbots", chatbotRoutes);
@@ -471,9 +477,6 @@ export async function registerRoutes(
   app.post("/api/feedback", feedbackController.submitFeedback);
   app.get("/api/feedback/:conversationId", feedbackController.checkFeedback);
   app.get("/api/chatbots/:chatbotId/satisfaction", feedbackController.getSatisfactionMetrics);
-
-  // Widget analytics tracking (public for widget access)
-  app.post("/api/analytics/widget/track", chatbotsController.trackWidgetEvent);
 
   // Analytics comparison route (requires auth)
   app.get(

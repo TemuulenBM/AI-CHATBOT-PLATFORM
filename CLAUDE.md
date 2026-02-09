@@ -95,7 +95,7 @@ Applied in this order:
 3. CSRF token (Double Submit Cookie pattern)
 4. Route-specific: Clerk auth → subscription loading → rate limiting
 
-**CSRF exemptions** (no token needed): GET/HEAD/OPTIONS, `/webhooks/*`, `/paddle/webhook`, `/chat/widget`, `/feedback`, `/analytics/widget/track`, `/gdpr/consent`
+**CSRF exemptions** (no token needed): GET/HEAD/OPTIONS, `/webhooks/*`, `/paddle/webhook`, `/chat/widget`, `/chat/stream`, `/chat/message`, `/feedback`, `/analytics/widget/track`, `/chat/support`, `/support`, `/gdpr/consent`
 
 **Public endpoints** (no auth needed): widget chat, widget config, feedback, widget analytics tracking, GDPR consent
 

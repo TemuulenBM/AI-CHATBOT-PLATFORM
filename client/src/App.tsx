@@ -18,6 +18,7 @@ import Conversations from "@/pages/dashboard/conversations";
 import Settings from "@/pages/dashboard/settings";
 import KnowledgeBase from "@/pages/dashboard/knowledge-base";
 import Analytics from "@/pages/dashboard/analytics";
+import ConversationDetail from "@/pages/dashboard/conversation-detail";
 
 function Router() {
   return (
@@ -71,6 +72,11 @@ function Router() {
       <Route path="/dashboard/chatbots/:id/knowledge">
         <ErrorBoundary>
           <KnowledgeBase />
+        </ErrorBoundary>
+      </Route>
+      <Route path="/dashboard/chatbots/:id/conversations/:conversationId">
+        <ErrorBoundary>
+          <ConversationDetail />
         </ErrorBoundary>
       </Route>
       <Route path="/dashboard/chatbots/:id/analytics">

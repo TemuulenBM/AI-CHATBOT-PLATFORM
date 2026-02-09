@@ -85,6 +85,21 @@ export interface ConversationSummary {
   updatedAt: string;
 }
 
+/** Нэг conversation-ийн бүтэн мэдээлэл (API-аас ирэх хэлбэр) */
+export interface ConversationDetail {
+  id: string;
+  chatbot_id: string;
+  session_id: string;
+  messages: Array<{
+    role: "user" | "assistant";
+    content: string;
+    timestamp: string;
+    sentiment?: string;
+  }>;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface SentimentBreakdown {
   positive: number;
   neutral: number;
@@ -162,6 +177,8 @@ interface ChatbotStore {
   conversationsTotal: number;
   conversationsPage: number;
   conversationsTotalPages: number;
+  conversationDetail: ConversationDetail | null;
+  isConversationDetailLoading: boolean;
   isLoading: boolean;
   isSaving: boolean;
   isRescraping: boolean;
@@ -185,6 +202,7 @@ interface ChatbotStore {
   fetchSentimentBreakdown: (chatbotId: string) => Promise<SentimentBreakdown | null>;
   fetchSatisfactionMetrics: (chatbotId: string) => Promise<SatisfactionMetrics | null>;
   fetchAllConversations: (page?: number, limit?: number, chatbotId?: string) => Promise<ConversationsResponse | null>;
+  fetchConversationDetail: (chatbotId: string, conversationId: string) => Promise<ConversationDetail | null>;
   triggerRescrape: (chatbotId: string) => Promise<{ success: boolean; message: string }>;
   updateScrapeSchedule: (chatbotId: string, config: { autoScrapeEnabled: boolean; scrapeFrequency: ScrapeFrequency }) => Promise<boolean>;
   fetchScrapeHistory: (chatbotId: string) => Promise<ScrapeHistoryResponse | null>;
@@ -249,6 +267,8 @@ export const useChatbotStore = create<ChatbotStore>((set, get) => ({
   conversationsTotal: 0,
   conversationsPage: 1,
   conversationsTotalPages: 0,
+  conversationDetail: null,
+  isConversationDetailLoading: false,
   isLoading: false,
   isSaving: false,
   isRescraping: false,
@@ -583,6 +603,36 @@ export const useChatbotStore = create<ChatbotStore>((set, get) => ({
       console.error('Failed to fetch all conversations:', error);
       set({
         isLoading: false,
+        error: 'Network error. Please try again.'
+      });
+    }
+    return null;
+  },
+
+  // Нэг conversation-ийн дэлгэрэнгүй мэдээлэл авах
+  fetchConversationDetail: async (chatbotId: string, conversationId: string) => {
+    set({ isConversationDetailLoading: true, conversationDetail: null, error: null });
+    try {
+      const headers = await getAuthHeaders(get()._getToken);
+      const response = await fetch(`/api/chatbots/${chatbotId}/conversations/${conversationId}`, {
+        headers,
+      });
+
+      if (response.ok) {
+        const data: ConversationDetail = await response.json();
+        set({ conversationDetail: data, isConversationDetailLoading: false });
+        return data;
+      } else {
+        const errorData = await response.json().catch(() => ({ message: 'Conversation not found' }));
+        set({
+          isConversationDetailLoading: false,
+          error: errorData.message || 'Failed to fetch conversation'
+        });
+      }
+    } catch (error) {
+      console.error('Failed to fetch conversation detail:', error);
+      set({
+        isConversationDetailLoading: false,
         error: 'Network error. Please try again.'
       });
     }

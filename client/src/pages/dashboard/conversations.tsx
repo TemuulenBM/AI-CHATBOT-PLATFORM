@@ -161,7 +161,11 @@ export default function Conversations() {
               </div>
               <div className="space-y-4">
                 {allConversations.map((conv) => (
-                  <GlassCard key={conv.id} className="p-4 md:p-6 hover:bg-card/50 transition-colors cursor-pointer">
+                  <GlassCard
+                    key={conv.id}
+                    className="p-4 md:p-6 hover:bg-card/50 transition-colors cursor-pointer"
+                    onClick={() => conv.chatbotId && setLocation(`/dashboard/chatbots/${conv.chatbotId}/conversations/${conv.id}`)}
+                  >
                     <div className="flex items-start gap-4">
                       <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center text-primary shrink-0">
                         <Bot className="h-5 w-5" />

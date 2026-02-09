@@ -90,7 +90,8 @@ export function validateCsrfToken(req: Request, res: Response, next: NextFunctio
   }
 
   // Skip CSRF validation for public widget endpoints (CORS-protected)
-  const publicPaths = ["/chat/widget", "/feedback", "/analytics/widget/track", "/chat/support", "/support"];
+  // /chat/stream, /chat/message — widget гадны сайтаас ажилладаг тул CSRF cookie авах боломжгүй
+  const publicPaths = ["/chat/widget", "/chat/stream", "/chat/message", "/feedback", "/analytics/widget/track", "/chat/support", "/support"];
   if (publicPaths.some(path => req.path.startsWith(path) || fullPath.startsWith("/api" + path))) {
     logger.debug("Skipping CSRF validation for public endpoint", { path: req.path, fullPath });
     next();
