@@ -14,6 +14,11 @@ const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
+// Conversation-д хадгалах хамгийн их message тоо
+// Яагаад: JSONB array хязгааргүй өсвөл DB storage, query speed, network payload бүгд нэмэгдэнэ
+// 100 message = ~50 user + 50 assistant pair — ихэнх use case-д хангалттай
+const MAX_STORED_MESSAGES = 100;
+
 // System prompt for built-in ConvoAI support bot - KERNEL framework
 // Generated from config for easy maintenance
 const SUPPORT_BOT_SYSTEM_PROMPT = buildSupportBotPrompt(supportBotConfig);
@@ -93,12 +98,14 @@ export async function sendMessage(
       chatbot.name
     );
 
-    // Update conversation
-    const newMessages: ConversationMessage[] = [
+    // Update conversation — хуучин message-ийг хязгаарлаж JSONB хэтрэхээс хамгаалах
+    const allMessages: ConversationMessage[] = [
       ...history,
       { role: "user", content: message, timestamp: new Date().toISOString() },
       { role: "assistant", content: response, timestamp: new Date().toISOString() },
     ];
+    // Хамгийн сүүлийн N message-г л хадгална — JSONB array хязгааргүй өсөхөөс хамгаална
+    const newMessages = allMessages.slice(-MAX_STORED_MESSAGES);
 
     if (conversation) {
       await supabaseAdmin
@@ -292,12 +299,13 @@ export async function streamMessage(
 
     res.end();
 
-    // Save conversation (after streaming completes)
-    const newMessages: ConversationMessage[] = [
+    // Save conversation (after streaming completes) — message тоог хязгаарлана
+    const allMessages: ConversationMessage[] = [
       ...history,
       { role: "user", content: message, timestamp: new Date().toISOString() },
       { role: "assistant", content: fullResponse, timestamp: new Date().toISOString() },
     ];
+    const newMessages = allMessages.slice(-MAX_STORED_MESSAGES);
 
     if (conversation) {
       await supabaseAdmin

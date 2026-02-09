@@ -28,16 +28,93 @@ interface DataExportJobData {
   format: string;
 }
 
+/** Хэрэглэгчийн мэдээлэл */
+interface ExportUser {
+  id: string;
+  email: string;
+  created_at: string;
+}
+
+/** Chatbot мэдээлэл */
+interface ExportChatbot {
+  id: string;
+  name: string;
+  website_url: string;
+  status: string;
+  settings: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+  last_scraped_at: string | null;
+  auto_scrape_enabled: boolean;
+  scrape_frequency: string | null;
+}
+
+/** Conversation мэдээлэл */
+interface ExportConversation {
+  id: string;
+  chatbot_id: string;
+  session_id: string;
+  messages: unknown;
+  created_at: string;
+  chatbot_name?: string;
+}
+
+/** Analytics session */
+interface ExportSession {
+  chatbot_id: string;
+  session_id: string;
+  started_at: string;
+  ended_at: string | null;
+  device_type: string | null;
+  browser: string | null;
+  country: string | null;
+  city: string | null;
+  message_count: number;
+  chatbot_name?: string;
+}
+
+/** Analytics event */
+interface ExportEvent {
+  event_name: string;
+  properties: Record<string, unknown> | null;
+  timestamp: string;
+  session_id: string;
+  chatbot_name?: string;
+}
+
+/** Subscription мэдээлэл */
+interface ExportSubscription {
+  plan_type: string | null;
+  status: string | null;
+  start_date: string | null;
+  end_date: string | null;
+  usage_limits: Record<string, unknown> | null;
+  messages_count: number;
+  chatbots_count: number;
+  stripe_customer_id: string | null;
+  paddle_customer_id: string | null;
+}
+
+/** Consent мэдээлэл */
+interface ExportConsent {
+  consent_type: string;
+  granted: boolean;
+  granted_at: string;
+  withdrawn_at: string | null;
+  consent_version: string;
+  ip_address: string | null;
+}
+
 interface UserData {
-  user: any;
-  chatbots: any[];
-  conversations: any[];
+  user: ExportUser | Record<string, never>;
+  chatbots: ExportChatbot[];
+  conversations: ExportConversation[];
   analytics: {
-    sessions: any[];
-    events: any[];
+    sessions: ExportSession[];
+    events: ExportEvent[];
   };
-  subscription: any;
-  consents: any[];
+  subscription: ExportSubscription | null;
+  consents: ExportConsent[];
   exportMetadata: {
     exportDate: string;
     totalChatbots: number;
@@ -198,7 +275,7 @@ async function collectUserData(userId: string): Promise<UserData> {
   const chatbotIds = chatbots?.map((c) => c.id) || [];
 
   // Fetch conversations with chatbot names
-  let conversations: any[] = [];
+  let conversations: ExportConversation[] = [];
   if (chatbotIds.length > 0) {
     const { data: convData } = await supabaseAdmin
       .from('conversations')
@@ -209,15 +286,18 @@ async function collectUserData(userId: string): Promise<UserData> {
       .in('chatbot_id', chatbotIds)
       .order('created_at', { ascending: false });
 
-    conversations = convData?.map((c: any) => ({
-      ...c,
-      chatbot_name: c.chatbots.name,
-      chatbots: undefined
+    conversations = convData?.map((c: Record<string, unknown>) => ({
+      id: c.id as string,
+      chatbot_id: c.chatbot_id as string,
+      session_id: c.session_id as string,
+      messages: c.messages,
+      created_at: c.created_at as string,
+      chatbot_name: (c.chatbots as { name: string })?.name,
     })) || [];
   }
 
   // Fetch analytics sessions
-  let analyticsSessions: any[] = [];
+  let analyticsSessions: ExportSession[] = [];
   if (chatbotIds.length > 0) {
     const { data: sessData } = await supabaseAdmin
       .from('widget_sessions')
@@ -230,15 +310,22 @@ async function collectUserData(userId: string): Promise<UserData> {
       .order('started_at', { ascending: false })
       .limit(10000);
 
-    analyticsSessions = sessData?.map((s: any) => ({
-      ...s,
-      chatbot_name: s.chatbots.name,
-      chatbots: undefined
+    analyticsSessions = sessData?.map((s: Record<string, unknown>) => ({
+      chatbot_id: s.chatbot_id as string,
+      session_id: s.session_id as string,
+      started_at: s.started_at as string,
+      ended_at: s.ended_at as string | null,
+      device_type: s.device_type as string | null,
+      browser: s.browser as string | null,
+      country: s.country as string | null,
+      city: s.city as string | null,
+      message_count: s.message_count as number,
+      chatbot_name: (s.chatbots as { name: string })?.name,
     })) || [];
   }
 
   // Fetch recent analytics events (last 90 days only, as per retention policy)
-  let analyticsEvents: any[] = [];
+  let analyticsEvents: ExportEvent[] = [];
   if (chatbotIds.length > 0) {
     const ninetyDaysAgo = new Date();
     ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
@@ -254,10 +341,12 @@ async function collectUserData(userId: string): Promise<UserData> {
       .order('timestamp', { ascending: false })
       .limit(50000);
 
-    analyticsEvents = eventData?.map((e: any) => ({
-      ...e,
-      chatbot_name: e.chatbots.name,
-      chatbots: undefined
+    analyticsEvents = eventData?.map((e: Record<string, unknown>) => ({
+      event_name: e.event_name as string,
+      properties: e.properties as Record<string, unknown> | null,
+      timestamp: e.timestamp as string,
+      session_id: e.session_id as string,
+      chatbot_name: (e.chatbots as { name: string })?.name,
     })) || [];
   }
 
@@ -282,15 +371,15 @@ async function collectUserData(userId: string): Promise<UserData> {
     .order('granted_at', { ascending: false });
 
   return {
-    user: user || {},
-    chatbots: chatbots || [],
+    user: (user || {}) as ExportUser | Record<string, never>,
+    chatbots: (chatbots || []) as ExportChatbot[],
     conversations,
     analytics: {
       sessions: analyticsSessions,
       events: analyticsEvents,
     },
-    subscription: subscription || null,
-    consents: consents || [],
+    subscription: (subscription || null) as ExportSubscription | null,
+    consents: (consents || []) as ExportConsent[],
     exportMetadata: {
       exportDate: new Date().toISOString(),
       totalChatbots: chatbots?.length || 0,
@@ -381,10 +470,10 @@ function generateHtmlReport(userData: UserData): string {
       <strong>Chatbot:</strong> ${conv.chatbot_name}<br>
       <strong>Session ID:</strong> ${conv.session_id}<br>
       <strong>Date:</strong> ${new Date(conv.created_at).toLocaleString()}<br>
-      <strong>Messages:</strong> ${JSON.parse(conv.messages).length}
+      <strong>Messages:</strong> ${Array.isArray(conv.messages) ? conv.messages.length : 0}
       <details>
         <summary>View Messages</summary>
-        <pre style="white-space: pre-wrap;">${JSON.stringify(JSON.parse(conv.messages), null, 2)}</pre>
+        <pre style="white-space: pre-wrap;">${JSON.stringify(conv.messages, null, 2)}</pre>
       </details>
     </div>
   `).join('');

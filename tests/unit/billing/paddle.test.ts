@@ -74,6 +74,14 @@ describe("PaddleService", () => {
     paddleService = new PaddleService();
     vi.clearAllMocks();
 
+    // axios.isAxiosError()-г бодит логик-аар тохируулах
+    // vi.mock("axios") нь бүх функцийг auto-mock хийдэг тул isAxiosError ч mock болсон
+    // Бодит axios-д isAxiosError(err) нь err?.isAxiosError === true гэж шалгадаг
+    mockAxios.isAxiosError = vi.fn(
+      (error: unknown): error is import("axios").AxiosError =>
+        typeof error === "object" && error !== null && (error as Record<string, unknown>).isAxiosError === true
+    );
+
     // Set required env vars
     process.env.PADDLE_API_KEY = "test-api-key";
     process.env.PADDLE_WEBHOOK_SECRET = "test-webhook-secret";
@@ -154,7 +162,9 @@ describe("PaddleService", () => {
       (supabaseAdmin.from as ReturnType<typeof vi.fn>).mockImplementation(mockFrom);
 
       // First call (POST) fails with 409
+      // isAxiosError: true шаардлагатай — axios.isAxiosError() энэ property-г шалгадаг
       mockAxios.post = vi.fn().mockRejectedValue({
+        isAxiosError: true,
         response: { status: 409 },
       });
 
@@ -186,6 +196,7 @@ describe("PaddleService", () => {
 
       // First call (POST) fails with email domain error
       mockAxios.post = vi.fn().mockRejectedValue({
+        isAxiosError: true,
         response: {
           status: 400,
           data: {
@@ -218,6 +229,7 @@ describe("PaddleService", () => {
 
       // First call (POST) fails with "already" in error detail
       mockAxios.post = vi.fn().mockRejectedValue({
+        isAxiosError: true,
         response: {
           status: 400,
           data: {
@@ -661,6 +673,7 @@ describe("PaddleService", () => {
 
     it("should handle 404 error when creating portal session", async () => {
       mockAxios.mockRejectedValue({
+        isAxiosError: true,
         response: { status: 404 },
       });
 
@@ -685,6 +698,7 @@ describe("PaddleService", () => {
 
     it("should handle 401/403 error when creating portal session", async () => {
       mockAxios.mockRejectedValue({
+        isAxiosError: true,
         response: { status: 401 },
       });
 

@@ -19,6 +19,15 @@ import { X } from 'lucide-react';
 import { getCsrfHeaders } from '../../hooks/use-csrf';
 import { useToast } from '@/hooks/use-toast';
 
+/** Consent state-г window object-д хадгалж, бусад script-үүд шалгах боломж олгох */
+declare global {
+  interface Window {
+    __ANALYTICS_CONSENT__?: boolean;
+    __MARKETING_CONSENT__?: boolean;
+    __SENTRY__?: { hub: unknown };
+  }
+}
+
 interface ConsentPreferences {
   essential: boolean;
   analytics: boolean;
@@ -177,22 +186,56 @@ export const CookieConsentBanner: React.FC = () => {
   };
 
   /**
-   * Apply consent preferences (enable/disable tracking)
+   * Consent preferences-г бодитоор хэрэгжүүлэх — tracking идэвхжүүлэх/идэвхгүй болгох
+   * Яагаад: GDPR Article 7 — хэрэглэгч зөвшөөрөөгүй бол tracking хийхийг хориглоно
    */
   const applyConsentPreferences = (prefs: ConsentPreferences) => {
-    // Analytics consent
-    if (!prefs.analytics) {
-      // Disable analytics tracking
-      // TODO: Add your analytics disable code here
-      console.log('Analytics tracking disabled');
+    // Analytics consent — Sentry болон бусад analytics tool-уудыг удирдах
+    if (prefs.analytics) {
+      // Sentry-г зөвшөөрсөн бол replay/feedback идэвхжүүлэх
+      window.__ANALYTICS_CONSENT__ = true;
+    } else {
+      // Analytics tracking идэвхгүй болгох
+      window.__ANALYTICS_CONSENT__ = false;
+
+      // Sentry-ийн client-side tracking-г зогсоох (session replay, feedback)
+      // Sentry SDK нь init()-ийн дараа disable хийхэд getCurrentScope ашиглана
+      try {
+        if (typeof window.__SENTRY__?.hub !== 'undefined') {
+          // Sentry session replay, user feedback зогсоох
+          // Sentry internal API-д хандахдаа type assertion хэрэгтэй
+          const hub = window.__SENTRY__.hub as { getClient?: () => { getOptions: () => { enabled: boolean } } };
+          const client = hub.getClient?.();
+          if (client) {
+            client.getOptions().enabled = false;
+          }
+        }
+      } catch {
+        // Sentry байхгүй бол алдаа гарахгүй
+      }
     }
 
-    // Marketing consent
-    if (!prefs.marketing) {
-      // Disable marketing cookies
-      // TODO: Add your marketing cookie disable code here
-      console.log('Marketing cookies disabled');
+    // Marketing consent — 3rd party tracking cookie, pixel удирдах
+    if (prefs.marketing) {
+      window.__MARKETING_CONSENT__ = true;
+    } else {
+      window.__MARKETING_CONSENT__ = false;
+
+      // Marketing cookie-нуудыг устгах (tracking pixel, ad cookie гэх мэт)
+      // Domain cookie-нуудаас marketing-тай холбоотой cookie-г арилгана
+      const marketingCookiePatterns = ['_fbp', '_fbc', '_gcl', '_ga_', '__gads', '_pin_'];
+      document.cookie.split(';').forEach(cookie => {
+        const cookieName = cookie.split('=')[0].trim();
+        if (marketingCookiePatterns.some(pattern => cookieName.startsWith(pattern))) {
+          // Cookie-г хугацаа дуусгаж устгах
+          document.cookie = `${cookieName}=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;`;
+        }
+      });
     }
+
+    // LocalStorage-д consent state хадгалж, бусад компонентууд шалгах боломж олгох
+    localStorage.setItem('analyticsConsent', String(prefs.analytics));
+    localStorage.setItem('marketingConsent', String(prefs.marketing));
   };
 
   if (!isVisible) {

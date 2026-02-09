@@ -276,7 +276,7 @@ export const embeddingWorker = new Worker<EmbeddingJobData>(
         .single();
 
       if (chatbot && chatbot.users) {
-        const users = chatbot.users as any;
+        const users = chatbot.users as { email?: string };
         const userEmail = users.email;
         if (userEmail) {
           await EmailService.sendTrainingCompleteEmail(

@@ -55,7 +55,7 @@ export async function checkUsageLimits(
   next: NextFunction
 ) {
   try {
-    const userId = (req as any).auth?.userId;
+    const userId = (req as Request & { auth?: { userId?: string } }).auth?.userId;
 
     // Skip if no user (public endpoints)
     if (!userId) {

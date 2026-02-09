@@ -26,7 +26,7 @@ interface PaddleCustomer {
   id: string;
   email: string;
   name?: string;
-  custom_data?: Record<string, any>;
+  custom_data?: Record<string, unknown>;
 }
 
 interface PaddleTransaction {
@@ -50,14 +50,28 @@ interface PaddleSubscription {
     ends_at: string;
   };
   next_billed_at?: string;
-  custom_data?: Record<string, any>;
+  custom_data?: Record<string, unknown>;
 }
 
+/** Paddle webhook event-ийн бүтэц — data нь event_type-с хамааран өөр бүтэцтэй */
 interface PaddleWebhookEvent {
   event_id: string;
   event_type: string;
   occurred_at: string;
-  data: any;
+  data: PaddleTransactionData | PaddleSubscription;
+}
+
+/** Paddle transaction-ийн data бүтэц */
+interface PaddleTransactionData {
+  id: string;
+  customer_id: string;
+  subscription_id?: string;
+  custom_data?: { userId?: string; plan?: string };
+  details?: {
+    totals?: { total: string | number };
+  };
+  error_code?: string;
+  error_detail?: string;
 }
 
 function getPaddleAuth(): { apiKey: string } {
@@ -108,12 +122,13 @@ export class PaddleService {
           }
         );
         customerId = response.data.data.id;
-      } catch (createError: any) {
+      } catch (createError: unknown) {
         // If customer already exists (409 Conflict or email already registered error),
         // try to find them by email
-        if (createError.response?.status === 409 ||
-            createError.response?.data?.error?.code === "customer_email_domain_not_allowed" ||
-            createError.response?.data?.error?.detail?.includes("already")) {
+        const axiosErr = axios.isAxiosError(createError) ? createError : null;
+        if (axiosErr?.response?.status === 409 ||
+            axiosErr?.response?.data?.error?.code === "customer_email_domain_not_allowed" ||
+            axiosErr?.response?.data?.error?.detail?.includes("already")) {
 
           logger.info("Customer may already exist, searching by email", { email });
 
@@ -159,9 +174,10 @@ export class PaddleService {
 
       logger.info("Paddle customer linked", { userId, customerId });
       return customerId;
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const axiosError = axios.isAxiosError(error) ? error : null;
       logger.error("Failed to create Paddle customer", {
-        error: error.response?.data || error.message,
+        error: axiosError?.response?.data || (error instanceof Error ? error.message : error),
         userId
       });
       throw new ExternalServiceError("Paddle", "Failed to create customer");
@@ -251,23 +267,24 @@ export class PaddleService {
 
       logger.info("Portal session created successfully", { userId, customerId: subscription.paddle_customer_id });
       return portalUrl;
-    } catch (error: any) {
+    } catch (error: unknown) {
       // Enhanced error logging to help debug Paddle API issues
+      const axiosErr = axios.isAxiosError(error) ? error : null;
       const errorDetails = {
         userId,
         customerId: subscription.paddle_customer_id,
-        statusCode: error.response?.status,
-        errorCode: error.response?.data?.error?.code,
-        errorMessage: error.response?.data?.error?.detail || error.response?.data?.error?.message,
-        fullError: error.response?.data || error.message,
+        statusCode: axiosErr?.response?.status,
+        errorCode: axiosErr?.response?.data?.error?.code,
+        errorMessage: axiosErr?.response?.data?.error?.detail || axiosErr?.response?.data?.error?.message,
+        fullError: axiosErr?.response?.data || (error instanceof Error ? error.message : error),
       };
 
       logger.error("Failed to create portal session", errorDetails);
 
       // Provide more specific error messages based on the error type
-      if (error.response?.status === 404) {
+      if (axiosErr?.response?.status === 404) {
         throw new ValidationError("Customer not found in billing system. Please contact support.");
-      } else if (error.response?.status === 401 || error.response?.status === 403) {
+      } else if (axiosErr?.response?.status === 401 || axiosErr?.response?.status === 403) {
         throw new ExternalServiceError("Paddle", "Authentication failed. Please contact support.");
       } else {
         throw new ExternalServiceError("Paddle", "Failed to create portal session. Please try again later.");
@@ -369,27 +386,27 @@ export class PaddleService {
 
     switch (event.event_type) {
       case "transaction.completed":
-        await this.handleTransactionCompleted(event.data);
+        await this.handleTransactionCompleted(event.data as PaddleTransactionData);
         break;
 
       case "subscription.created":
-        await this.handleSubscriptionCreated(event.data);
+        await this.handleSubscriptionCreated(event.data as PaddleSubscription);
         break;
 
       case "subscription.updated":
-        await this.handleSubscriptionUpdated(event.data);
+        await this.handleSubscriptionUpdated(event.data as PaddleSubscription);
         break;
 
       case "subscription.canceled":
-        await this.handleSubscriptionCanceled(event.data);
+        await this.handleSubscriptionCanceled(event.data as PaddleSubscription);
         break;
 
       case "subscription.past_due":
-        await this.handleSubscriptionPastDue(event.data);
+        await this.handleSubscriptionPastDue(event.data as PaddleSubscription);
         break;
 
       case "transaction.payment_failed":
-        await this.handlePaymentFailed(event.data);
+        await this.handlePaymentFailed(event.data as PaddleTransactionData);
         break;
 
       default:
@@ -399,7 +416,7 @@ export class PaddleService {
     return { received: true };
   }
 
-  private async handleTransactionCompleted(transaction: any): Promise<void> {
+  private async handleTransactionCompleted(transaction: PaddleTransactionData): Promise<void> {
     const userId = transaction.custom_data?.userId;
     const plan = transaction.custom_data?.plan as PlanType;
     const subscriptionId = transaction.subscription_id;
@@ -470,7 +487,7 @@ export class PaddleService {
 
     if (user?.email && transaction.details?.totals?.total) {
       const planName = plan.charAt(0).toUpperCase() + plan.slice(1); // Capitalize first letter
-      const amount = `$${(parseInt(transaction.details.totals.total) / 100).toFixed(2)}`;
+      const amount = `$${(parseInt(String(transaction.details.totals.total)) / 100).toFixed(2)}`;
       await EmailService.sendSubscriptionConfirmation(user.email, `${planName} Plan`, amount);
       logger.info("Subscription confirmation email sent", { userId, email: user.email, plan });
     }
@@ -518,7 +535,13 @@ export class PaddleService {
     // Check if billing period has renewed (period_start changed)
     const isPeriodRenewal = currentSub.current_period_start !== newPeriodStart;
 
-    const updateData: any = {
+    const updateData: {
+      plan: string;
+      current_period_start: string;
+      current_period_end: string;
+      updated_at: string;
+      usage?: { messages_count: number; chatbots_count: number };
+    } = {
       plan,
       current_period_start: newPeriodStart,
       current_period_end: subscription.current_billing_period?.ends_at || new Date().toISOString(),
@@ -635,7 +658,7 @@ export class PaddleService {
     logger.warn("Subscription past due", { subscriptionId: subscription.id, userId: subData.user_id });
   }
 
-  private async handlePaymentFailed(transaction: any): Promise<void> {
+  private async handlePaymentFailed(transaction: PaddleTransactionData): Promise<void> {
     // Get user info for alerting
     const { data: subData } = await supabaseAdmin
       .from("subscriptions")
@@ -659,7 +682,7 @@ export class PaddleService {
     if (userData?.email) {
       try {
         const amount = transaction.details?.totals?.total
-          ? `$${(transaction.details.totals.total / 100).toFixed(2)}`
+          ? `$${(Number(transaction.details.totals.total) / 100).toFixed(2)}`
           : "N/A";
 
         await EmailService.sendPaymentFailed(

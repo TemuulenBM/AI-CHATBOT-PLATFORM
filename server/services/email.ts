@@ -642,7 +642,7 @@ export class EmailService {
     to: string | string[],
     alertType: string,
     message: string,
-    details?: Record<string, any>
+    details?: Record<string, unknown>
   ): Promise<void> {
     const detailsHtml = details
       ? `

@@ -19,11 +19,12 @@ export default defineConfig({
         "server/static.ts",
       ],
       thresholds: {
-        // Temporarily set to 0 to see current coverage
-        lines: 0,
-        functions: 0,
-        branches: 0,
-        statements: 0,
+        // Хамгийн бага coverage шаардлага — regression-с хамгаална
+        // 40% нь одоогийн байдалд бодитой зорилт; цаашид 60%+ руу ахиулах
+        lines: 40,
+        functions: 40,
+        branches: 30,
+        statements: 40,
       },
     },
     setupFiles: ["./tests/setup.ts"],

@@ -134,11 +134,12 @@ export class AIService {
   /**
    * Check if error is related to context length/token limit
    */
-  private isContextLengthError(error: any): boolean {
+  private isContextLengthError(error: unknown): boolean {
     if (!error) return false;
 
-    const errorMessage = error.message?.toLowerCase() || "";
-    const errorCode = error.code?.toLowerCase() || "";
+    const err = error as { message?: string; code?: string };
+    const errorMessage = err.message?.toLowerCase() || "";
+    const errorCode = err.code?.toLowerCase() || "";
 
     // OpenAI context length errors
     if (

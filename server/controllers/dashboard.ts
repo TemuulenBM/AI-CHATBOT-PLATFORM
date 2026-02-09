@@ -1,8 +1,31 @@
 import { Response, NextFunction } from "express";
-import { supabaseAdmin } from "../utils/supabase";
+import { supabaseAdmin, ChatbotSettings } from "../utils/supabase";
 import { AuthenticatedRequest } from "../middleware/clerkAuth";
 import { AuthorizationError } from "../utils/errors";
 import logger from "../utils/logger";
+
+/** Dashboard-д ашиглах chatbot мэдээллийн бүтэц */
+interface ChatbotRow {
+  id: string;
+  name: string;
+  website_url: string;
+  status: string;
+  settings: ChatbotSettings;
+  pages_scraped: number | null;
+  created_at: string;
+  updated_at: string;
+  last_scraped_at: string | null;
+  scrape_frequency: string | null;
+  auto_scrape_enabled: boolean;
+}
+
+/** Conversation message-ийн бүтэц (JSONB array доторх элемент) */
+interface DashboardMessage {
+  role: string;
+  content: string;
+  timestamp: string;
+  sentiment?: string;
+}
 
 /**
  * Dashboard-ийн нэгдсэн өгөгдөл авах endpoint
@@ -103,7 +126,7 @@ export async function getDashboardOverview(
  * - chatbots дээрээс total/active-г шууд тоолно (query хэмнэнэ)
  * - conversations count + message count-г parallel хийнэ
  */
-async function getStats(chatbots: any[], chatbotIds: string[]) {
+async function getStats(chatbots: ChatbotRow[], chatbotIds: string[]) {
   const totalChatbots = chatbots.length;
   const activeChatbots = chatbots.filter(c => c.status === "ready").length;
 
@@ -118,26 +141,23 @@ async function getStats(chatbots: any[], chatbotIds: string[]) {
   }
 
   // Conversation count болон message count-г зэрэгцээ авна
-  const [convCountResult, convMessagesResult] = await Promise.all([
+  // SQL RPC ашиглаж бүх JSONB-г JS-руу татахгүйгээр тоолно
+  const [convCountResult, msgCountResult] = await Promise.all([
     // Нийт conversation тоо (head: true → зөвхөн count буцаана, өгөгдөл татахгүй)
     supabaseAdmin
       .from("conversations")
       .select("id", { count: "exact", head: true })
       .in("chatbot_id", chatbotIds),
-    // Message тоолохдоо зөвхөн messages массивын уртыг авна
-    // JSONB бүтнээр нь татахын оронд messages field-г л авна
-    supabaseAdmin
-      .from("conversations")
-      .select("messages")
-      .in("chatbot_id", chatbotIds)
+    // SQL-level-д message тоолох — JSONB бүтнээр нь JS-руу татахгүй
+    supabaseAdmin.rpc("get_total_message_count", { p_chatbot_ids: chatbotIds })
   ]);
 
   const totalConversations = convCountResult.count || 0;
 
-  // Messages тоолох — JSONB массивын элемент бүрийг тоолно
-  const totalMessages = convMessagesResult.data?.reduce((sum, conv) => {
-    return sum + (Array.isArray(conv.messages) ? conv.messages.length : 0);
-  }, 0) || 0;
+  // RPC нь BIGINT буцаадаг — Supabase-с number эсвэл string ирж болно
+  const totalMessages = typeof msgCountResult.data === 'number'
+    ? msgCountResult.data
+    : parseInt(String(msgCountResult.data || 0), 10) || 0;
 
   return {
     totalChatbots,
@@ -186,7 +206,7 @@ async function getMessageVolume(chatbotIds: string[], days: number) {
 
   conversations?.forEach(conv => {
     if (Array.isArray(conv.messages)) {
-      conv.messages.forEach((msg: any) => {
+      conv.messages.forEach((msg: DashboardMessage) => {
         const msgDate = new Date(msg.timestamp).toISOString().split('T')[0];
         messagesByDate.set(msgDate, (messagesByDate.get(msgDate) || 0) + 1);
       });
@@ -225,7 +245,7 @@ function buildVolumeArray(days: number, messagesByDate: Map<string, number>) {
  *
  * Жишээ: 10 chatbot → өмнө 21 query, одоо 3 query
  */
-async function getChatbotComparison(chatbots: any[], chatbotIds: string[]) {
+async function getChatbotComparison(chatbots: ChatbotRow[], chatbotIds: string[]) {
   if (chatbots.length === 0) {
     return [];
   }
@@ -313,7 +333,7 @@ async function getFirstBotData(chatbotId: string | null) {
 
     conversations.forEach(conv => {
       if (Array.isArray(conv.messages)) {
-        conv.messages.forEach((msg: any) => {
+        conv.messages.forEach((msg: DashboardMessage) => {
           if (msg.sentiment) {
             total++;
             if (msg.sentiment === 'positive') positive++;

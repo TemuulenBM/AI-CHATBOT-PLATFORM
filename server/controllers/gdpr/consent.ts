@@ -86,7 +86,7 @@ export const recordConsent = async (req: AuthenticatedRequest, res: Response) =>
       { type: 'marketing', granted: marketing },
     ];
 
-    const insertErrors: any[] = [];
+    const insertErrors: Array<{ type: string; error: unknown }> = [];
     for (const consent of consents) {
       const { error: insertError } = await supabaseAdmin.from('user_consents').insert({
         user_id: userId || null,
@@ -161,7 +161,7 @@ export const getConsentStatus = async (req: AuthenticatedRequest, res: Response)
     const { data: consents } = await query;
 
     // Get latest consent for each type
-    const latestConsents: Record<string, any> = {};
+    const latestConsents: Record<string, { consent_type: string; granted: boolean; granted_at: string; consent_version: string }> = {};
     consents?.forEach((consent) => {
       if (!latestConsents[consent.consent_type]) {
         latestConsents[consent.consent_type] = consent;

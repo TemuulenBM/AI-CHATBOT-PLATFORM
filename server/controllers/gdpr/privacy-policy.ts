@@ -194,7 +194,7 @@ export const updateVersion = async (req: AdminAuthenticatedRequest, res: Respons
     }
 
     // Update version
-    const updates: any = {};
+    const updates: { content?: string; effective_date?: string } = {};
     if (content) updates.content = content;
     if (effectiveDate) updates.effective_date = effectiveDate;
 

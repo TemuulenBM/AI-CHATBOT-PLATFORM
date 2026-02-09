@@ -10,7 +10,7 @@ import logger from '../utils/logger';
 /**
  * Add a job to the appropriate queue
  */
-export async function addJob(queueName: string, data: any): Promise<void> {
+export async function addJob(queueName: string, data: Record<string, unknown>): Promise<void> {
   try {
     switch (queueName) {
       case 'data-export':
