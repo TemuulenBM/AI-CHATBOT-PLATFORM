@@ -243,12 +243,29 @@ describe("Clerk Auth Middleware", () => {
       );
     });
 
-    it("should use cached subscription when available", async () => {
+    it("should always read from DB directly, ignoring cache", async () => {
+      // checkAndIncrementUsage одоо ЗААВАЛ DB-с шууд уншина
+      // Яагаад: Usage check нь аюулгүй байдлын шийдвэр — cache ашиглавал
+      // downgrade хийсний дараа хуучин plan-аар алгасах эрсдэлтэй
       const cachedSubscription = {
         plan: "starter",
         usage: { messages_count: 5, chatbots_count: 1 },
       };
       vi.mocked(getCache).mockResolvedValue(cachedSubscription);
+
+      const subscriptionQuery = {
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        single: vi.fn().mockResolvedValue({
+          data: {
+            plan: "starter",
+            usage: { messages_count: 5, chatbots_count: 1 },
+          },
+          error: null,
+        }),
+      };
+      mockSupabaseFrom.mockReturnValue(subscriptionQuery as any);
+
       mockSupabaseRpc.mockResolvedValue({
         data: { allowed: true, current_usage: 6, limit: 2000, plan: "starter" },
         error: null,
@@ -259,7 +276,8 @@ describe("Clerk Auth Middleware", () => {
 
       await checkAndIncrementUsage("user123", "message");
 
-      expect(mockSupabaseFrom).not.toHaveBeenCalled();
+      // Cache байсан ч DB-с шууд уншдаг болсон
+      expect(mockSupabaseFrom).toHaveBeenCalled();
       expect(mockSupabaseRpc).toHaveBeenCalled();
     });
   });

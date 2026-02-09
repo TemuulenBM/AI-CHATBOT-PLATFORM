@@ -31,6 +31,15 @@ vi.mock("../../../server/services/sentiment", () => ({
   analyzeSentiment: vi.fn().mockResolvedValue("neutral"),
 }));
 
+// Support conversation-уудыг Redis-рүү шилжүүлсэн тул mock хэрэгтэй
+vi.mock("../../../server/utils/redis", () => ({
+  redis: { get: vi.fn(), set: vi.fn(), setex: vi.fn(), del: vi.fn(), incr: vi.fn(), expire: vi.fn(), ttl: vi.fn() },
+  getCache: vi.fn().mockResolvedValue(null),
+  setCache: vi.fn().mockResolvedValue(undefined),
+  deleteCache: vi.fn().mockResolvedValue(undefined),
+  default: { get: vi.fn(), set: vi.fn() },
+}));
+
 vi.mock("../../../server/utils/logger", () => ({
   default: {
     info: vi.fn(),

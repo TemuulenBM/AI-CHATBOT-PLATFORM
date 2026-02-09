@@ -71,6 +71,7 @@ vi.mock("../../../server/services/scraper", () => ({
 vi.mock("../../../server/services/embedding", () => ({
   embeddingService: {
     deleteEmbeddings: vi.fn().mockResolvedValue(undefined),
+    deleteEmbeddingsBefore: vi.fn().mockResolvedValue(undefined),
     createEmbedding: vi.fn().mockResolvedValue(undefined),
     getEmbeddingCount: vi.fn().mockResolvedValue(10),
   },
@@ -395,8 +396,9 @@ describe("Queues Integration Tests", () => {
       const result = await embeddingProcessor(job);
 
       expect(result.embeddingsCreated).toBe(10);
-      expect(embeddingService.deleteEmbeddings).toHaveBeenCalledWith("chatbot-123");
+      // Swap pattern: createEmbedding эхлээд дуудагдаж, дараа нь deleteEmbeddingsBefore дуудагдана
       expect(embeddingService.createEmbedding).toHaveBeenCalledTimes(2);
+      expect(embeddingService.deleteEmbeddingsBefore).toHaveBeenCalledWith("chatbot-123", expect.any(String));
       expect(job.updateProgress).toHaveBeenCalled();
       expect(EmailService.sendTrainingCompleteEmail).toHaveBeenCalled();
       expect(logger.info).toHaveBeenCalledWith(
@@ -444,8 +446,9 @@ describe("Queues Integration Tests", () => {
         historyId: "history-123",
       };
 
+      // Swap pattern: createEmbedding эхлээд дуудагддаг тул энэ нь fail болно
       const embeddingError = new Error("Embedding failed");
-      vi.mocked(embeddingService.deleteEmbeddings).mockRejectedValueOnce(embeddingError);
+      vi.mocked(embeddingService.createEmbedding).mockRejectedValueOnce(embeddingError);
 
       const updateBuilder = createMockQueryBuilder({ updateError: null });
 

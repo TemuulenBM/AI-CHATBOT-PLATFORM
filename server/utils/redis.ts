@@ -152,10 +152,16 @@ export async function deleteCache(key: string): Promise<void> {
 
 export async function deleteCachePattern(pattern: string): Promise<void> {
   try {
-    const keys = await redis.keys(pattern);
-    if (keys.length > 0) {
-      await redis.del(...keys);
-    }
+    // SCAN ашиглана — redis.keys() нь бүх key-г нэг дор уншиж blocking үүсгэдэг
+    // SCAN нь cursor-based iterate хийдэг тул production-д аюулгүй
+    let cursor = "0";
+    do {
+      const [nextCursor, keys] = await redis.scan(cursor, "MATCH", pattern, "COUNT", 100);
+      cursor = nextCursor;
+      if (keys.length > 0) {
+        await redis.del(...keys);
+      }
+    } while (cursor !== "0");
   } catch (error) {
     logger.error("Cache pattern delete error", { pattern, error });
   }
@@ -184,8 +190,10 @@ export async function checkRateLimit(
       resetIn: ttl > 0 ? ttl : windowSeconds,
     };
   } catch (error) {
-    logger.error("Rate limit check error", { key, error });
-    return { allowed: true, remaining: limit, resetIn: windowSeconds };
+    // Redis алдаа гарвал fail-closed: хандалтыг хориглоно
+    // Яагаад: Rate limit нь аюулгүй байдлын механизм — fail-open бол DDoS, brute-force эрсдэл үүснэ
+    logger.error("Rate limit check error - fail-closed, хандалт хориглоно", { key, error });
+    return { allowed: false, remaining: 0, resetIn: windowSeconds };
   }
 }
 

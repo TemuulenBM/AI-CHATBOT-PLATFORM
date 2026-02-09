@@ -150,30 +150,32 @@ describe("Redis Quota Exhaustion Scenarios", () => {
   });
 
   describe("checkRateLimit quota exhaustion", () => {
-    it("should allow requests when Redis quota is exceeded (fail-open)", async () => {
+    it("should deny requests when Redis quota is exceeded (fail-closed)", async () => {
+      // Fail-closed стратеги: Redis ажиллахгүй бол хандалтыг хориглоно
+      // Яагаад: Rate limit нь security механизм — fail-open бол DDoS эрсдэлтэй
       const quotaError = new Error("max requests limit exceeded");
       vi.mocked(mockRedis.incr).mockRejectedValue(quotaError);
 
       const result = await checkRateLimit("user:123", 10, 60);
 
-      // Should fail-open (allow request) when Redis is unavailable
-      expect(result.allowed).toBe(true);
-      expect(result.remaining).toBe(10);
+      expect(result.allowed).toBe(false);
+      expect(result.remaining).toBe(0);
       expect(result.resetIn).toBe(60);
-      expect(logger.error).toHaveBeenCalledWith("Rate limit check error", {
+      expect(logger.error).toHaveBeenCalledWith("Rate limit check error - fail-closed, хандалт хориглоно", {
         key: "user:123",
         error: quotaError,
       });
     });
 
-    it("should allow requests when Redis connection fails", async () => {
+    it("should deny requests when Redis connection fails (fail-closed)", async () => {
+      // Connection унавал мөн хориглоно — аюулгүй байдлыг тэргүүнд тавина
       const connError = new Error("Connection refused");
       vi.mocked(mockRedis.incr).mockRejectedValue(connError);
 
       const result = await checkRateLimit("user:123", 10, 60);
 
-      expect(result.allowed).toBe(true);
-      expect(result.remaining).toBe(10);
+      expect(result.allowed).toBe(false);
+      expect(result.remaining).toBe(0);
     });
 
     it("should handle quota error during expire call", async () => {
@@ -264,18 +266,19 @@ describe("Redis Quota Exhaustion Scenarios", () => {
 
   describe("Graceful degradation scenarios", () => {
     it("should continue operating when Redis is unavailable", async () => {
-      // Simulate Redis completely unavailable
+      // Redis бүрэн унасан үед cache үйлдлүүд алдаа шидэхгүй (graceful degradation)
+      // Харин rate limit fail-closed болно — аюулгүй байдлын механизм учраас
       vi.mocked(mockRedis.get).mockRejectedValue(new Error("Connection refused"));
       vi.mocked(mockRedis.setex).mockRejectedValue(new Error("Connection refused"));
       vi.mocked(mockRedis.incr).mockRejectedValue(new Error("Connection refused"));
 
-      // Cache operations should not throw
+      // Cache үйлдлүүд алдаа шидэхгүй — graceful degradation
       await expect(getCache("key")).resolves.toBeNull();
       await expect(setCache("key", "value")).resolves.not.toThrow();
 
-      // Rate limiting should fail-open
+      // Rate limiting fail-closed — Redis ажиллахгүй бол хандалт хориглоно
       const rateLimitResult = await checkRateLimit("user:123", 10, 60);
-      expect(rateLimitResult.allowed).toBe(true);
+      expect(rateLimitResult.allowed).toBe(false);
     });
 
     it("should handle intermittent Redis failures", async () => {

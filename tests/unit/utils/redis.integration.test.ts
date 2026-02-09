@@ -315,7 +315,8 @@ describe("server/utils/redis integration coverage", () => {
 
     await import("../../../server/utils/redis");
     const instance = mockInstances[0];
-    instance.keys.mockRejectedValue(new Error("keys failed"));
+    // scan() ашигладаг болсон тул scan-д алдаа mock хийнэ
+    instance.scan = vi.fn().mockRejectedValue(new Error("scan failed"));
 
     const { deleteCachePattern } = await import("../../../server/utils/redis");
 
@@ -327,34 +328,39 @@ describe("server/utils/redis integration coverage", () => {
     });
   });
 
-  it("handles deleteCachePattern with empty keys array", async () => {
+  it("handles deleteCachePattern with no matching keys via scan", async () => {
     process.env.REDIS_URL = "redis://localhost:6379";
     vi.resetModules();
 
     await import("../../../server/utils/redis");
     const instance = mockInstances[0];
-    instance.keys.mockResolvedValue([]); // empty array
+    // scan() нь cursor-based iterate хийдэг — ["0", []] гэж хоосон буцаавал дуусна
+    instance.scan = vi.fn().mockResolvedValue(["0", []]); // cursor "0" = scan дууссан, keys хоосон
 
     const { deleteCachePattern } = await import("../../../server/utils/redis");
 
     await deleteCachePattern("pattern:*");
 
-    expect(instance.keys).toHaveBeenCalledWith("pattern:*");
-    expect(instance.del).not.toHaveBeenCalled(); // Should not call del when keys.length === 0
+    // scan() ашиглаж байгааг шалгана (keys() биш)
+    expect(instance.scan).toHaveBeenCalledWith("0", "MATCH", "pattern:*", "COUNT", 100);
+    expect(instance.del).not.toHaveBeenCalled(); // Хоосон keys тул del дуудагдахгүй
   });
 
-  it("deletes multiple keys when pattern matches", async () => {
+  it("deletes multiple keys when scan finds matches", async () => {
     process.env.REDIS_URL = "redis://localhost:6379";
     vi.resetModules();
 
     await import("../../../server/utils/redis");
     const instance = mockInstances[0];
-    instance.keys.mockResolvedValue(["key1", "key2", "key3"]);
+    // scan() нь cursor="0" буцаавал iterate дуусна гэсэн үг
+    // Энд нэг scan дуудалтаар 3 key олдож, cursor "0" буцаана (scan дууссан)
+    instance.scan = vi.fn().mockResolvedValue(["0", ["key1", "key2", "key3"]]);
 
     const { deleteCachePattern } = await import("../../../server/utils/redis");
 
     await deleteCachePattern("pattern:*");
 
+    expect(instance.scan).toHaveBeenCalledWith("0", "MATCH", "pattern:*", "COUNT", 100);
     expect(instance.del).toHaveBeenCalledWith("key1", "key2", "key3");
   });
 
@@ -485,7 +491,9 @@ describe("server/utils/redis integration coverage", () => {
     expect(result.resetIn).toBe(45);
   });
 
-  it("fails open on rate limit errors", async () => {
+  it("fails closed on rate limit errors", async () => {
+    // Fail-closed стратеги: Redis алдаа гарвал хандалтыг хориглоно
+    // Яагаад: Rate limit нь аюулгүй байдлын механизм — fail-open бол DDoS, brute-force эрсдэл үүснэ
     process.env.REDIS_URL = "redis://localhost:6379";
     vi.resetModules();
 
@@ -498,9 +506,9 @@ describe("server/utils/redis integration coverage", () => {
 
     const result = await checkRateLimit("user:quota", 3, 30);
 
-    expect(result.allowed).toBe(true);
-    expect(result.remaining).toBe(3);
-    expect(mockLogger.error).toHaveBeenCalledWith("Rate limit check error", {
+    expect(result.allowed).toBe(false);
+    expect(result.remaining).toBe(0);
+    expect(mockLogger.error).toHaveBeenCalledWith("Rate limit check error - fail-closed, хандалт хориглоно", {
       key: "user:quota",
       error: quotaError,
     });

@@ -42,6 +42,12 @@ const MAX_HISTORY_MESSAGES = 20;    // Keep last 20 messages only
 const MAX_CONTEXT_LENGTH = 4000;    // Max characters for context (~1000 tokens)
 const MAX_TOTAL_INPUT_TOKENS = 10000; // Soft limit for total input (conservative estimate)
 
+// Streaming timeout тохиргоо
+// Per-chunk: chunk хооронд 10 секундээс удаан хүлээвэл timeout — network hang эсвэл API саатлыг илрүүлнэ
+// Total: нэг response-д 60 секундээс илүү хугацаа зарцуулахгүй — server ресурс хамгаалах
+const STREAM_CHUNK_TIMEOUT_MS = 10_000;  // 10 секунд chunk бүрийн хоорондох хамгийн их хугацаа
+const STREAM_TOTAL_TIMEOUT_MS = 60_000;  // 60 секунд нийт хамгийн их хугацаа
+
 /**
  * Check if a model requires max_completion_tokens instead of max_tokens
  * GPT-5 series and o1 models use max_completion_tokens
@@ -440,7 +446,16 @@ Helpful, concise responses acknowledging knowledge limitations when appropriate.
 
     const stream = await openai.chat.completions.create(requestParams as unknown as OpenAI.ChatCompletionCreateParamsStreaming);
 
+    // Timeout хамгаалалт: chunk хооронд 10s, нийт 60s
+    const streamStart = Date.now();
+
     for await (const chunk of stream) {
+      // Нийт хугацааны шалгалт — нэг response 60 секундээс хэтрэхгүй
+      if (Date.now() - streamStart > STREAM_TOTAL_TIMEOUT_MS) {
+        logger.warn("Stream total timeout хэтэрсэн, зогсоож байна", { model });
+        break;
+      }
+
       const content = chunk.choices[0]?.delta?.content;
       if (content) {
         yield content;
@@ -468,7 +483,16 @@ Helpful, concise responses acknowledging knowledge limitations when appropriate.
       messages,
     });
 
+    // Timeout хамгаалалт: нийт 60s
+    const streamStart = Date.now();
+
     for await (const event of stream) {
+      // Нийт хугацааны шалгалт
+      if (Date.now() - streamStart > STREAM_TOTAL_TIMEOUT_MS) {
+        logger.warn("Anthropic stream total timeout хэтэрсэн, зогсоож байна");
+        break;
+      }
+
       if (
         event.type === "content_block_delta" &&
         event.delta.type === "text_delta"

@@ -220,10 +220,12 @@ export const embeddingWorker = new Worker<EmbeddingJobData>(
       // Chatbot remains "ready" throughout embedding process
       // It's already serving requests in fallback mode
 
-      // Delete existing embeddings (if any from previous training)
-      await embeddingService.deleteEmbeddings(chatbotId);
+      // Swap pattern: эхлээд шинийг үүсгэж, дараа нь хуучныг устгана
+      // Яагаад: delete → create дарааллаар хийвэл, create fail болоход бүх embedding алдагдана
+      // Swap pattern-д create fail болсон ч хуучин embedding хэвээр үлдэнэ
+      const cutoffTime = new Date().toISOString();
 
-      // Create embeddings for each page
+      // Шинэ embedding-уудыг үүсгэх (хуучинтай зэрэг оршино — similarity search ажиллана)
       let processed = 0;
       for (const page of pages) {
         await embeddingService.createEmbedding(chatbotId, page);
@@ -233,8 +235,8 @@ export const embeddingWorker = new Worker<EmbeddingJobData>(
         await job.updateProgress((processed / pages.length) * 100);
       }
 
-      // Chatbot stays "ready" - no status change needed
-      // Once embeddings exist, responses will automatically become more specific
+      // Бүх шинэ embedding амжилттай үүссэн — одоо хуучныг устгах аюулгүй
+      await embeddingService.deleteEmbeddingsBefore(chatbotId, cutoffTime);
 
       const embeddingCount = await embeddingService.getEmbeddingCount(chatbotId);
 

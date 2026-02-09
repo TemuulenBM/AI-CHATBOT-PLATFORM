@@ -563,7 +563,7 @@ UPDATE widget_sessions SET ip_address = NULL WHERE created_at < NOW() - INTERVAL
 
 ```bash
 # Apply database schema
-psql $DATABASE_URL -f supabase/migrations/010_widget_analytics.sql
+psql $DATABASE_URL -f supabase/migrations/010b_widget_analytics.sql
 ```
 
 ### Verify Tables
@@ -622,5 +622,5 @@ npm run dev
 For issues or questions:
 - Check logs: `server/utils/logger.ts`
 - Review code: `server/services/widget-analytics.ts`
-- Database schema: `supabase/migrations/010_widget_analytics.sql`
+- Database schema: `supabase/migrations/010b_widget_analytics.sql`
 - API routes: `server/routes/widget-analytics.ts`

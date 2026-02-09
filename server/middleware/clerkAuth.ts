@@ -372,31 +372,24 @@ export async function checkAndIncrementUsage(
   userId: string,
   action: "message" | "chatbot"
 ): Promise<void> {
-  // Get current plan from cache or database
-  const cacheKey = `subscription:${userId}`;
-  let subscription = await getCache<{
-    plan: PlanType;
-    usage: { messages_count: number; chatbots_count: number };
-  }>(cacheKey);
+  // Usage check нь аюулгүй байдлын шийдвэр тул ЗААВАЛ DB-с шууд уншина
+  // Cache ашиглахгүй — downgrade хийсний дараа хуучин plan-аар алгасах эрсдэлтэй
+  const { data: subscriptionData } = await supabaseAdmin
+    .from("subscriptions")
+    .select("plan, usage")
+    .eq("user_id", userId)
+    .single();
 
-  if (!subscription) {
-    const { data } = await supabaseAdmin
-      .from("subscriptions")
-      .select("plan, usage")
-      .eq("user_id", userId)
-      .single();
+  const subscription = subscriptionData || {
+    plan: "free" as PlanType,
+    usage: { messages_count: 0, chatbots_count: 0 },
+  };
 
-    subscription = data || {
-      plan: "free" as PlanType,
-      usage: { messages_count: 0, chatbots_count: 0 },
-    };
-  }
-
-  const plan = subscription?.plan || "free";
+  const plan = (subscription.plan || "free") as PlanType;
   const field = action === "message" ? "messages_count" : "chatbots_count";
 
   // Call atomic function that checks and increments in single transaction
-  const { data, error } = await supabaseAdmin.rpc("check_and_increment_usage", {
+  const { data: rpcResult, error } = await supabaseAdmin.rpc("check_and_increment_usage", {
     p_user_id: userId,
     p_field: field,
     p_plan: plan,
@@ -407,7 +400,7 @@ export async function checkAndIncrementUsage(
     throw new Error("Failed to process usage tracking");
   }
 
-  const result = data as { allowed: boolean; current_usage: number; limit: number; plan: string };
+  const result = rpcResult as unknown as { allowed: boolean; current_usage: number; limit: number; plan: string };
 
   if (!result.allowed) {
     const limits = PLAN_LIMITS[plan];
@@ -417,8 +410,8 @@ export async function checkAndIncrementUsage(
     );
   }
 
-  // Invalidate cache after successful increment
-  await setCache(cacheKey, null, 1);
+  // Subscription cache-г invalidate хийх — бусад endpoint-ууд шинэ usage тоог харахын тулд
+  await setCache(`subscription:${userId}`, null, 1);
 
   logger.debug("Usage incremented", { userId, action, currentUsage: result.current_usage, limit: result.limit });
 }

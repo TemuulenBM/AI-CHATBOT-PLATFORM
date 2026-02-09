@@ -224,6 +224,25 @@ export class EmbeddingService {
   }
 
   /**
+   * Тодорхой хугацаанаас өмнөх embedding-уудыг устгах (swap pattern-д ашиглана)
+   * Шинэ embedding үүсгэсний дараа хуучныг нь устгахад зориулагдсан
+   */
+  async deleteEmbeddingsBefore(chatbotId: string, beforeTimestamp: string): Promise<void> {
+    const { error } = await supabaseAdmin
+      .from("embeddings")
+      .delete()
+      .eq("chatbot_id", chatbotId)
+      .lt("created_at", beforeTimestamp);
+
+    if (error) {
+      logger.error("Failed to delete old embeddings", { error, chatbotId, beforeTimestamp });
+      throw new Error("Failed to delete old embeddings");
+    }
+
+    logger.info("Old embeddings deleted (swap pattern)", { chatbotId, beforeTimestamp });
+  }
+
+  /**
    * Get embedding count for a chatbot
    */
   async getEmbeddingCount(chatbotId: string): Promise<number> {

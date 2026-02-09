@@ -6,6 +6,7 @@ import { ChatMessageInput } from "../middleware/validation";
 import { aiService, requiresMaxCompletionTokens } from "../services/ai";
 import { analyzeSentiment } from "../services/sentiment";
 import { supportBotConfig, buildSupportBotPrompt } from "../config/support-bot.config";
+import { getCache, setCache } from "../utils/redis";
 import logger from "../utils/logger";
 import OpenAI from "openai";
 
@@ -17,8 +18,26 @@ const openai = new OpenAI({
 // Generated from config for easy maintenance
 const SUPPORT_BOT_SYSTEM_PROMPT = buildSupportBotPrompt(supportBotConfig);
 
-// In-memory conversation history for support bot (simple implementation)
-const supportConversations = new Map<string, ConversationMessage[]>();
+// Support bot conversation-ыг Redis-д хадгална (24 цагийн TTL)
+// Яагаад: In-memory Map нь server restart-д алдагдана, horizontal scaling-д ажиллахгүй,
+// мөн хязгааргүй өсч memory leak үүсгэнэ
+const SUPPORT_CONVERSATION_TTL = 86400; // 24 цаг (секундээр)
+const SUPPORT_CONVERSATION_PREFIX = "support_conv:";
+
+/**
+ * Redis-с support bot conversation history авах
+ */
+async function getSupportConversation(sessionId: string): Promise<ConversationMessage[]> {
+  const data = await getCache<ConversationMessage[]>(`${SUPPORT_CONVERSATION_PREFIX}${sessionId}`);
+  return data || [];
+}
+
+/**
+ * Redis-д support bot conversation history хадгалах (24 цагийн TTL-тай)
+ */
+async function setSupportConversation(sessionId: string, messages: ConversationMessage[]): Promise<void> {
+  await setCache(`${SUPPORT_CONVERSATION_PREFIX}${sessionId}`, messages, SUPPORT_CONVERSATION_TTL);
+}
 
 export async function sendMessage(
   req: AuthenticatedRequest,
@@ -443,8 +462,8 @@ export async function supportBotMessage(
       messageLength: message.length,
     });
 
-    // Get conversation history
-    const history = supportConversations.get(sid) || [];
+    // Redis-с conversation history авах
+    const history = await getSupportConversation(sid);
 
     // Set up SSE
     res.setHeader("Content-Type", "text/event-stream");
@@ -554,20 +573,15 @@ export async function supportBotMessage(
 
     res.end();
 
-    // Save to conversation history (keep last 20 messages)
+    // Redis-д conversation history хадгалах (сүүлийн 20 мессеж, 24 цагийн TTL)
+    // TTL нь автоматаар хуучин conversation-г цэвэрлэнэ — in-memory Map шиг memory leak үүсгэхгүй
     const updatedHistory: ConversationMessage[] = [
       ...history,
       { role: "user" as const, content: message, timestamp: new Date().toISOString() },
       { role: "assistant" as const, content: fullResponse, timestamp: new Date().toISOString() },
     ].slice(-20);
 
-    supportConversations.set(sid, updatedHistory);
-
-    // Clean up old conversations periodically (simple cleanup)
-    if (supportConversations.size > 1000) {
-      const keys = Array.from(supportConversations.keys());
-      keys.slice(0, 500).forEach((k) => supportConversations.delete(k));
-    }
+    await setSupportConversation(sid, updatedHistory);
 
   } catch (error) {
     if (res.headersSent) {
