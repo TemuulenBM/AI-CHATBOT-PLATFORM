@@ -202,7 +202,28 @@ export function configureHelmet(app: Express): void {
  * CORS and CORP configuration
  */
 export function configureCORS(app: Express): void {
-  // API routes CORS (strict)
+  // Widget-ээс дуудагддаг API endpoint-ууд — permissive CORS (origin: *)
+  // ЧУХАЛ: Strict /api CORS-оос ӨМНӨ бүртгэх ёстой, ингэвэл эдгээр path-ууд
+  // strict validator-т орохгүйгээр шууд * origin-оор зөвшөөрөгдөнө.
+  // Widget гадны сайтад embed хийгддэг тул ALLOWED_ORIGINS-д байх боломжгүй.
+  app.use(
+    [
+      "/api/chat/stream",
+      "/api/chat/message",
+      "/api/chat/widget",
+      "/api/chat/support",
+      "/api/analytics/widget/track",
+      "/api/feedback",
+    ],
+    cors({
+      origin: "*",
+      methods: ["GET", "POST", "OPTIONS"],
+      allowedHeaders: ["Content-Type"],
+      maxAge: 86400, // 24 цаг
+    })
+  );
+
+  // API routes CORS (strict) — зөвхөн ALLOWED_ORIGINS-д байгаа origin зөвшөөрөгдөнө
   app.use(
     "/api",
     cors({
