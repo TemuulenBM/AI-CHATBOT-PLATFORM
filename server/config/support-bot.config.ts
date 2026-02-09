@@ -47,21 +47,21 @@ export const supportBotConfig: SupportBotConfig = {
     },
     {
       name: "Starter",
-      price: "$29/mo",
+      price: "$49/mo",
       chatbots: 3,
-      messages: 1000,
+      messages: 2000,
     },
     {
       name: "Growth",
-      price: "$79/mo",
+      price: "$99/mo",
       chatbots: 10,
-      messages: 5000,
+      messages: 10000,
     },
     {
       name: "Business",
-      price: "$199/mo",
+      price: "$299/mo",
       chatbots: "unlimited",
-      messages: 20000,
+      messages: 50000,
     },
   ],
 };
