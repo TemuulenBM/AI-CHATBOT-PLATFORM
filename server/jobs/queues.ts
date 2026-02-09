@@ -252,11 +252,13 @@ export const embeddingWorker = new Worker<EmbeddingJobData>(
           .eq("id", historyId);
       }
 
-      // Update chatbot's last_scraped_at timestamp
+      // Chatbot-ийн scrape мэдээллийг шинэчлэх
+      // pages_scraped-г энд хадгална — UI-д зөв тоо харуулахын тулд
       await supabaseAdmin
         .from("chatbots")
         .update({
           last_scraped_at: new Date().toISOString(),
+          pages_scraped: pages.length,
           updated_at: new Date().toISOString(),
         })
         .eq("id", chatbotId);

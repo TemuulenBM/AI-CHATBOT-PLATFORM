@@ -253,7 +253,7 @@ export default function ChatbotsList() {
                       <div>
                         <div className="text-xs text-muted-foreground mb-1">Pages</div>
                         <div className="text-sm font-medium">
-                          {bot.pages_scraped} scraped
+                          {bot.pages_scraped ? `${bot.pages_scraped} scraped` : "—"}
                         </div>
                       </div>
                     </div>
