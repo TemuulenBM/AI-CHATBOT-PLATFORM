@@ -99,6 +99,6 @@
       ]
     }
   ],
-  "regions": ["iad1", "sfo1", "lhr1", "hnd1", "syd1"],
+  "regions": ["iad1"],
   "crons": []
 }

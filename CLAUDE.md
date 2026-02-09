@@ -69,7 +69,7 @@ npm run start            # Start production server from dist/
 - `@shared/*` → `./shared/*`
 
 ### Deployment Architecture
-- **Frontend**: Vercel (multi-region: iad1, sfo1, lhr1, hnd1, syd1)
+- **Frontend**: Vercel (single region: iad1 — Hobby plan)
 - **Backend**: Render.com (Vercel rewrites `/api/*` to Render backend)
 - **API_ONLY mode**: Set `API_ONLY=true` to skip static file serving on backend
 
