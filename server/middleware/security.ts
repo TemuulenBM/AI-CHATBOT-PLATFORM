@@ -202,39 +202,43 @@ export function configureHelmet(app: Express): void {
  * CORS and CORP configuration
  */
 export function configureCORS(app: Express): void {
-  // Widget-ээс дуудагддаг API endpoint-ууд — permissive CORS (origin: *)
-  // ЧУХАЛ: Strict /api CORS-оос ӨМНӨ бүртгэх ёстой, ингэвэл эдгээр path-ууд
-  // strict validator-т орохгүйгээр шууд * origin-оор зөвшөөрөгдөнө.
-  // Widget гадны сайтад embed хийгддэг тул ALLOWED_ORIGINS-д байх боломжгүй.
-  app.use(
-    [
-      "/api/chat/stream",
-      "/api/chat/message",
-      "/api/chat/widget",
-      "/api/chat/support",
-      "/api/analytics/widget/track",
-      "/api/feedback",
-    ],
-    cors({
-      origin: "*",
-      methods: ["GET", "POST", "OPTIONS"],
-      allowedHeaders: ["Content-Type"],
-      maxAge: 86400, // 24 цаг
-    })
-  );
+  // Widget-ээс дуудагддаг API path-уудын жагсаалт
+  // Эдгээр нь гадны сайтад embed хийгдсэн widget-ээс дуудагддаг тул origin: * байх ёстой
+  const widgetApiPaths = [
+    "/chat/stream", "/chat/message", "/chat/widget",
+    "/chat/support", "/feedback",
+  ];
 
-  // API routes CORS (strict) — зөвхөн ALLOWED_ORIGINS-д байгаа origin зөвшөөрөгдөнө
-  app.use(
-    "/api",
-    cors({
-      origin: corsOriginValidator,
-      credentials: true,
-      methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-      allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"],
-      exposedHeaders: ["X-RateLimit-Limit", "X-RateLimit-Remaining", "X-RateLimit-Reset"],
-      maxAge: 600, // 10 minutes
-    })
-  );
+  // Widget endpoint-д зориулсан permissive CORS (origin: true → request origin-г reflect хийнэ)
+  const widgetCors = cors({
+    origin: true,
+    methods: ["GET", "POST", "OPTIONS"],
+    allowedHeaders: ["Content-Type"],
+    maxAge: 86400,
+  });
+
+  // Dashboard/auth endpoint-д зориулсан strict CORS
+  const strictCors = cors({
+    origin: corsOriginValidator,
+    credentials: true,
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"],
+    exposedHeaders: ["X-RateLimit-Limit", "X-RateLimit-Remaining", "X-RateLimit-Reset"],
+    maxAge: 600,
+  });
+
+  // Нэг middleware-р widget эсвэл strict CORS ялгаж ажиллуулна
+  // Яагаад: Хоёр cors() тусдаа app.use-р бүртгэвэл хоёулаа ажиллаж header conflict үүсгэнэ
+  app.use("/api", (req: Request, res: Response, next: NextFunction) => {
+    const isWidgetPath =
+      widgetApiPaths.some(p => req.path.startsWith(p)) ||
+      req.originalUrl.startsWith("/api/analytics/widget/track");
+
+    if (isWidgetPath) {
+      return widgetCors(req, res, next);
+    }
+    return strictCors(req, res, next);
+  });
 
   // Widget routes CORS (permissive for embedding)
   app.use(
