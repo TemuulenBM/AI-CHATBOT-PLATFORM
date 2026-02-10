@@ -3,7 +3,6 @@ import * as cheerio from "cheerio";
 import robotsParser from "robots-parser";
 import { parseStringPromise } from "xml2js";
 import puppeteer, { Browser } from "puppeteer";
-import { existsSync } from "fs";
 import logger from "../utils/logger";
 
 interface ScrapedPage {
@@ -35,46 +34,10 @@ const DEFAULT_OPTIONS: ScraperOptions = {
 };
 
 /**
- * Chrome executable-ийн path олох
- * Дараалал:
- * 1. CHROME_EXECUTABLE_PATH env var (гараар тохируулсан бол)
- * 2. puppeteer-ийн суулгасан Chrome (npm install үед автоматаар татсан)
- * 3. System-д суулгасан Chrome/Chromium (macOS, Linux)
+ * puppeteer (full) package нь npm install үед Chrome-г автоматаар татаж суулгадаг.
+ * puppeteer.launch() дуудахад executablePath заахгүй бол өөрийнхөө Chrome-г ашиглана.
+ * CHROME_EXECUTABLE_PATH env var байвал тэр path-ийг хүчээр ашиглана (custom Chrome).
  */
-function findChromePath(): string {
-  // 1. Env var-аар тохируулсан бол шууд ашиглана
-  const envPath = process.env.CHROME_EXECUTABLE_PATH;
-  if (envPath) return envPath;
-
-  // 2. puppeteer package-ийн суулгасан Chrome — Render.com дээр ажиллана
-  // puppeteer (full) нь npm install үед Chrome-г автоматаар татаж суулгадаг
-  try {
-    const bundledPath = puppeteer.executablePath();
-    if (bundledPath && existsSync(bundledPath)) return bundledPath;
-  } catch {
-    // executablePath() олдоогүй бол system path-аас хайна
-  }
-
-  // 3. System-д суулгасан Chrome/Chromium (fallback)
-  const commonPaths = [
-    // macOS
-    "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
-    "/Applications/Chromium.app/Contents/MacOS/Chromium",
-    // Linux (Docker, Ubuntu/Debian)
-    "/usr/bin/google-chrome",
-    "/usr/bin/google-chrome-stable",
-    "/usr/bin/chromium-browser",
-    "/usr/bin/chromium",
-  ];
-
-  for (const p of commonPaths) {
-    if (existsSync(p)) return p;
-  }
-
-  throw new Error(
-    "Chrome executable олдсонгүй. CHROME_EXECUTABLE_PATH env var тохируулна уу."
-  );
-}
 
 export class WebsiteScraper {
   private options: ScraperOptions;
@@ -173,15 +136,21 @@ export class WebsiteScraper {
 
   /**
    * Headless Chrome browser нээх
+   * puppeteer (full) нь өөрийнхөө Chrome-г автоматаар олдог — executablePath заах шаардлагагүй.
+   * CHROME_EXECUTABLE_PATH env var байвал тэрийг ашиглана (custom Chrome тохиолдолд).
    * --no-sandbox: Docker/Render.com дээр root user-ээр ажиллахад шаардлагатай
    * --disable-dev-shm-usage: /dev/shm жижиг байвал crash-аас сэргийлнэ
    */
   private async launchBrowser(): Promise<void> {
-    // findChromePath() нь Chrome олдоогүй бол throw хийнэ
-    const chromePath = findChromePath();
-    logger.info("Launching headless browser", { chromePath });
+    const customChromePath = process.env.CHROME_EXECUTABLE_PATH;
+
+    logger.info("Launching headless browser", {
+      executablePath: customChromePath || "puppeteer-bundled",
+    });
+
     this.browser = await puppeteer.launch({
-      executablePath: chromePath,
+      // CHROME_EXECUTABLE_PATH байвал тэрийг ашиглана, байхгүй бол puppeteer өөрийн Chrome-г ашиглана
+      ...(customChromePath && { executablePath: customChromePath }),
       headless: true,
       args: [
         "--no-sandbox",
