@@ -74,6 +74,7 @@ vi.mock("../../../server/services/embedding", () => ({
     deleteEmbeddingsBefore: vi.fn().mockResolvedValue(undefined),
     createEmbedding: vi.fn().mockResolvedValue(undefined),
     getEmbeddingCount: vi.fn().mockResolvedValue(10),
+    invalidateEmbeddingCache: vi.fn().mockResolvedValue(undefined),
   },
 }));
 

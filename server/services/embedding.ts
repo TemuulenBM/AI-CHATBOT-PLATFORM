@@ -1,6 +1,6 @@
 import OpenAI from "openai";
 import { supabaseAdmin } from "../utils/supabase";
-import { getCache, setCache } from "../utils/redis";
+import { getCache, setCache, deleteCachePattern } from "../utils/redis";
 import logger from "../utils/logger";
 import { ExternalServiceError } from "../utils/errors";
 
@@ -240,6 +240,16 @@ export class EmbeddingService {
     }
 
     logger.info("Old embeddings deleted (swap pattern)", { chatbotId, beforeTimestamp });
+  }
+
+  /**
+   * Embedding шинэчлэгдсэний дараа similarity cache-г цэвэрлэх
+   * Яагаад: findSimilar() нь үр дүнг 5 мин cache-лдэг тул шинэ embedding
+   * үүссэний дараа хуучин хоосон cache хэвээр үлдэж болно
+   */
+  async invalidateEmbeddingCache(chatbotId: string): Promise<void> {
+    await deleteCachePattern(`similar:${chatbotId}:*`);
+    logger.info("Embedding similarity cache invalidated", { chatbotId });
   }
 
   /**

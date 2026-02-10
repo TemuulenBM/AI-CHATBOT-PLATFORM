@@ -94,13 +94,21 @@ export class AIService {
       }
 
       // Step 2: Fall back to scraped content embeddings
-      // Use MAX_CONTEXT_CHUNKS instead of hardcoded 5
+      // Threshold 0.4 — recall нэмэгдэнэ, LLM хамааралгүй контекстийг өөрөө шүүнэ
       const similar = await embeddingService.findSimilar(
         chatbotId,
         message,
         MAX_CONTEXT_CHUNKS, // 3 chunks instead of 5
-        0.6
+        0.4
       );
+
+      // Production дээр embedding хайлтын үр дүнг хянах
+      logger.info("Embedding search results", {
+        chatbotId,
+        query: message.substring(0, 50),
+        resultsCount: similar.length,
+        topSimilarity: similar[0]?.similarity ?? null,
+      });
 
       if (similar.length === 0) {
         return { relevantContent: "", sources: [] };

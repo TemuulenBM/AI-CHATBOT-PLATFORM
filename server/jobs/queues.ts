@@ -243,6 +243,9 @@ export const embeddingWorker = new Worker<EmbeddingJobData>(
       // Бүх шинэ embedding амжилттай үүссэн — одоо хуучныг устгах аюулгүй
       await embeddingService.deleteEmbeddingsBefore(chatbotId, cutoffTime);
 
+      // Similarity cache цэвэрлэх — хуучин хоосон cache хэвээр үлдэхээс сэргийлнэ
+      await embeddingService.invalidateEmbeddingCache(chatbotId);
+
       const embeddingCount = await embeddingService.getEmbeddingCount(chatbotId);
 
       // Update scrape history with completion status
