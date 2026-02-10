@@ -47,8 +47,12 @@ export async function analyzeSentiment(text: string): Promise<Sentiment> {
                     content: SENTIMENT_PROMPT + text,
                 },
             ],
-            temperature: 0,
         };
+
+        // GPT-5 серийн моделиуд temperature параметр дэмжихгүй (default: 1)
+        if (!requiresMaxCompletionTokens(model)) {
+            requestParams.temperature = 0;
+        }
 
         // Use max_completion_tokens for GPT-5 series models
         if (requiresMaxCompletionTokens(model)) {

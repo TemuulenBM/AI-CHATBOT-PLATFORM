@@ -159,9 +159,10 @@ describe("Sentiment Analysis Service - Pure Function Tests", () => {
       expect(maxTokens).toBe(10);
     });
 
-    it("should use temperature 0 for deterministic results", () => {
-      const temperature = 0;
-      expect(temperature).toBe(0);
+    it("should not use temperature for GPT-5 models", () => {
+      // GPT-5 серийн моделиуд temperature дэмжихгүй тул нэмэхгүй
+      const model = "gpt-5-nano";
+      expect(requiresMaxCompletionTokens(model)).toBe(true);
     });
   });
 

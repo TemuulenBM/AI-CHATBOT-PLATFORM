@@ -210,10 +210,12 @@ export function configureCORS(app: Express): void {
   ];
 
   // Widget endpoint-д зориулсан permissive CORS (origin: true → request origin-г reflect хийнэ)
+  // sendBeacon() cookie автоматаар илгээдэг тул Allow-Credentials header шаардлагатай
   const widgetCors = cors({
     origin: true,
     methods: ["GET", "POST", "OPTIONS"],
     allowedHeaders: ["Content-Type"],
+    credentials: true,
     maxAge: 86400,
   });
 
