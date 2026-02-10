@@ -11,6 +11,7 @@ import { Switch } from "@/components/ui/switch";
 import { useChatbotStore, Chatbot } from "@/store/chatbot-store";
 import { useLocation } from "wouter";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@clerk/clerk-react";
 import { Confetti } from "@/components/ui/success-animation";
 import {
   Tooltip,
@@ -62,10 +63,12 @@ export default function CreateChatbot() {
   const { createChatbot, isLoading, error, clearError } = useChatbotStore();
   const [, setLocation] = useLocation();
   const { toast } = useToast();
+  const { getToken } = useAuth();
 
   // Poll scrape status for newly created chatbot
   const { status: scrapeStatus } = useScrapeStatus(
     createdChatbot?.id,
+    getToken,
     { autoRefresh: !!createdChatbot }
   );
 

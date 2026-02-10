@@ -129,7 +129,7 @@ export default function ChatbotSettings() {
   const [showRescrapeDialog, setShowRescrapeDialog] = useState(false);
 
   // Use scrape status hook for polling
-  const { status: scrapeStatus, refetch: refetchScrapeStatus } = useScrapeStatus(id, {
+  const { status: scrapeStatus, refetch: refetchScrapeStatus } = useScrapeStatus(id, getToken, {
     autoRefresh: true,
   });
 

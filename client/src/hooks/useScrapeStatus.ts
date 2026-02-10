@@ -46,9 +46,11 @@ interface UseScrapeStatusReturn {
 /**
  * Hook to fetch and poll scrape status for a chatbot
  * Automatically polls while status is "pending" or "in_progress"
+ * getToken: Clerk auth token авах функц — backend auth middleware-д шаардлагатай
  */
 export function useScrapeStatus(
   chatbotId: string | undefined,
+  getToken: (() => Promise<string | null>) | undefined,
   options: UseScrapeStatusOptions = {}
 ): UseScrapeStatusReturn {
   const {
@@ -75,7 +77,18 @@ export function useScrapeStatus(
       setIsLoading(true);
       setError(null);
 
-      const response = await fetch(`/api/chatbots/${chatbotId}/scrape-history`);
+      // Auth header бэлдэх — backend auth middleware Bearer token шаарддаг
+      const headers: Record<string, string> = {};
+      if (getToken) {
+        try {
+          const token = await getToken();
+          if (token) {
+            headers.Authorization = `Bearer ${token}`;
+          }
+        } catch { /* Token авч чадаагүй — header-гүй үргэлжлүүлнэ */ }
+      }
+
+      const response = await fetch(`/api/chatbots/${chatbotId}/scrape-history`, { headers });
 
       if (!response.ok) {
         throw new Error(`Failed to fetch scrape history: ${response.statusText}`);

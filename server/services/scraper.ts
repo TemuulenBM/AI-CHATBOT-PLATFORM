@@ -355,7 +355,7 @@ export class WebsiteScraper {
         }
       });
     } catch (error) {
-      logger.debug("Failed to crawl for links", { url: startUrl, error });
+      logger.warn("Failed to crawl for links", { url: startUrl, error: error instanceof Error ? error.message : error });
     }
 
     return Array.from(urls);
@@ -505,7 +505,7 @@ export class WebsiteScraper {
         }
       }
 
-      logger.debug("Failed to scrape page", { url, error });
+      logger.warn("Failed to scrape page", { url, error: error instanceof Error ? error.message : error });
       return null;
     }
   }
