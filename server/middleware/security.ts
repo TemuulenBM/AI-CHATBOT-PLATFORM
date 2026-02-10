@@ -227,12 +227,17 @@ export function configureCORS(app: Express): void {
     maxAge: 600,
   });
 
+  // Widget-ээс conversation history авах path-ийн pattern
+  // /chat/:chatbotId/session_:id — widget-ийн loadConversationHistory() дуудна
+  const widgetConversationPattern = /^\/chat\/[^/]+\/session_/;
+
   // Нэг middleware-р widget эсвэл strict CORS ялгаж ажиллуулна
   // Яагаад: Хоёр cors() тусдаа app.use-р бүртгэвэл хоёулаа ажиллаж header conflict үүсгэнэ
   app.use("/api", (req: Request, res: Response, next: NextFunction) => {
     const isWidgetPath =
       widgetApiPaths.some(p => req.path.startsWith(p)) ||
-      req.originalUrl.startsWith("/api/analytics/widget/track");
+      req.originalUrl.startsWith("/api/analytics/widget/track") ||
+      widgetConversationPattern.test(req.path);
 
     if (isWidgetPath) {
       return widgetCors(req, res, next);
