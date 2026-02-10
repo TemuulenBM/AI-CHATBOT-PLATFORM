@@ -117,6 +117,7 @@ export default function ChatbotSettings() {
   const [showInitially, setShowInitially] = useState(false);
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [animationStyle, setAnimationStyle] = useState<"slide" | "fade" | "bounce" | "none">("slide");
+  const [renderJavaScript, setRenderJavaScript] = useState(false);
 
   const [userPlan, setUserPlan] = useState<"free" | "starter" | "growth" | "business">("free");
 
@@ -210,6 +211,7 @@ export default function ChatbotSettings() {
       setShowInitially(currentChatbot.settings?.showInitially ?? false);
       setSoundEnabled(currentChatbot.settings?.soundEnabled ?? true);
       setAnimationStyle(currentChatbot.settings?.animationStyle || "slide");
+      setRenderJavaScript(currentChatbot.settings?.renderJavaScript ?? false);
 
       setHasChanges(false);
     }
@@ -234,12 +236,14 @@ export default function ChatbotSettings() {
       openDelay !== (currentChatbot.settings?.openDelay ?? 0) ||
       showInitially !== (currentChatbot.settings?.showInitially ?? false) ||
       soundEnabled !== (currentChatbot.settings?.soundEnabled ?? true) ||
-      animationStyle !== (currentChatbot.settings?.animationStyle || "slide");
+      animationStyle !== (currentChatbot.settings?.animationStyle || "slide") ||
+      renderJavaScript !== (currentChatbot.settings?.renderJavaScript ?? false);
 
     setHasChanges(changed);
   }, [name, personality, primaryColor, welcomeMessage, systemPrompt,
       position, widgetSize, borderRadius, fontFamily, headerStyle,
-      showBranding, openDelay, showInitially, soundEnabled, animationStyle, currentChatbot]);
+      showBranding, openDelay, showInitially, soundEnabled, animationStyle,
+      renderJavaScript, currentChatbot]);
 
   const handleSave = async () => {
     if (!id || !hasChanges) return;
@@ -261,6 +265,7 @@ export default function ChatbotSettings() {
         showInitially,
         soundEnabled,
         animationStyle,
+        renderJavaScript,
       },
     });
 
@@ -522,6 +527,20 @@ export default function ChatbotSettings() {
                         {currentChatbot?.website_url ? new URL(currentChatbot.website_url).hostname : "N/A"}
                       </p>
                     </div>
+                  </div>
+
+                  {/* SPA Rendering Toggle */}
+                  <div className="flex items-center justify-between p-4 rounded-lg bg-background/50 border border-white/5">
+                    <div className="space-y-0.5">
+                      <Label>Render JavaScript (SPA)</Label>
+                      <p className="text-xs text-muted-foreground">
+                        Enable for React, Vue, Angular sites that render content with JavaScript
+                      </p>
+                    </div>
+                    <Switch
+                      checked={renderJavaScript}
+                      onCheckedChange={setRenderJavaScript}
+                    />
                   </div>
 
                   {/* Re-scrape Button */}

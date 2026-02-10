@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Check, Globe, Loader2, Sparkles, Code2, Copy, ExternalLink, Brain, HelpCircle, Info } from "lucide-react";
 import { Slider } from "@/components/ui/slider";
+import { Switch } from "@/components/ui/switch";
 import { useChatbotStore, Chatbot } from "@/store/chatbot-store";
 import { useLocation } from "wouter";
 import { useToast } from "@/hooks/use-toast";
@@ -53,6 +54,7 @@ export default function CreateChatbot() {
   const [selectedColor, setSelectedColor] = useState(colorOptions[0].value);
   const [welcomeMessage, setWelcomeMessage] = useState("Hello! How can I help you today?");
   const [personality, setPersonality] = useState(50);
+  const [renderJavaScript, setRenderJavaScript] = useState(false);
   const [createdChatbot, setCreatedChatbot] = useState<Chatbot | null>(null);
   const [showConfetti, setShowConfetti] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -124,6 +126,7 @@ export default function CreateChatbot() {
       primaryColor: selectedColor,
       welcomeMessage: welcomeMessage.trim(),
       showBranding: true,
+      renderJavaScript,
     });
 
     if (chatbot) {
@@ -358,6 +361,21 @@ export default function CreateChatbot() {
                         <span>Casual</span>
                       </div>
                     </div>
+
+                    {/* SPA Rendering Toggle */}
+                    <div className="flex items-center justify-between p-4 rounded-lg bg-background/50 border border-white/5">
+                      <div className="space-y-0.5">
+                        <Label>Render JavaScript (SPA)</Label>
+                        <p className="text-xs text-muted-foreground">
+                          Enable for React, Vue, Angular sites
+                        </p>
+                      </div>
+                      <Switch
+                        checked={renderJavaScript}
+                        onCheckedChange={setRenderJavaScript}
+                      />
+                    </div>
+
                     <Button
                       className="w-full btn-gradient mt-4"
                       onClick={handleCreate}

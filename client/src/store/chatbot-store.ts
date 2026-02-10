@@ -18,6 +18,9 @@ export interface ChatbotSettings {
   showInitially?: boolean;
   soundEnabled?: boolean;
   animationStyle?: "slide" | "fade" | "bounce" | "none";
+
+  // SPA сайтуудыг Puppeteer-ээр scrape хийх тохиргоо
+  renderJavaScript?: boolean;
 }
 
 export type ScrapeFrequency = "manual" | "daily" | "weekly" | "monthly";
