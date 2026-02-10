@@ -962,12 +962,13 @@ export async function getScrapeHistory(
       chatbot.auto_scrape_enabled
     );
 
+    // Frontend snake_case хүлээж авдаг — Supabase column name-тай нийцүүлсэн
     res.json({
       history,
-      lastScrapedAt: chatbot.last_scraped_at,
-      scrapeFrequency: chatbot.scrape_frequency,
-      autoScrapeEnabled: chatbot.auto_scrape_enabled,
-      nextScheduledScrape: nextScheduledScrape?.toISOString() || null,
+      last_scraped_at: chatbot.last_scraped_at,
+      scrape_frequency: chatbot.scrape_frequency,
+      auto_scrape_enabled: chatbot.auto_scrape_enabled,
+      next_scheduled_scrape: nextScheduledScrape?.toISOString() || null,
     });
   } catch (error) {
     next(error);

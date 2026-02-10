@@ -1718,8 +1718,8 @@ describe("Chatbots Controller", () => {
       await getScrapeHistory(req, res, mockNext);
 
       expect(res._json).toHaveProperty("history");
-      expect(res._json).toHaveProperty("lastScrapedAt");
-      expect(res._json).toHaveProperty("nextScheduledScrape");
+      expect(res._json).toHaveProperty("last_scraped_at");
+      expect(res._json).toHaveProperty("next_scheduled_scrape");
     });
   });
 

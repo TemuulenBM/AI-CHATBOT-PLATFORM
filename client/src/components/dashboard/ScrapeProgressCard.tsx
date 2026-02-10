@@ -4,7 +4,7 @@ import { Progress } from "@/components/ui/progress";
 import { ScrapeStatusBadge } from "./ScrapeStatusBadge";
 import { ScrapeHistoryEntry } from "@/hooks/useScrapeStatus";
 import { format } from "date-fns";
-import { RefreshCw } from "lucide-react";
+import { RefreshCw, Loader2 } from "lucide-react";
 
 interface ScrapeProgressCardProps {
   chatbotId: string;
@@ -58,16 +58,25 @@ export function ScrapeProgressCard({
       </CardHeader>
 
       <CardContent className="space-y-4">
-        {/* Progress bar for in-progress scrapes */}
+        {/* In-progress: pages_scraped 0 байхад spinner, 0-ээс их бол progress bar */}
         {latestScrape?.status === "in_progress" && (
           <div className="space-y-2">
-            <div className="flex justify-between text-sm">
-              <span className="text-muted-foreground">
-                {latestScrape.pages_scraped} pages indexed
-              </span>
-              <span className="text-muted-foreground">{Math.round(progressValue)}%</span>
-            </div>
-            <Progress value={progressValue} className="h-2" />
+            {latestScrape.pages_scraped > 0 ? (
+              <>
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">
+                    {latestScrape.pages_scraped} pages indexed
+                  </span>
+                  <span className="text-muted-foreground">{Math.round(progressValue)}%</span>
+                </div>
+                <Progress value={progressValue} className="h-2" />
+              </>
+            ) : (
+              <div className="flex items-center gap-2">
+                <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                <span className="text-sm text-muted-foreground">Scraping website and creating embeddings...</span>
+              </div>
+            )}
             <p className="text-xs text-muted-foreground">
               This may take a few minutes...
             </p>

@@ -16,6 +16,7 @@ export interface ScrapeHistoryEntry {
 
 export interface ScrapeHistoryResponse {
   history: ScrapeHistoryEntry[];
+  last_scraped_at: string | null;
   next_scheduled_scrape: string | null;
 }
 
@@ -26,6 +27,8 @@ interface UseScrapeStatusOptions {
   pollInterval?: number;
   /** Maximum polling duration in milliseconds (default: 300000ms / 5 minutes) */
   maxPollDuration?: number;
+  /** Scrape дуусахад (completed/failed) дуудагдах callback — chatbot data refetch хийхэд ашиглана */
+  onComplete?: () => void;
 }
 
 interface UseScrapeStatusReturn {
@@ -57,6 +60,7 @@ export function useScrapeStatus(
     autoRefresh = true,
     pollInterval = 3000,
     maxPollDuration = 300000, // 5 minutes
+    onComplete,
   } = options;
 
   const [status, setStatus] = useState<ScrapeHistoryResponse | null>(null);
@@ -97,13 +101,14 @@ export function useScrapeStatus(
       const data: ScrapeHistoryResponse = await response.json();
       setStatus(data);
 
-      // Check if we should stop polling
+      // Scrape дуусвал polling зогсоож, onComplete callback дуудна
       const latestEntry = data.history[0];
       if (
         latestEntry &&
         (latestEntry.status === "completed" || latestEntry.status === "failed")
       ) {
         stopPolling();
+        onComplete?.();
       }
 
       return data;

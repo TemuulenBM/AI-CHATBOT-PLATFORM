@@ -129,8 +129,12 @@ export default function ChatbotSettings() {
   const [showRescrapeDialog, setShowRescrapeDialog] = useState(false);
 
   // Use scrape status hook for polling
+  // onComplete: scrape дуусахад chatbot data дахин ачаална → "Last Trained" шинэчлэгдэнэ
   const { status: scrapeStatus, refetch: refetchScrapeStatus } = useScrapeStatus(id, getToken, {
     autoRefresh: true,
+    onComplete: () => {
+      if (id) fetchChatbot(id);
+    },
   });
 
   // Auth check
@@ -611,7 +615,7 @@ export default function ChatbotSettings() {
                       <ScrapeProgressCard
                         chatbotId={id}
                         history={scrapeStatus.history}
-                        lastScrapedAt={currentChatbot?.last_scraped_at || null}
+                        lastScrapedAt={scrapeStatus?.last_scraped_at || currentChatbot?.last_scraped_at || null}
                         nextScheduledScrape={scrapeStatus.next_scheduled_scrape}
                         onManualRescrape={() => setShowRescrapeDialog(true)}
                         isRescraping={isRescraping}
