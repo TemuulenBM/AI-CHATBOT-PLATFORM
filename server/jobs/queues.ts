@@ -202,6 +202,10 @@ export const scrapeWorker = new Worker<ScrapeJobData>(
   {
     connection,
     concurrency: 2,
+    // Scraping удаан процесс (Chrome суулгах + олон page scrape хийх) тул lock хугацааг уртасгана.
+    // Default 30s нь хангалтгүй — Chrome install ~60s, scraping ~минутууд зарцуулж болно.
+    // lockRenewTime автоматаар lockDuration / 2 = 60s болно.
+    lockDuration: 120_000,
     limiter: {
       max: 5,
       duration: 60000, // 5 jobs per minute

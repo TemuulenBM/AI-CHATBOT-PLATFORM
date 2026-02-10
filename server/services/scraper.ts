@@ -3,8 +3,12 @@ import * as cheerio from "cheerio";
 import robotsParser from "robots-parser";
 import { parseStringPromise } from "xml2js";
 import puppeteer, { Browser } from "puppeteer";
-import { execSync } from "child_process";
+import { exec } from "child_process";
 import { existsSync } from "fs";
+import { promisify } from "util";
+
+// promisify(exec): event loop блоклохгүй — BullMQ lock renewal timer ажиллах боломжтой болно
+const execAsync = promisify(exec);
 import logger from "../utils/logger";
 
 interface ScrapedPage {
@@ -156,9 +160,9 @@ export class WebsiteScraper {
 
     logger.info("Chrome суулгаж байна...");
     try {
-      execSync("npx puppeteer browsers install chrome", {
+      // execAsync: event loop блоклохгүй тул BullMQ lock auto-renewal ажиллана
+      await execAsync("npx puppeteer browsers install chrome", {
         timeout: 120_000,
-        stdio: "pipe",
       });
       logger.info("Chrome амжилттай суулгагдлаа", {
         executablePath: puppeteer.executablePath(),
