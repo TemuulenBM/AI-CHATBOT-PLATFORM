@@ -3,6 +3,8 @@ import * as cheerio from "cheerio";
 import robotsParser from "robots-parser";
 import { parseStringPromise } from "xml2js";
 import puppeteer, { Browser } from "puppeteer";
+import { execSync } from "child_process";
+import { existsSync } from "fs";
 import logger from "../utils/logger";
 
 interface ScrapedPage {
@@ -135,6 +137,41 @@ export class WebsiteScraper {
   }
 
   /**
+   * Chrome binary суулгагдсан эсэхийг шалгаж, байхгүй бол автоматаар суулгана.
+   * Self-healing: build step амжилтгүй, instance restart, cache устгагдсан ч runtime-д ажиллана.
+   * Зөвхөн анхны удаа ~30-60 сек нэмэлт хугацаа шаардагдана.
+   */
+  private async ensureChromeInstalled(): Promise<void> {
+    try {
+      const execPath = puppeteer.executablePath();
+      if (existsSync(execPath)) {
+        logger.info("Chrome binary олдлоо", { executablePath: execPath });
+        return;
+      }
+      logger.warn("Chrome binary path олдсонгүй", { expectedPath: execPath });
+    } catch {
+      // executablePath() алдаа өгвөл Chrome суулгагдаагүй
+      logger.warn("Chrome executablePath тодорхойлогдсонгүй");
+    }
+
+    logger.info("Chrome суулгаж байна...");
+    try {
+      execSync("npx puppeteer browsers install chrome", {
+        timeout: 120_000,
+        stdio: "pipe",
+      });
+      logger.info("Chrome амжилттай суулгагдлаа", {
+        executablePath: puppeteer.executablePath(),
+      });
+    } catch (error) {
+      logger.error("Chrome суулгахад алдаа гарлаа", {
+        error: error instanceof Error ? error.message : error,
+      });
+      throw new Error("Chrome installation failed — scraping unavailable");
+    }
+  }
+
+  /**
    * Headless Chrome browser нээх
    * puppeteer (full) нь өөрийнхөө Chrome-г автоматаар олдог — executablePath заах шаардлагагүй.
    * CHROME_EXECUTABLE_PATH env var байвал тэрийг ашиглана (custom Chrome тохиолдолд).
@@ -142,6 +179,9 @@ export class WebsiteScraper {
    * --disable-dev-shm-usage: /dev/shm жижиг байвал crash-аас сэргийлнэ
    */
   private async launchBrowser(): Promise<void> {
+    // Chrome binary байгаа эсэхийг шалгаж, байхгүй бол суулгана
+    await this.ensureChromeInstalled();
+
     const customChromePath = process.env.CHROME_EXECUTABLE_PATH;
 
     logger.info("Launching headless browser", {
