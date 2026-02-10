@@ -162,6 +162,7 @@ export const accountDeletionWorker = new Worker<AccountDeletionJobData>(
   {
     connection: getRedisConnection(),
     concurrency: 1, // Process one deletion at a time for safety
+    drainDelay: 30_000, // Upstash квот хэмнэх
     limiter: {
       max: 5,
       duration: 60000, // Max 5 deletions per minute

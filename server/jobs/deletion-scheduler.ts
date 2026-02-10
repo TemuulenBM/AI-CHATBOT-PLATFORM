@@ -99,6 +99,7 @@ export const scheduledDeletionWorker = new Worker<ScheduledDeletionCheckJobData>
   {
     connection,
     concurrency: 1, // Only one check at a time
+    drainDelay: 60_000, // Cron job — өдөрт 1 удаа тул 60s poll хангалттай
   }
 );
 

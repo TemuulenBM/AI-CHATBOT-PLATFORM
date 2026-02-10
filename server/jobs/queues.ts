@@ -206,6 +206,9 @@ export const scrapeWorker = new Worker<ScrapeJobData>(
     // Default 30s нь хангалтгүй — Chrome install ~60s, scraping ~минутууд зарцуулж болно.
     // lockRenewTime автоматаар lockDuration / 2 = 60s болно.
     lockDuration: 120_000,
+    // drainDelay: Queue хоосон үед poll хийх хоорондын хугацаа (ms)
+    // Default 5s нь Upstash free tier (500k req/day) дээр хэт олон request үүсгэнэ
+    drainDelay: 30_000,
     limiter: {
       max: 5,
       duration: 60000, // 5 jobs per minute
@@ -324,6 +327,7 @@ export const embeddingWorker = new Worker<EmbeddingJobData>(
   {
     connection,
     concurrency: 1, // Process one at a time due to API rate limits
+    drainDelay: 30_000, // Upstash квот хэмнэх — хоосон queue-г 30s тутам шалгана
     limiter: {
       max: 10,
       duration: 60000, // 10 jobs per minute
@@ -494,6 +498,7 @@ export const scheduledRescrapeWorker = new Worker<ScheduledRescrapeJobData>(
   {
     connection,
     concurrency: 1,
+    drainDelay: 60_000, // Cron job — өдөрт 1 удаа ажилладаг тул 60s poll хангалттай
   }
 );
 

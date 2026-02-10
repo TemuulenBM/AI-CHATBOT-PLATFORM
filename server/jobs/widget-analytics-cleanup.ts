@@ -372,6 +372,7 @@ export const analyticsCleanupWorker = new Worker(
   {
     connection,
     concurrency: 1, // Only one cleanup job at a time
+    drainDelay: 60_000, // Cron job тул 60s poll хангалттай
   }
 );
 

@@ -244,6 +244,7 @@ export const dataExportWorker = new Worker<DataExportJobData>(
   {
     connection: getRedisConnection(),
     concurrency: 2, // Process 2 exports at a time
+    drainDelay: 30_000, // Upstash квот хэмнэх
     limiter: {
       max: 10,
       duration: 60000, // Max 10 exports per minute
